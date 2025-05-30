@@ -2,7 +2,7 @@
 This is an application meant to be build for the sole purpose of having a centralized unit for managing multiple applicaitons. 
 
 ## Instructions on how to use the current state of this project.
-This application currently only supports A database with the following specificaitons.
+This application currently only supports a database with the following specificaitons.
 
 
 MYSQL:
