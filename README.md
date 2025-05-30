@@ -1,22 +1,35 @@
 # ProtoType
-This is an application meant to be build for the sole purpose of having a centralized unit for managing multiple applicaitons. 
 
-## Instructions on how to use the current state of this project.
-This application currently only supports a database with the following specificaitons.
+ProtoType is an application designed to serve as a centralized unit for managing multiple applications.
 
+---
 
-MYSQL:
-```
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Docker
+- MySQL or SQL Server (other drivers like Oracle and PostgreSQL are untested but should have similar connection procedures)
+
+---
+
+## 🗄️ Database Specifications
+
+#### MySQL Table
+
+```sql
 CREATE TABLE Employees(
-    employeeId text,
-    firstName text,
-    lastName text,
-    email text,
-    role text
+    employeeId TEXT,
+    firstName TEXT,
+    lastName TEXT,
+    email TEXT,
+    role TEXT
 );
 ```
-SQL SERVER:
-```
+
+#### SQL Server Table
+
+```sql
 CREATE TABLE Employees(
     employeeId NVARCHAR(255),
     firstName NVARCHAR(255),
@@ -25,38 +38,56 @@ CREATE TABLE Employees(
     role NVARCHAR(255)
 );
 ```
-*All other driver classes like oracle and PostgreSQL have not been tested yet but the means of establishing a connection should be the same.*
 
-## Steps for running local servers in docker for MySQL
+> **Note:** Other database drivers (e.g., Oracle, PostgreSQL) have not been tested yet, but the connection process should be similar.
 
-### Create volume
-```docker volume create mysql_appThree```
+---
 
-### Spin up container
-```docker run -d --name AppThree -e MYSQL_ROOT_PASSWORD='Password0!' -e MYSQL_DATABASE=AppThree -p 1434:3306 -v mysql_appThree:/var/lib/mysql mysql:latest```
+## 🐳 Running Local Servers with Docker
 
-## Steps for running local servers in docker for SQL Server
+### For MySQL
 
-### Create volume
-```docker volume create mysql_appThree```
+1. **Create a Docker volume**
+   ```sh
+   docker volume create mysql_appThree
+   ```
 
-### Spin up container
-```sudo docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=Password0\!" --name appTwo -p 1435:1433 -v mysql_appThree:/var/opt/mssql -d --restart=always --hostname AppTwo --platform linux/amd64 mcr.microsoft.com/mssql/server:2022-latest```
+2. **Start MySQL container**
+   ```sh
+   docker run -d --name AppThree -e MYSQL_ROOT_PASSWORD='Password0!' -e MYSQL_DATABASE=AppThree -p 1434:3306 -v mysql_appThree:/var/lib/mysql mysql:latest
+   ```
 
-### MISC
-You can check to see if the contains had spun up correctly
+### For SQL Server
 
-```docker ps```
-```docker logs AppThree | grep 'A MySQL'```
+1. **Create a Docker volume**
+   ```sh
+   docker volume create mysql_appThree
+   ```
 
-### Managing Server Data
-I just use Datagrip but others can also be used
+2. **Start SQL Server container**
+   ```sh
+   sudo docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=Password0!" --name appTwo -p 1435:1433 -v mysql_appThree:/var/opt/mssql -d --restart=always --hostname AppTwo --platform linux/amd64 mcr.microsoft.com/mssql/server:latest
+   ```
 
+---
 
-### Mock Data
-I just used this website https://mockaroo.com/ and imported the data into my server. 
+## ⚙️ Miscellaneous
 
-*Make sure that the fields follow the same format as the table*
+- **Verify containers are running:**
+  ```sh
+  docker ps
+  docker logs AppThree | grep 'A MySQL'
+  ```
 
+- **Managing server data:**  
+  Tools like DataGrip can be used to manage your database, but any SQL client should work.
 
-# THERE WILL BE A GOOD CHANCE THAT THIS PROJECT WILL BE RESTRUCTURED AND USE .NET
+- **Mock Data:**  
+  You can generate mock data using [Mockaroo](https://mockaroo.com/) and import it into your server.  
+  > Make sure that the field names and data types match your table specification.
+
+---
+
+## ⚠️ Notice
+
+> **There is a good chance this project will be restructured and use .NET in the future.**
