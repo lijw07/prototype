@@ -56,3 +56,6 @@ I just use Datagrip but others can also be used
 I just used this website https://mockaroo.com/ and imported the data into my server. 
 
 *Make sure that the fields follow the same format as the table*
+
+
+# THERE WILL BE A GOOD CHANCE THAT THIS PROJECT WILL BE RESTRUCTURED AND USE .NET
