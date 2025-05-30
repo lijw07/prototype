@@ -25,7 +25,7 @@ CREATE TABLE Employees(
     role NVARCHAR(255)
 );
 ```
-*All other Driver classes like oracle and PostgreSQL have not been tested yet but the means of establishing a connection should be the same.*
+*All other driver classes like oracle and PostgreSQL have not been tested yet but the means of establishing a connection should be the same.*
 
 ## Steps for running local servers in docker for MySQL
 
@@ -33,7 +33,7 @@ CREATE TABLE Employees(
 ```docker volume create mysql_appThree```
 
 ### Spin up container
-```docker run -d --name AppThree -e MYSQL_ROOT_PASSWORD='Password0!' \ -e MYSQL_DATABASE=AppThree -p 1434:3306 -v mysql_appThree:/var/lib/mysql mysql:latest```
+```docker run -d --name AppThree -e MYSQL_ROOT_PASSWORD='Password0!' -e MYSQL_DATABASE=AppThree -p 1434:3306 -v mysql_appThree:/var/lib/mysql mysql:latest```
 
 ## Steps for running local servers in docker for SQL Server
 
@@ -44,7 +44,8 @@ CREATE TABLE Employees(
 ```sudo docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=Password0\!" --name appTwo -p 1435:1433 -v mysql_appThree:/var/opt/mssql -d --restart=always --hostname AppTwo --platform linux/amd64 mcr.microsoft.com/mssql/server:2022-latest```
 
 ### MISC
-You can check to see if the contains had spun up correct
+You can check to see if the contains had spun up correctly
+
 ```docker ps```
 ```docker logs AppThree | grep 'A MySQL'```
 
