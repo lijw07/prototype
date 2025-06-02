@@ -1,5 +1,16 @@
-bin/
-obj/
-/packages/
-riderModule.iml
-/_ReSharper.Caches/
+# .NET specific exclusions
+/bin/
+/obj/
+
+# Rider specific exclusions
+/Rider/.idea/
+/.idea/
+
+# Other common exclusions
+*.user
+*.suo
+*.log
+*.user
+*.temp
+
+# You can add more specific exclusions here based on your project needs

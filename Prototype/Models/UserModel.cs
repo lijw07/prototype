@@ -16,4 +16,7 @@ public class UserModel
     public DateTime UpdatedAt { get; set; }
     public DateTime? DeletedAt { get; set; }
     public Status Status { get; set; }
+    public ActiveDirectoryModel ActiveDirectory { get; set; }
+    public HumanResourcesModel HumanResources { get; set; }
+    public List<ApplicationModel> Applications { get; set; }
 }
