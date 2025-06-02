@@ -2,9 +2,9 @@ namespace Prototype.Models;
 
 public class ActiveDirectoryModel
 {
-    private Guid ActiveDirectoryId { get; set; }
-    private string Email { get; set; }
-    private string Username { get; set; }
-    private string Password { get; set; }
-    private Status Status { get; set; }
+    public Guid ActiveDirectoryId { get; set; }
+    public string Email { get; set; }
+    public string Username { get; set; }
+    public string Password { get; set; }
+    public Status Status { get; set; }
 }

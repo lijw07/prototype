@@ -2,6 +2,6 @@ namespace Prototype.Models;
 
 public class DataSourceConnectionModel
 {
-    private Guid DataSourceConnectionId {get; set;}
-    private string DataSourceConnectionName {get; set;}
+    public Guid DataSourceConnectionId {get; set;}
+    public string DataSourceConnectionName {get; set;}
 }

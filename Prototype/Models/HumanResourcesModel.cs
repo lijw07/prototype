@@ -2,10 +2,10 @@ namespace Prototype.Models;
 
 public class HumanResourcesModel
 {
-    private Guid HumanResourceId { get; set; }
-    private string FirstName { get; set; }
-    private string LastName { get; set; }
-    private string Manager { get; set; }
-    private string Department { get; set; }
-    private Status Status { get; set; }
+    public Guid HumanResourceId { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Manager { get; set; }
+    public string Department { get; set; }
+    public Status Status { get; set; }
 }
