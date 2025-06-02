@@ -1,0 +1,7 @@
+﻿services:
+  prototype:
+    image: prototype
+    build:
+      context: .
+      dockerfile: Prototype/Dockerfile
+
