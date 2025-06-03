@@ -1,7 +1,8 @@
-# ASP.NET Core MVC + React + Docker Project
+# Prototype Project
 
 This repository is a starter template for a modern web application using **ASP.NET Core MVC** with the classic SPA project structure, **React** for the frontend (integrated via the SPA template), and **Docker** for containerization and deployment. This setup allows for efficient development, testing, and deployment of scalable web applications.
 
+The application is designed to act as a middleman, connecting to multiple client databases and managing user permissions centrally via service accounts or APIs.
 ---
 
 ## Table of Contents
