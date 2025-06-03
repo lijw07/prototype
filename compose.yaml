@@ -8,8 +8,10 @@
       - "3000:3000"
     volumes:
       - ./Prototype/ClientApp:/app
+      - /app/node_modules
     environment:
       - CHOKIDAR_USE_POLLING=true
+      - BROWSER=none
   
   backend:
     build:
