@@ -1,7 +1,6 @@
-namespace Prototype;
+namespace Prototype.Utility;
 
 public enum Status
 {
-    ACTIVE,
-    INACTIVE
+    
 }
