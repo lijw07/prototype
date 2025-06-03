@@ -100,3 +100,4 @@ lcov-report/
 /Prototype/ClientApp/.env.development.local
 /Prototype/ClientApp/.env.test.local
 /Prototype/ClientApp/.env.production.local
+/Prototype/obj
