@@ -2,5 +2,7 @@ namespace Prototype.Models;
 
 public class ApplicationPermissionsModel
 {
-    private Guid ApplicationPermissionId { get; set; }
+    public Guid ApplicationPermissionId { get; set; }
+    public InternalPermission InternalPermission { get; set; }
+    public ExternalPermission ExternalPermission { get; set; }
 }
