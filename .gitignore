@@ -1,5 +1,102 @@
+# ------------------------------------------
+# Node.js / React
+# ------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+/node_modules
+/build
+/dist
+/.env.local
+/.env.development.local
+/.env.test.local
+/.env.production.local
+
+# ------------------------------------------
+# ASP.NET Core / .NET
+# ------------------------------------------
 bin/
 obj/
-/packages/
-riderModule.iml
-/_ReSharper.Caches/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ASP.NET Scaffolding
+.scaffolding/
+
+# Publish output
+publish/
+out/
+
+# User-specific files
+*.swp
+*.userprefs
+
+# Visual Studio temp files
+.vs/
+.vscode/
+
+# Rider
+.idea/
+*.sln.iml
+
+# ASP.NET Environment files
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Staging.json
+secrets.json
+
+# ------------------------------------------
+# Docker
+# ------------------------------------------
+*.tar
+*.container
+*.pid
+.env
+docker-compose.override.yml
+
+# Docker volumes (if you persist volumes to a directory)
+docker-data/
+volume-data/
+
+# ------------------------------------------
+# Logs
+# ------------------------------------------
+*.log
+logs/
+log/
+
+# ------------------------------------------
+# System
+# ------------------------------------------
+.DS_Store
+Thumbs.db
+
+# ------------------------------------------
+# Miscellaneous
+# ------------------------------------------
+# Optional: Ignore test coverage/other build artifacts
+coverage/
+coverage-final.json
+lcov-report/
+
+# ------------------------------------------
+# Ignore local tools/IDE
+# ------------------------------------------
+*.sln.DotSettings.user
+.idea/
+*.code-workspace
+
+# ------------------------------------------
+# Ignore React build output in ClientApp (if using ASP.NET template)
+# ------------------------------------------
+/Prototype/ClientApp/node_modules/
+/Prototype/ClientApp/build/
+/Prototype/ClientApp/dist/
+/Prototype/ClientApp/.env.local
+/Prototype/ClientApp/.env.development.local
+/Prototype/ClientApp/.env.test.local
+/Prototype/ClientApp/.env.production.local
