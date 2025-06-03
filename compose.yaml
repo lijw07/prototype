@@ -1,7 +1,31 @@
 ﻿services:
-  prototype:
-    image: prototype
+  backend:
     build:
       context: .
       dockerfile: Prototype/Dockerfile
+      target: dev
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./Prototype:/src/Prototype
+      - ~/.nuget/packages:/root/.nuget/packages
+    environment:
+      - DOTNET_USE_POLLING_FILE_WATCHER=1
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=db,1433;Database=PrototypeDb;User=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True
+    depends_on:
+      - db
 
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong!Passw0rd
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+
+volumes:
+  sql_data:

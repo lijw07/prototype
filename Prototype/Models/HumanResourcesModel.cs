@@ -7,5 +7,4 @@ public class HumanResourcesModel
     private string LastName { get; set; }
     private string Manager { get; set; }
     private string Department { get; set; }
-    private Status Status { get; set; }
 }

@@ -8,7 +8,6 @@ public class EmployeeModel
     private string Email {get; set;}
     private string FirstName {get; set;}
     private string LastName {get; set;}
-    private Status status {get; set;}
     private DateTime CreatedAt {get; set;}
     private DateTime UpdatedAt {get; set;}
     private DateTime DeletedAt {get; set;}

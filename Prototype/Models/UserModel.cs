@@ -11,9 +11,7 @@ public class UserModel
     private string Manager { get; set; }
     private string Department { get; set; }
     private string JobTitle { get; set; }
-    private Permission Permission { get; set; }
     private DateTime CreatedAt { get; set; }
     private DateTime UpdatedAt { get; set; }
     private DateTime? DeletedAt { get; set; }
-    private Status Status { get; set; }
 }
