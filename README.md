@@ -117,5 +117,3 @@ When creating a new branch, please follow this naming convention for clarity and
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
-
----

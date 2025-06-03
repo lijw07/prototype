@@ -2,9 +2,12 @@ namespace Prototype.Models;
 
 public class ApplicationModel
 {
-    private Guid ApplicationId { get; set; }
-    private string ApplicationName { get; set; }
-    private DateTime CreatedAt { get; set; }
-    private DateTime UpdatedAt { get; set; }
-    private DateTime DeletedAt { get; set; }
+    public Guid ApplicationId { get; set; }
+    public string ApplicationName { get; set; }
+    public ConnectionType ConnectionType { get; set; }
+    public ConnectionDetail ConnectionDetail { get; set; }
+    public Status Status { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public DateTime? DeletedAt { get; set; }
 }
