@@ -4,7 +4,10 @@
   word-break: break-all;
 }
 
-html {
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  background-color: #f8f9fa; /* light gray background like the image */
   font-size: 14px;
 }
 @media (min-width: 768px) {
@@ -15,4 +18,17 @@ html {
 
 .box-shadow {
   box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .05);
+}
+.nav-link {
+  border-radius: 4px;
+}
+
+.nav-link:hover {
+  background-color: #e9ecef; /* Light gray hover */
+  color: #000 !important;
+}
+
+.nav-link.active {
+  background-color: #4a4b4d; /* Bootstrap primary */
+  color: #fff !important;
 }

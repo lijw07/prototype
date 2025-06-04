@@ -15,7 +15,7 @@ useEffect(() => {
 
   return (
     <div>
-      <h1>Sentinel Prototype</h1>
+      <h1>Sentinel Prototype Home Page</h1>
       <p>Seconds: {seconds}</p>
     </div>
   );

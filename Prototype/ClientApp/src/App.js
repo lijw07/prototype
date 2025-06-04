@@ -4,7 +4,8 @@ import Layout from './components/Layout';
 import Home from './components/Home';
 import Counter from './components/Counter';
 import FetchData from './components/FetchData';
-
+import Accounts
+ from './components/Accounts';
 export default function App() {
   return (
     <Layout>
@@ -12,6 +13,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/counter" element={<Counter />} />
         <Route path="/fetch-data" element={<FetchData />} />
+        <Route path="/accounts" element={<Accounts />} />
       </Routes>
     </Layout>
   );
