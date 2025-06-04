@@ -1,10 +1,14 @@
 using Microsoft.AspNetCore.SpaServices.ReactDevelopmentServer;
-
+using Microsoft.EntityFrameworkCore;
+using Prototype.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services
 builder.Services.AddControllersWithViews();
+builder.Services.AddDbContext<SentinelContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
 builder.Services.AddSpaStaticFiles(configuration =>
 {
     configuration.RootPath = "ClientApp/build"; // Production build output folder
