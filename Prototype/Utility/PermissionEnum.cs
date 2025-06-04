@@ -1,6 +1,6 @@
 namespace Prototype.Models;
 
-public enum Permission
+public enum PermissionEnum
 {
     PLATFORM_ADMIN,
     USER_ADMIN,

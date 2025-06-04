@@ -4,10 +4,10 @@ using Prototype.Utility;
 
 namespace Prototype.Models;
 
-public class UserModel
+public class EmployeeModel
 {
     [Key]
-    public Guid UserId { get; set; }
+    public Guid EmployeeId { get; set; }
     
     [Required]
     public string Username { get; set; }
@@ -39,26 +39,26 @@ public class UserModel
     [Required]
     public string JobTitle { get; set; }
     
-    public ICollection<ApplicationModel> Application { get; set; }
-    
-    public ICollection<ActiveDirectoryModel> ActiveDirectory { get; set; }
-    
-    public ICollection<AuditLogModel> AuditLog { get; set; }
-    
-    public Guid UserSessionId { get; set; }
-    
-    [ForeignKey(nameof(UserSessionId))]
-    public UserSessionModel UserSession { get; set; }
+    [Required]
+    public Guid EmployeePermissionId { get; set; }
     
     [Required]
-    public Guid HumanResourceId { get; set; }
+    [ForeignKey(nameof(EmployeePermissionId))]
+    public EmployeePermissionModel EmployeePermission { get; set; }
     
     [Required]
-    [ForeignKey(nameof(HumanResourceId))]
-    public HumanResourceModel HumanResource { get; set; }
+    public Guid EmployeeRoleId { get; set; }
     
     [Required]
-    public PermissionEnum Permission { get; set; }
+    [ForeignKey("EmployeeRoleId")]
+    public EmployeeRoleModel EmployeeRole { get; set; }
+    
+    [Required]
+    public Guid ApplicationId { get; set; }
+    
+    [Required]
+    [ForeignKey(nameof(ApplicationId))]
+    public ApplicationModel Application { get; set; }
     
     [Required]
     public StatusEnum Status { get; set; }
