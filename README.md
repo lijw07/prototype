@@ -115,6 +115,14 @@ If done correctly, there should be no errors and the last statment should be
 Done.
 ```
 
+If you run into a bug, running those commands should hopefully fix it.
+```sh
+dotnet clean
+rm -rf bin/
+rm -rf obj/
+dotnet build
+```
+
 ---
 
 ## Branch Naming Convention
