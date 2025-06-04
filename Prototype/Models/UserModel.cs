@@ -35,21 +35,27 @@ public class UserModel
     
     public required string JobTitle { get; set; }
     
-    public ICollection<ApplicationModel> Application { get; set; }
+    public ICollection<UserApplicationModel> UserApplication { get; set; }
     
-    public ICollection<ActiveDirectoryModel> ActiveDirectory { get; set; }
+    public Guid ActiveDirectoryId { get; set; }
     
-    public ICollection<AuditLogModel> AuditLog { get; set; }
+    [ForeignKey(nameof(ActiveDirectoryId))]
+    public ActiveDirectoryModel ActiveDirectory { get; set; }
+    
+    public Guid AuditLogId { get; set; }
+    
+    [ForeignKey(nameof(AuditLogId))]
+    public AuditLogModel AuditLog { get; set; }
     
     public Guid UserSessionId { get; set; }
     
     [ForeignKey(nameof(UserSessionId))]
     public UserSessionModel UserSession { get; set; }
     
-    //public Guid? HumanResourceId { get; set; }
+    public Guid? HumanResourceId { get; set; }
     
-    //[ForeignKey(nameof(HumanResourceId))]
-    //public HumanResourceModel? HumanResource { get; set; }
+    [ForeignKey(nameof(HumanResourceId))]
+    public HumanResourceModel HumanResource { get; set; }
     
     public required PermissionEnum Permission { get; set; }
     

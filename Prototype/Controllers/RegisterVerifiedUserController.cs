@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Models;
+using Prototype.Utility;
 
 namespace Prototype.Controllers;
 
@@ -13,7 +14,7 @@ public class RegisterVerifiedUserController(SentinelContext context) : Controlle
     [HttpPost]
     public async Task<IActionResult> Verify([FromBody] EmailVerificationRequest request)
     {
-        var tempUser = await context.TemporaryUser
+        var tempUser = await context.TemporaryUser.Include(temporaryUserModel => temporaryUserModel.UserSession)
             .FirstOrDefaultAsync(u => u.Email == request.Email && u.VerificationCode == request.VerificationCode);
 
         if (tempUser == null || tempUser.RequestedAt.AddHours(24) < DateTime.UtcNow)
@@ -32,15 +33,15 @@ public class RegisterVerifiedUserController(SentinelContext context) : Controlle
             Department = tempUser.Department,
             Location = tempUser.Location,
             JobTitle = tempUser.JobTitle,
-            Application = null,
+            UserApplication = null,
             ActiveDirectory = null,
             AuditLog = null,
             UserSessionId = tempUser.UserSessionId,
             UserSession = tempUser.UserSession,
             //HumanResourceId = Guid.NewGuid(),
             //HumanResource = null,
-            Permission = tempUser.Permission,
-            Status = tempUser.Status,
+            Permission = PermissionEnum.USER,
+            Status = StatusEnum.ACTIVE,
             CreatedAt = tempUser.CreatedAt,
             UpdatedAt = tempUser.UpdatedAt
         };

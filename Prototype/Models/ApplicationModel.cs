@@ -24,19 +24,11 @@ public class ApplicationModel
     [Required]
     public required ApplicationPermissionEnum ApplicationPermission { get; set; }
     
-    public required ICollection<EmployeeModel> Employee { get; set; }
+    public ICollection<EmployeeApplicationModel> EmployeeApplications { get; set; }
     
-    [Required]
-    public required Guid ApplicationHealthId { get; set; }
+    public ICollection<ApplicationHealthLogModel> ApplicationHealthLog { get; set; }
     
-    [Required]
-    [ForeignKey(nameof(ApplicationHealthId))]
-    public required ApplicationHealthModel ApplicationHealth { get; set; }
-    
-    public required Guid UserId { get; set; }
-    
-    [ForeignKey(nameof(UserId))]
-    public required UserModel User { get; set; }
+    public ICollection<UserApplicationModel> UserApplications { get; set; }
     
     [Required]
     public required DateTime CreatedAt { get; set; }

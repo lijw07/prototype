@@ -21,10 +21,5 @@ public class ActiveDirectoryModel
     [Required]
     public required StatusEnum Status { get; set; }
     
-    [Required]
-    public required Guid UserId { get; set; }
-    
-    [Required]
-    [ForeignKey(nameof(UserId))]
-    public required UserModel User { get; set; }
+    public required ICollection<UserModel> User { get; set; }
 }

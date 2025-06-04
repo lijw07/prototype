@@ -36,25 +36,10 @@ public class TemporaryUserModel
     
     public required string JobTitle { get; set; }
     
-    public required ICollection<ApplicationModel> Application { get; set; }
-    
-    public required ICollection<ActiveDirectoryModel> ActiveDirectory { get; set; }
-    
-    public required ICollection<AuditLogModel> AuditLog { get; set; }
-    
     public required Guid UserSessionId { get; set; }
     
     [ForeignKey(nameof(UserSessionId))]
     public required UserSessionModel UserSession { get; set; }
-    
-    //public required Guid HumanResourceId { get; set; }
-    
-    //[ForeignKey(nameof(HumanResourceId))]
-    //public required HumanResourceModel HumanResource { get; set; }
-    
-    public required PermissionEnum Permission { get; set; }
-    
-    public required StatusEnum Status { get; set; }
     
     public required DateTime CreatedAt { get; set; }
     

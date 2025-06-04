@@ -8,6 +8,8 @@ public class ApplicationHealthModel
     [Key]
     public required Guid ApplicationHealthId { get; set; }
     
+    public ICollection<ApplicationHealthLogModel> ApplicationHealthLog { get; set; }
+    
     [Required]
     public required DateTime LastCheckTimestamp { get; set; }
     

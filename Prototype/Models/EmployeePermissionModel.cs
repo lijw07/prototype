@@ -7,6 +7,8 @@ public class EmployeePermissionModel
     [Key]
     public required Guid EmployeePermissionId { get; set; }
     
+    public ICollection<EmployeeApplicationModel> EmployeeApplications { get; set; }
+    
     [Required]
     public required PermissionEnum Permission { get; set; }
     

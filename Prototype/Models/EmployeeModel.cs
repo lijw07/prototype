@@ -13,7 +13,7 @@ public class EmployeeModel
     public required string Username { get; set; }
     
     [Required]
-    public required string Password { get; set; }
+    public required string PasswordHash { get; set; }
     
     [Required]
     public required string FirstName { get; set; }
@@ -53,12 +53,7 @@ public class EmployeeModel
     [ForeignKey("EmployeeRoleId")]
     public required EmployeeRoleModel EmployeeRole { get; set; }
     
-    [Required]
-    public required Guid ApplicationId { get; set; }
-    
-    [Required]
-    [ForeignKey(nameof(ApplicationId))]
-    public required ApplicationModel Application { get; set; }
+    public ICollection<EmployeeApplicationModel> EmployeeApplications { get; set; }
     
     [Required]
     public required StatusEnum Status { get; set; }

@@ -12,10 +12,7 @@ public class AuditLogModel
     [Required]
     public required ActionTypeEnum ActionType { get; set; }
     
-    public required Guid UserId { get; set; }
-
-    [ForeignKey(nameof(UserId))] 
-    public required UserModel User { get; set; }
+    public required ICollection<UserModel> User { get; set; }
 
     [Required]
     public required string ResourceAffected { get; set; }
