@@ -34,4 +34,10 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller}/{action=Index}/{id?}");
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<SentinelContext>();
+    db.Database.Migrate();
+}
+
 app.Run();

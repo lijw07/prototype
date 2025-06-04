@@ -8,7 +8,7 @@ namespace Prototype.Controllers;
 
 [ApiController]
 [Route("[controller]")]
-public class EmailVerificationController(SentinelContext context) : ControllerBase
+public class RegisterVerifiedUserController(SentinelContext context) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Verify([FromBody] EmailVerificationRequest request)
@@ -35,10 +35,10 @@ public class EmailVerificationController(SentinelContext context) : ControllerBa
             Application = null,
             ActiveDirectory = null,
             AuditLog = null,
-            UserSessionId = Guid.NewGuid(),
-            UserSession = null,
-            HumanResourceId = Guid.NewGuid(),
-            HumanResource = null,
+            UserSessionId = tempUser.UserSessionId,
+            UserSession = tempUser.UserSession,
+            //HumanResourceId = Guid.NewGuid(),
+            //HumanResource = null,
             Permission = tempUser.Permission,
             Status = tempUser.Status,
             CreatedAt = tempUser.CreatedAt,

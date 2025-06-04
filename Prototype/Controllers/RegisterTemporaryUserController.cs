@@ -10,13 +10,21 @@ namespace Prototype.Controllers;
 
 [ApiController]
 [Route("[controller]")]
-public class RegisterController(SentinelContext context) : ControllerBase
+public class RegisterTemporaryUserController(SentinelContext context) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
         if (await context.Users.AnyAsync(u => u.Username == request.Username))
             return Conflict(new { message = "Account already exists!" });
+
+        var userSession = new UserSessionModel
+        {
+            UserSessionId = Guid.NewGuid(),
+            ActionType = ActionTypeEnum.Create,
+            ResourceAffected = "Temporary User has been created",
+            CreatedAt = DateTime.Now.Date
+        };
         
         var verificationCode = RandomNumberGenerator.GetInt32(000000, 100000).ToString();
         var tempUser = new TemporaryUserModel
@@ -35,10 +43,10 @@ public class RegisterController(SentinelContext context) : ControllerBase
             Application = null,
             ActiveDirectory = null,
             AuditLog = null,
-            UserSessionId = default,
-            UserSession = null,
-            HumanResourceId = default,
-            HumanResource = null,
+            UserSessionId = userSession.UserSessionId,
+            UserSession = userSession,
+            //HumanResourceId = default,
+            //HumanResource = null,
             Permission = PermissionEnum.USER,
             Status = StatusEnum.ACTIVE,
             CreatedAt = DateTime.Now.Date,

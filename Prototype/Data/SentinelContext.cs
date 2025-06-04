@@ -153,7 +153,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         {
             entity.Property(us => us.UserSessionId).HasConversion<Guid>();
 
-            entity.Property(us => us.ActionTypeEnum).HasConversion(
+            entity.Property(us => us.ActionType).HasConversion(
                 us => us.ToString(),
                 us => (ActionTypeEnum)Enum.Parse(typeof(ActionTypeEnum), us));
         });

@@ -9,11 +9,11 @@ public class UserSessionModel
     public required Guid UserSessionId { get; set; }
     
     [Required]
-    public required ActionTypeEnum ActionTypeEnum { get; set; }
+    public required ActionTypeEnum ActionType { get; set; }
     
     [Required]
     public required string ResourceAffected { get; set; }
     
     [Required]
-    public required DateTime Timestamp { get; set; }
+    public required DateTime CreatedAt { get; set; }
 }

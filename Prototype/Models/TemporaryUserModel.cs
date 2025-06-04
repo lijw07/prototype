@@ -47,10 +47,10 @@ public class TemporaryUserModel
     [ForeignKey(nameof(UserSessionId))]
     public required UserSessionModel UserSession { get; set; }
     
-    public required Guid HumanResourceId { get; set; }
+    //public required Guid HumanResourceId { get; set; }
     
-    [ForeignKey(nameof(HumanResourceId))]
-    public required HumanResourceModel HumanResource { get; set; }
+    //[ForeignKey(nameof(HumanResourceId))]
+    //public required HumanResourceModel HumanResource { get; set; }
     
     public required PermissionEnum Permission { get; set; }
     
