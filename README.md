@@ -70,14 +70,14 @@ npm start
 ```
 This runs the React app at [http://localhost:3000](http://localhost:3000), proxying API calls to the backend.
 
-#### 3. Run the ASP.NET Core Backend
+#### 3. Run the ASP.NET Core Backend (Without docker)
 
 From the root project directory:
 
 ```sh
 dotnet run
 ```
-By default, this runs the ASP.Net Core MVC at [http://localhost:8080](http://localhost:8080)
+By default, this runs the ASP.Net Core MVC at [http://localhost:5266](http://localhost:8080)
 
 #### 4. Run Sql Server
 
