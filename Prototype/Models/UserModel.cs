@@ -10,7 +10,7 @@ public class UserModel
     public required Guid UserId { get; set; }
     
     [Required]
-    public required  string Username { get; set; }
+    public required string Username { get; set; }
     
     [Required]
     public required string Password { get; set; }
@@ -27,16 +27,12 @@ public class UserModel
     [Required]
     public required string PhoneNumber { get; set; }
     
-    [Required]
     public required string Manager { get; set; }
     
-    [Required]
     public required string Department { get; set; }
     
-    [Required]
     public required string Location { get; set; }
     
-    [Required]
     public required string JobTitle { get; set; }
     
     public required ICollection<ApplicationModel> Application { get; set; }
@@ -50,22 +46,16 @@ public class UserModel
     [ForeignKey(nameof(UserSessionId))]
     public required UserSessionModel UserSession { get; set; }
     
-    [Required]
     public required Guid HumanResourceId { get; set; }
     
-    [Required]
     [ForeignKey(nameof(HumanResourceId))]
     public required HumanResourceModel HumanResource { get; set; }
     
-    [Required]
     public required PermissionEnum Permission { get; set; }
     
-    [Required]
     public required StatusEnum Status { get; set; }
     
-    [Required]
     public required DateTime CreatedAt { get; set; }
     
-    [Required]
     public required DateTime UpdatedAt { get; set; }
 }

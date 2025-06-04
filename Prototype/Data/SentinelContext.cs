@@ -6,18 +6,18 @@ namespace Prototype.Data;
 
 public class SentinelContext(DbContextOptions<SentinelContext> options) : DbContext(options)
 {
-    private DbSet<ActiveDirectoryModel> ActiveDirectories { get; set; }
-    private DbSet<ApplicationHealthModel> ApplicationHealth { get; set; }
-    private DbSet<ApplicationModel> Applications { get; set; }
-    private DbSet<AuditLogModel> AuditLogs { get; set; }
-    private DbSet<ConnectionCredentialModel> ConnectionCredentials { get; set; }
-    private DbSet<DataSourceConnectionModel> DataSourceConnections { get; set; }
-    private DbSet<EmployeeModel> Employee { get; set; }
-    private DbSet<EmployeePermissionModel> EmployeePermissions { get; set; }
-    private DbSet<EmployeeRoleModel> EmployeeRoles { get; set; }
-    private DbSet<HumanResourceModel> HumanResource { get; set; }
-    private DbSet<UserModel> Users { get; set; }
-    private DbSet<UserSessionModel> UserSessions { get; set; }
+    public DbSet<ActiveDirectoryModel> ActiveDirectories { get; set; }
+    public DbSet<ApplicationHealthModel> ApplicationHealth { get; set; }
+    public DbSet<ApplicationModel> Applications { get; set; }
+    public DbSet<AuditLogModel> AuditLogs { get; set; }
+    public DbSet<ConnectionCredentialModel> ConnectionCredentials { get; set; }
+    public DbSet<DataSourceConnectionModel> DataSourceConnections { get; set; }
+    public DbSet<EmployeeModel> Employee { get; set; }
+    public DbSet<EmployeePermissionModel> EmployeePermissions { get; set; }
+    public DbSet<EmployeeRoleModel> EmployeeRoles { get; set; }
+    public DbSet<HumanResourceModel> HumanResource { get; set; }
+    public DbSet<UserModel> Users { get; set; }
+    public DbSet<UserSessionModel> UserSessions { get; set; }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
