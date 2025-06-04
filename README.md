@@ -48,6 +48,8 @@ To stop:
 docker compose down
 ```
 
+**⚠️ WARNING:** Running `docker compose down` can potientally delete mock data!
+
 ---
 
 ### Running the .NET/React App (Development)
