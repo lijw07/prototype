@@ -6,14 +6,14 @@ namespace Prototype.Models;
 public class UserSessionModel
 {
     [Key]
-    public Guid UserSessionId { get; set; }
+    public required Guid UserSessionId { get; set; }
     
     [Required]
-    public ActionTypeEnum ActionTypeEnum { get; set; }
+    public required ActionTypeEnum ActionTypeEnum { get; set; }
     
     [Required]
-    public string ResourceAffected { get; set; }
+    public required string ResourceAffected { get; set; }
     
     [Required]
-    public DateTime Timestamp { get; set; }
+    public required DateTime Timestamp { get; set; }
 }

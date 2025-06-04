@@ -5,14 +5,14 @@ namespace Prototype.Models;
 public class EmployeeRoleModel
 {
     [Key]
-    public Guid EmployeeRoleId { get; set; }
+    public required Guid EmployeeRoleId { get; set; }
     
     [Required]
-    public string JobTitle { get; set; }
+    public required string JobTitle { get; set; }
     
     [Required]
-    public DateTime CreatedAt { get; set; }
+    public required DateTime CreatedAt { get; set; }
     
     [Required]
-    public DateTime UpdatedAt { get; set; }
+    public required DateTime UpdatedAt { get; set; }
 }

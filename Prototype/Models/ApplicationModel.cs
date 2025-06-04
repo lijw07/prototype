@@ -7,40 +7,40 @@ namespace Prototype.Models;
 public class ApplicationModel
 {
     [Key]
-    public Guid ApplicationId { get; set; }
+    public required Guid ApplicationId { get; set; }
     
     [Required]
-    public string Name { get; set; }
+    public required string Name { get; set; }
     
-    public Guid DataSourceConnectionId { get; set; }
+    public required Guid DataSourceConnectionId { get; set; }
     
     [Required]
     [ForeignKey(nameof(DataSourceConnectionId))]
-    public DataSourceConnectionModel DataSourceConnection { get; set; }
+    public required DataSourceConnectionModel DataSourceConnection { get; set; }
     
     [Required]
-    public StatusEnum Status { get; set; }
+    public required StatusEnum Status { get; set; }
     
     [Required]
-    public ApplicationPermissionEnum ApplicationPermission { get; set; }
+    public required ApplicationPermissionEnum ApplicationPermission { get; set; }
     
-    public ICollection<EmployeeModel> Employee { get; set; }
+    public required ICollection<EmployeeModel> Employee { get; set; }
     
     [Required]
-    public Guid ApplicationHealthId { get; set; }
+    public required Guid ApplicationHealthId { get; set; }
     
     [Required]
     [ForeignKey(nameof(ApplicationHealthId))]
-    public ApplicationHealthModel ApplicationHealth { get; set; }
+    public required ApplicationHealthModel ApplicationHealth { get; set; }
     
-    public Guid UserId { get; set; }
+    public required Guid UserId { get; set; }
     
     [ForeignKey(nameof(UserId))]
-    public UserModel User { get; set; }
+    public required UserModel User { get; set; }
     
     [Required]
-    public DateTime CreatedAt { get; set; }
+    public required DateTime CreatedAt { get; set; }
     
     [Required]
-    public DateTime UpdatedAt { get; set; }
+    public required DateTime UpdatedAt { get; set; }
 }

@@ -7,24 +7,24 @@ namespace Prototype.Models;
 public class DataSourceConnectionModel
 {
     [Key]
-    public Guid DataSourceConnectionId { get; set; }
+    public required Guid DataSourceConnectionId { get; set; }
     
     [Required]
-    public string DataSourceName { get; set; }
+    public required string DataSourceName { get; set; }
     
     [Required]
-    public DataSourceTypeEnum DataSourceType { get; set; }
+    public required DataSourceTypeEnum DataSourceType { get; set; }
     
     [Required]
-    public Guid ConnectionCredentialId { get; set; }
+    public required Guid ConnectionCredentialId { get; set; }
     
     [Required]
     [ForeignKey(nameof(ConnectionCredentialId))]
-    public ConnectionCredentialModel ConnectionCredential { get; set; }
+    public required ConnectionCredentialModel ConnectionCredential { get; set; }
     
     [Required]
-    public DateTime CreatedAt { get; set; }
+    public required DateTime CreatedAt { get; set; }
     
     [Required]
-    public DateTime UpdatedAt { get; set; }
+    public required DateTime UpdatedAt { get; set; }
 }

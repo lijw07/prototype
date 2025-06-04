@@ -6,14 +6,14 @@ namespace Prototype.Models;
 public class ConnectionCredentialModel
 {
     [Key]
-    public Guid ConnectionCredentialId { get; set; }
+    public required Guid ConnectionCredentialId { get; set; }
     
     [Required]
-    public CredentialTypeEnum CredentialType { get; set; }
+    public required CredentialTypeEnum CredentialType { get; set; }
     
     [Required]
-    public DateTime CreatedAt { get; set; }
+    public required DateTime CreatedAt { get; set; }
     
     [Required]
-    public DateTime UpdatedAt { get; set; }
+    public required DateTime UpdatedAt { get; set; }
 }

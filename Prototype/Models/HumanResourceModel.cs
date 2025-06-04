@@ -7,37 +7,37 @@ namespace Prototype.Models;
 public class HumanResourceModel
 {
     [Key]
-    public Guid HumanResourceId { get; set; }
+    public required Guid HumanResourceId { get; set; }
     
     [Required]
-    public string Firstname { get; set; }
+    public required string Firstname { get; set; }
     
     [Required]
-    public string Lastname { get; set; }
+    public required string Lastname { get; set; }
     
     [Required]
-    public string Email { get; set; }
+    public required string Email { get; set; }
     
     [Required]
-    public string PhoneNumber { get; set; }
+    public required string PhoneNumber { get; set; }
     
     [Required]
-    public string Manager { get; set; }
+    public required string Manager { get; set; }
     
     [Required]
-    public string Department { get; set; }
+    public required string Department { get; set; }
     
     [Required]
-    public StatusEnum Status { get; set; }
+    public required StatusEnum Status { get; set; }
     
     [Required]
-    public PermissionEnum Permission { get; set; }
+    public required PermissionEnum Permission { get; set; }
     
-    public ICollection<UserModel> User { get; set; }
-    
-    [Required]
-    public DateTime CreatedAt { get; set; }
+    public required ICollection<UserModel> User { get; set; }
     
     [Required]
-    public DateTime UpdatedAt { get; set; }
+    public required DateTime CreatedAt { get; set; }
+    
+    [Required]
+    public required DateTime UpdatedAt { get; set; }
 }

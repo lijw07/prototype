@@ -5,14 +5,14 @@ namespace Prototype.Models;
 public class EmployeePermissionModel
 {
     [Key]
-    public Guid EmployeePermissionId { get; set; }
+    public required Guid EmployeePermissionId { get; set; }
     
     [Required]
-    public PermissionEnum Permission { get; set; }
+    public required PermissionEnum Permission { get; set; }
     
     [Required]
-    public DateTime CreatedAt { get; set; }
+    public required DateTime CreatedAt { get; set; }
     
     [Required]
-    public DateTime UpdatedAt { get; set; }
+    public required DateTime UpdatedAt { get; set; }
 }

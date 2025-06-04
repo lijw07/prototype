@@ -6,14 +6,14 @@ namespace Prototype.Models;
 public class ApplicationHealthModel
 {
     [Key]
-    public Guid ApplicationHealthId { get; set; }
+    public required Guid ApplicationHealthId { get; set; }
     
     [Required]
-    public DateTime LastCheckTimestamp { get; set; }
+    public required DateTime LastCheckTimestamp { get; set; }
     
     [Required]
-    public StatusEnum Status { get; set; }
+    public required StatusEnum Status { get; set; }
     
     [Required]
-    public TimeSpan ResponseTime { get; set; }
+    public required TimeSpan ResponseTime { get; set; }
 }

@@ -7,65 +7,65 @@ namespace Prototype.Models;
 public class UserModel
 {
     [Key]
-    public Guid UserId { get; set; }
+    public required Guid UserId { get; set; }
     
     [Required]
-    public string Username { get; set; }
+    public required  string Username { get; set; }
     
     [Required]
-    public string Password { get; set; }
+    public required string Password { get; set; }
     
     [Required]
-    public string FirstName { get; set; }
+    public required string FirstName { get; set; }
     
     [Required]
-    public string LastName { get; set; }
+    public required string LastName { get; set; }
     
     [Required]
-    public string Email { get; set; }
+    public required string Email { get; set; }
     
     [Required]
-    public string PhoneNumber { get; set; }
+    public required string PhoneNumber { get; set; }
     
     [Required]
-    public string Manager { get; set; }
+    public required string Manager { get; set; }
     
     [Required]
-    public string Department { get; set; }
+    public required string Department { get; set; }
     
     [Required]
-    public string Location { get; set; }
+    public required string Location { get; set; }
     
     [Required]
-    public string JobTitle { get; set; }
+    public required string JobTitle { get; set; }
     
-    public ICollection<ApplicationModel> Application { get; set; }
+    public required ICollection<ApplicationModel> Application { get; set; }
     
-    public ICollection<ActiveDirectoryModel> ActiveDirectory { get; set; }
+    public required ICollection<ActiveDirectoryModel> ActiveDirectory { get; set; }
     
-    public ICollection<AuditLogModel> AuditLog { get; set; }
+    public required ICollection<AuditLogModel> AuditLog { get; set; }
     
-    public Guid UserSessionId { get; set; }
+    public required Guid UserSessionId { get; set; }
     
     [ForeignKey(nameof(UserSessionId))]
-    public UserSessionModel UserSession { get; set; }
+    public required UserSessionModel UserSession { get; set; }
     
     [Required]
-    public Guid HumanResourceId { get; set; }
+    public required Guid HumanResourceId { get; set; }
     
     [Required]
     [ForeignKey(nameof(HumanResourceId))]
-    public HumanResourceModel HumanResource { get; set; }
+    public required HumanResourceModel HumanResource { get; set; }
     
     [Required]
-    public PermissionEnum Permission { get; set; }
+    public required PermissionEnum Permission { get; set; }
     
     [Required]
-    public StatusEnum Status { get; set; }
+    public required StatusEnum Status { get; set; }
     
     [Required]
-    public DateTime CreatedAt { get; set; }
+    public required DateTime CreatedAt { get; set; }
     
     [Required]
-    public DateTime UpdatedAt { get; set; }
+    public required DateTime UpdatedAt { get; set; }
 }

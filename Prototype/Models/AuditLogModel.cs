@@ -7,19 +7,19 @@ namespace Prototype.Models;
 public class AuditLogModel
 {
     [Key]
-    public Guid AuditLogId { get; set; }
+    public required Guid AuditLogId { get; set; }
     
     [Required]
-    public ActionTypeEnum ActionType { get; set; }
+    public required ActionTypeEnum ActionType { get; set; }
     
-    public Guid UserId { get; set; }
+    public required Guid UserId { get; set; }
 
     [ForeignKey(nameof(UserId))] 
-    public UserModel User { get; set; }
+    public required UserModel User { get; set; }
 
     [Required]
-    public string ResourceAffected { get; set; }
+    public required string ResourceAffected { get; set; }
     
     [Required]
-    public DateTime Timestamp { get; set; }
+    public required DateTime Timestamp { get; set; }
 }
