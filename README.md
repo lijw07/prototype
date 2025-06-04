@@ -77,6 +77,30 @@ dotnet run
 ```
 By default, this runs the ASP.Net Core MVC at [http://localhost:8080](http://localhost:8080)
 
+#### 4. Run Sql Server
+
+When running this command, ensure the current directory is /Prototype
+
+```sh
+dotnet ef migrations add MigrationMessage
+```
+
+When this command is done, you should see something like this
+```sh
+Build started...
+Build succeeded.
+Done. To undo this action, use 'ef migrations remove'
+```
+
+Run this follow up script to populate the sql server
+```sh
+dotnet ef database update
+```
+If done correctly, there should be no errors and the last statment should be
+```sh
+Done.
+```
+
 ---
 
 ## Branch Naming Convention
