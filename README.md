@@ -52,7 +52,7 @@ docker compose down
 
 ---
 
-### Running the .NET/React App (Development)
+### Running the .NET/React App (Without Docker)
 
 #### 1. Restore & Install Dependencies
 
@@ -79,7 +79,16 @@ dotnet run
 ```
 By default, this runs the ASP.Net Core MVC at [http://localhost:5266](http://localhost:8080)
 
-#### 4. Run Sql Server
+---
+
+### Run Sql Server
+
+#### 1. Install Entity Framework tool
+```sh
+dotnet tool install --global dotnet-ef
+```
+
+#### 2. Start Migration Process
 
 When running this command, ensure the current directory is /Prototype
 
@@ -93,6 +102,9 @@ Build started...
 Build succeeded.
 Done. To undo this action, use 'ef migrations remove'
 ```
+
+
+#### 4. Upload Migrated Tables to Sql Server
 
 Run this follow up script to populate the sql server
 ```sh
