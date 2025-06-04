@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
@@ -8,6 +9,7 @@ using Prototype.Utility;
 namespace Prototype.Controllers;
 
 [ApiController]
+[Route("[controller]")]
 public class RegisterController(SentinelContext context) : ControllerBase
 {
     [HttpPost]
@@ -15,14 +17,15 @@ public class RegisterController(SentinelContext context) : ControllerBase
     {
         if (await context.Users.AnyAsync(u => u.Username == request.Username))
             return Conflict(new { message = "Account already exists!" });
-
-        var user = new UserModel
+        
+        var verificationCode = RandomNumberGenerator.GetInt32(000000, 100000).ToString();
+        var tempUser = new TemporaryUserModel
         {
-            UserId = Guid.NewGuid(),
+            TemporaryUserId = Guid.NewGuid(),
             Username = request.Username,
-            Password = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            FirstName = request.Firstname,
-            LastName = request.Lastname,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.PasswordHash),
+            Firstname = request.Firstname,
+            Lastname = request.Lastname,
             Email = request.Email,
             PhoneNumber = request.PhoneNumber,
             Manager = request.Manager,
@@ -40,10 +43,13 @@ public class RegisterController(SentinelContext context) : ControllerBase
             Status = StatusEnum.ACTIVE,
             CreatedAt = DateTime.Now.Date,
             UpdatedAt = DateTime.Now.Date,
+            VerificationCode = verificationCode,
+            RequestedAt = DateTime.Now.Date,
         };
         
-        context.Users.Add(user);
+        context.TemporaryUser.Add(tempUser);
         await context.SaveChangesAsync();
-        return Ok(new { id = user.UserId, message = "Registration Successful" });
+        await EmailNotification.SendVerificationEmail(tempUser.Email, verificationCode);
+        return Ok(new { id = tempUser.TemporaryUserId, message = "Registration Successful" });
     }
 }

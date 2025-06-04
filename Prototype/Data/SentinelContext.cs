@@ -16,6 +16,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
     public DbSet<EmployeePermissionModel> EmployeePermissions { get; set; }
     public DbSet<EmployeeRoleModel> EmployeeRoles { get; set; }
     public DbSet<HumanResourceModel> HumanResource { get; set; }
+    public DbSet<TemporaryUserModel> TemporaryUser { get; set; }
     public DbSet<UserModel> Users { get; set; }
     public DbSet<UserSessionModel> UserSessions { get; set; }
     
@@ -116,6 +117,21 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
             entity.Property(hr => hr.Permission).HasConversion(
                 hr => hr.ToString(),
                 hr => (PermissionEnum)Enum.Parse(typeof(PermissionEnum), hr));
+        });
+        
+        modelBuilder.Entity<TemporaryUserModel>(entity =>
+        {
+            entity.Property(tu => tu.TemporaryUserId).HasConversion<Guid>();
+            
+            entity.Property(tu => tu.UserSessionId).HasConversion<Guid>();
+
+            entity.Property(tu => tu.Permission).HasConversion(
+                tu => tu.ToString(),
+                tu => (PermissionEnum)Enum.Parse(typeof(PermissionEnum), tu));
+            
+            entity.Property(tu => tu.Status).HasConversion(
+                tu => tu.ToString(),
+                tu => (StatusEnum)Enum.Parse(typeof(StatusEnum), tu));
         });
         
         modelBuilder.Entity<UserModel>(entity =>

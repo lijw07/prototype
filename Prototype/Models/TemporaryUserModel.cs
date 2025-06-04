@@ -4,11 +4,11 @@ using Prototype.Utility;
 
 namespace Prototype.Models;
 
-public class UserModel
+public class TemporaryUserModel
 {
     [Key]
-    public required Guid UserId { get; set; }
-    
+    public required Guid TemporaryUserId { get; set; }
+
     [Required]
     public required string Username { get; set; }
     
@@ -16,10 +16,10 @@ public class UserModel
     public required string PasswordHash { get; set; }
     
     [Required]
-    public required string FirstName { get; set; }
+    public required string Firstname { get; set; }
     
     [Required]
-    public required string LastName { get; set; }
+    public required string Lastname { get; set; }
     
     [Required]
     public required string Email { get; set; }
@@ -31,6 +31,7 @@ public class UserModel
     
     public required string Department { get; set; }
     
+    [Required]
     public required string Location { get; set; }
     
     public required string JobTitle { get; set; }
@@ -58,4 +59,10 @@ public class UserModel
     public required DateTime CreatedAt { get; set; }
     
     public required DateTime UpdatedAt { get; set; }
+
+    [Required]
+    public required string VerificationCode { get; set; }
+    
+    [Required]
+    public required DateTime RequestedAt { get; set; }
 }
