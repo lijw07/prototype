@@ -5,5 +5,6 @@ namespace Prototype.Services;
 
 public interface ITemporaryUserFactoryService
 {
-    TemporaryUserModel CreateFromRequest(RegisterRequest request, string verificationCode);
+    TemporaryUserModel CreateTemporaryUserFromRequest(RegisterRequest request, string verificationCode);
+    UserModel CreateUserFromTemporaryUser(TemporaryUserModel tempUser);
 }
