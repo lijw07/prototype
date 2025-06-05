@@ -8,7 +8,16 @@ public class TemporaryUserModel
 {
     [Key]
     public required Guid TemporaryUserId { get; set; }
-
+    
+    [Required]
+    public required string FirstName { get; set; }
+    
+    [Required]
+    public required string LastName { get; set; }
+    
+    [Required]
+    public required string Email { get; set; }
+    
     [Required]
     public required string Username { get; set; }
     
@@ -16,38 +25,11 @@ public class TemporaryUserModel
     public required string PasswordHash { get; set; }
     
     [Required]
-    public required string Firstname { get; set; }
-    
-    [Required]
-    public required string Lastname { get; set; }
-    
-    [Required]
-    public required string Email { get; set; }
-    
-    [Required]
     public required string PhoneNumber { get; set; }
     
-    public required string Manager { get; set; }
-    
-    public required string Department { get; set; }
-    
-    [Required]
-    public required string Location { get; set; }
-    
-    public required string JobTitle { get; set; }
-    
-    public required Guid UserSessionId { get; set; }
-    
-    [ForeignKey(nameof(UserSessionId))]
-    public required UserSessionModel UserSession { get; set; }
-    
-    public required DateTime CreatedAt { get; set; }
-    
-    public required DateTime UpdatedAt { get; set; }
-
     [Required]
     public required string VerificationCode { get; set; }
     
     [Required]
-    public required DateTime RequestedAt { get; set; }
+    public required DateTime CreatedAt { get; set; }
 }

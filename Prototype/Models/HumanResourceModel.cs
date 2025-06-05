@@ -9,35 +9,30 @@ public class HumanResourceModel
     [Key]
     public required Guid HumanResourceId { get; set; }
     
-    [Required]
-    public required string Firstname { get; set; }
+    public Guid UserId { get; set; }
+    
+    [ForeignKey(nameof(UserId))]
+    public UserModel User { get; set; }
     
     [Required]
-    public required string Lastname { get; set; }
+    public required Guid EmployeeNumber { get; set; }
     
     [Required]
-    public required string Email { get; set; }
+    public required JobPositionEnum JobTitle { get; set; }
     
     [Required]
-    public required string PhoneNumber { get; set; }
+    public required DepartmentEnum Department { get; set; }
+    
+    public Guid Manager { get; set; }
     
     [Required]
-    public required string Manager { get; set; }
+    public required string Location { get; set; }
     
     [Required]
-    public required string Department { get; set; }
+    public required DateTime HireDate { get; set; }
+    
+    public DateTime TerminationDate { get; set; }
     
     [Required]
-    public required StatusEnum Status { get; set; }
-    
-    [Required]
-    public required PermissionEnum Permission { get; set; }
-    
-    public required ICollection<UserModel> User { get; set; }
-    
-    [Required]
-    public required DateTime CreatedAt { get; set; }
-    
-    [Required]
-    public required DateTime UpdatedAt { get; set; }
+    public StatusEnum Status { get; set; }
 }

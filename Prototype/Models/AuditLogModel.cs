@@ -10,13 +10,21 @@ public class AuditLogModel
     public required Guid AuditLogId { get; set; }
     
     [Required]
-    public required ActionTypeEnum ActionType { get; set; }
-    
-    public required ICollection<UserModel> User { get; set; }
-
-    [Required]
-    public required string ResourceAffected { get; set; }
+    public Guid UserId { get; set; }
     
     [Required]
-    public required DateTime Timestamp { get; set; }
+    [ForeignKey(nameof(UserId))]
+    public required UserModel User { get; set; }
+    
+    [Required]
+    public ActionTypeEnum ActionType { get; set; }
+    
+    [Required]
+    public required string Description { get; set; }
+    
+    [Required]
+    public string Metadata { get; set; }
+    
+    [Required]
+    public required DateTime CreatedAt { get; set; }
 }

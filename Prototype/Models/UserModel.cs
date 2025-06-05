@@ -10,16 +10,16 @@ public class UserModel
     public required Guid UserId { get; set; }
     
     [Required]
-    public required string Username { get; set; }
-    
-    [Required]
-    public required string PasswordHash { get; set; }
-    
-    [Required]
     public required string FirstName { get; set; }
     
     [Required]
     public required string LastName { get; set; }
+    
+    [Required]
+    public required string Username { get; set; }
+    
+    [Required]
+    public required string PasswordHash { get; set; }
     
     [Required]
     public required string Email { get; set; }
@@ -27,39 +27,11 @@ public class UserModel
     [Required]
     public required string PhoneNumber { get; set; }
     
-    public required string Manager { get; set; }
+    public ICollection<UserApplicationModel> Applications { get; set; }
     
-    public required string Department { get; set; }
+    public ICollection<UserActivityLogModel> UserActivityLogs { get; set; }
     
-    public required string Location { get; set; }
-    
-    public required string JobTitle { get; set; }
-    
-    public ICollection<UserApplicationModel> UserApplication { get; set; }
-    
-    public Guid ActiveDirectoryId { get; set; }
-    
-    [ForeignKey(nameof(ActiveDirectoryId))]
-    public ActiveDirectoryModel ActiveDirectory { get; set; }
-    
-    public Guid AuditLogId { get; set; }
-    
-    [ForeignKey(nameof(AuditLogId))]
-    public AuditLogModel AuditLog { get; set; }
-    
-    public Guid UserSessionId { get; set; }
-    
-    [ForeignKey(nameof(UserSessionId))]
-    public UserSessionModel UserSession { get; set; }
-    
-    public Guid? HumanResourceId { get; set; }
-    
-    [ForeignKey(nameof(HumanResourceId))]
-    public HumanResourceModel HumanResource { get; set; }
-    
-    public required PermissionEnum Permission { get; set; }
-    
-    public required StatusEnum Status { get; set; }
+    public ICollection<AuditLogModel> AuditLogs { get; set; }
     
     public required DateTime CreatedAt { get; set; }
     
