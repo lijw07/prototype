@@ -19,5 +19,6 @@ public enum ActionTypeEnum
     Approve,
     Reject,
     Enable,
-    Disable
+    Disable,
+    ForgotUsername
 }
