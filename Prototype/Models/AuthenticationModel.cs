@@ -13,11 +13,11 @@ public class AuthenticationModel
     public AuthenticationTypeEnum Authentication { get; set; }
     
     [Required]
-    public required string DataSourceId { get; set; }
+    public required Guid DataSourceId { get; set; }
     
     [Required]
     [ForeignKey(nameof(DataSourceId))]
-    public DataSourceModel DataSourceType { get; set; }
+    public DataSourceModel DataSource { get; set; }
     
     public string? Username { get; set; }
     

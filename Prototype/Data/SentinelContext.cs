@@ -67,7 +67,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
             .HasConversion(a => a.ToString(), a => (AuthenticationTypeEnum) Enum.Parse(typeof(AuthenticationTypeEnum), a));
 
         modelBuilder.Entity<AuthenticationModel>()
-            .HasOne(a => a.DataSourceType)
+            .HasOne(a => a.DataSource)
             .WithOne(ds => ds.Authentication)
             .HasForeignKey<AuthenticationModel>(a => a.DataSourceId);
 
@@ -77,7 +77,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
 
         modelBuilder.Entity<DataSourceModel>()
             .HasOne(ds => ds.Authentication)
-            .WithOne(a => a.DataSourceType);
+            .WithOne(a => a.DataSource);
 
         #endregion
         

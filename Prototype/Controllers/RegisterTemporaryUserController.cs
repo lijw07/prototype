@@ -10,9 +10,9 @@ namespace Prototype.Controllers;
 [ApiController]
 [Route("[controller]")]
 public class RegisterTemporaryUserController(
-    IEntityCreationService<TemporaryUserModel> tempUserService,
+    IEntitySaveService<TemporaryUserModel> tempUserService,
     IVerificationService verificationService,
-    ITemporaryUserFactoryService tempUserFactory,
+    IEntityCreationFactoryService tempUserFactory,
     IEmailNotificationService emailNotificationService,
     SentinelContext context)
     : ControllerBase

@@ -3,7 +3,10 @@ using Prototype.Models;
 
 namespace Prototype.Services;
 
-public interface ITemporaryUserFactoryService
+/// <summary>
+/// IEntityCreationFactoryService Is responsible for creating Entities.
+/// </summary>
+public interface IEntityCreationFactoryService
 {
     TemporaryUserModel CreateTemporaryUserFromRequest(RegisterRequest request, string verificationCode);
     UserModel CreateUserFromTemporaryUser(TemporaryUserModel tempUser);

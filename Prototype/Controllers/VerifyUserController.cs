@@ -7,10 +7,10 @@ using Prototype.Services;
 namespace Prototype.Controllers;
 
 [ApiController]
-[Route("verify")]
+[Route("[controller]")]
 public class VerifyUserController(
-    IEntityCreationService<UserModel> tempUserService,
-    ITemporaryUserFactoryService tempUserFactory,
+    IEntitySaveService<UserModel> tempUserService,
+    IEntityCreationFactoryService tempUserFactory,
     IEmailNotificationService emailNotificationService,
     SentinelContext context) : ControllerBase
 {

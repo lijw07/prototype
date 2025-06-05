@@ -1,8 +1,7 @@
 namespace Prototype.Services;
 
 /// <summary>
-/// Service responsible for sending email notifications.
-/// The verification email service constructs the verification link internally.
+/// IEmailNotificationService Is responsible for sending emails to users.
 /// </summary>
 public interface IEmailNotificationService
 {

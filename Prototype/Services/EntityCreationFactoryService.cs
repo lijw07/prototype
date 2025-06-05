@@ -5,7 +5,7 @@ using Prototype.Models;
 namespace Prototype.Services;
 
 
-public class TemporaryUserFactoryService : ITemporaryUserFactoryService
+public class EntityCreationFactoryService : IEntityCreationFactoryService
 {
     public TemporaryUserModel CreateTemporaryUserFromRequest(RegisterRequest request, string verificationCode)
     {

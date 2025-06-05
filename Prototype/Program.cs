@@ -8,7 +8,6 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<SentinelContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -18,8 +17,8 @@ builder.Services.Configure<SmtpSettings>(
 // Custom services
 builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
 builder.Services.AddScoped<IVerificationService, VerificationService>();
-builder.Services.AddScoped<ITemporaryUserFactoryService, TemporaryUserFactoryService>();
-builder.Services.AddScoped(typeof(IEntityCreationService<>), typeof(EntityCreationService<>));
+builder.Services.AddScoped<IEntityCreationFactoryService, EntityCreationFactoryService>();
+builder.Services.AddScoped(typeof(IEntitySaveService<>), typeof(EntitySaveService<>));
 
 var app = builder.Build();
 
@@ -31,13 +30,16 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-
 app.UseRouting();
+
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Prototype API V1");
+    });
 }
 
 app.MapControllerRoute(
