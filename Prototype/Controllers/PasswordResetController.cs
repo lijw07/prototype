@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
@@ -12,7 +11,6 @@ namespace Prototype.Controllers;
 [Route("[controller]")]
 public class PasswordResetController(
     IEntityCreationFactoryService entityCreationFactoryService,
-    IEntitySaveService<UserModel> entitySaveService,
     IEntitySaveService<AuditLogModel> auditLogService,
     IEmailNotificationService emailNotificationService,
     SentinelContext context) : ControllerBase

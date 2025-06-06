@@ -20,6 +20,8 @@ public class ApplicationModel
     
     public ApplicationConnectionModel ApplicationConnections { get; set; }
     
+    public ICollection<EmployeeModel> Employees { get; set; }
+    
     [Required]
     public required DateTime CreatedAt { get; set; }
     

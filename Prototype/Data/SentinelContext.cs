@@ -82,6 +82,19 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
 
         #endregion
         
+        #region EmployeeModel
+        
+        modelBuilder.Entity<EmployeeModel>()
+            .HasOne(e => e.Application)
+            .WithMany(a => a.Employees)
+            .HasForeignKey(e => e.ApplicationId);
+        
+        modelBuilder.Entity<EmployeeModel>()
+            .Property(e => e.EmployeePermissionType)
+            .HasConversion(ep => ep.ToString(), ep => (EmployeePermissionTypeEnum) Enum.Parse(typeof(EmployeePermissionTypeEnum), ep));
+        
+        #endregion
+        
         #region HumanResourceModel
         
         modelBuilder.Entity<HumanResourceModel>()
