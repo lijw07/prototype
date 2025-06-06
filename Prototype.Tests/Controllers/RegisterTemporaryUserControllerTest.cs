@@ -5,7 +5,6 @@ using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Models;
 using Prototype.Services;
-using Prototype.DTOs;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
@@ -17,7 +16,7 @@ namespace Prototype.Tests.Controllers
     public class RegisterTemporaryUserControllerTest
     {
         [Fact]
-        public async Task RegisterWithValidCredentials_ReturnsOk_AndSavesUser()
+        public async Task RegisterWithValidCredentials()
         {
             var options = new DbContextOptionsBuilder<SentinelContext>()
                 .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
