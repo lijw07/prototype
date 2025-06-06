@@ -17,6 +17,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
     public DbSet<UserActivityLogModel> UserActivityLogs { get; set; }
     public DbSet<UserApplicationModel> UserApplications { get; set; }
     public DbSet<UserModel> Users { get; set; }
+    public DbSet<UserRecoveryRequestModel> UserRecoveryRequests { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -122,6 +123,19 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         modelBuilder.Entity<UserApplicationModel>()
             .HasKey(ua => new { ua.UserId, ua.ApplicationId });
 
+        #endregion
+        
+        #region UserRecoveryRequestModel
+        
+        modelBuilder.Entity<UserRecoveryRequestModel>()
+            .HasOne(urr => urr.User)
+            .WithMany(u => u.UserRecoveryRequests)
+            .HasForeignKey(urr => urr.UserId);
+        
+        modelBuilder.Entity<UserRecoveryRequestModel>()
+            .Property(urr => urr.UserRecoveryType)
+            .HasConversion(ust => ust.ToString(), ust => (UserRecoveryTypeEnum) Enum.Parse(typeof(UserRecoveryTypeEnum), ust));
+        
         #endregion
     }
 }

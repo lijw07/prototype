@@ -109,4 +109,28 @@ public class EntityCreationFactoryService : IEntityCreationFactoryService
             CreatedAt = DateTime.Now
         };
     }
+
+    public AuditLogModel CreateAuditLogFromResetPassword(UserRecoveryRequestModel userRecoveryRequest)
+    {
+        return new AuditLogModel
+        {
+            AuditLogId = Guid.NewGuid(),
+            UserId = userRecoveryRequest.UserId,
+            User = userRecoveryRequest.User,
+            ActionType = ActionTypeEnum.ChangePassword,
+            Description = $"User {userRecoveryRequest.User.Username} successfully reset their password using token {userRecoveryRequest.Token}.",
+            Metadata = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                userRecoveryRequest.UserRecoveryRequestId,
+                userRecoveryRequest.UserId,
+                userRecoveryRequest.User.Email,
+                userRecoveryRequest.Token,
+                AffectedTable = nameof(UserModel),
+                RecoveryType = userRecoveryRequest.UserRecoveryType.ToString(),
+                RequestedAt = userRecoveryRequest.CreatedAt,
+                ResetAt = DateTime.Now
+            }),
+            CreatedAt = DateTime.Now
+        };
+    }
 }

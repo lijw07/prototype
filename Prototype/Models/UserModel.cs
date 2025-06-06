@@ -33,6 +33,8 @@ public class UserModel
     
     public ICollection<AuditLogModel> AuditLogs { get; set; }
     
+    public ICollection<UserRecoveryRequestModel> UserRecoveryRequests { get; set; }
+    
     public required DateTime CreatedAt { get; set; }
     
     public required DateTime UpdatedAt { get; set; }

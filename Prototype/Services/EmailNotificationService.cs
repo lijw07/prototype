@@ -99,6 +99,22 @@ public class EmailNotificationService : IEmailNotificationService
         await SendEmailAsync(recipientEmail, subject, body);
     }
 
+    public async Task SendPasswordResetVerificationEmail(string recipientEmail)
+    {
+        var subject = "Your Password Has Been Successfully Reset";
+        var body = $@"
+                <html>
+                  <body>
+                    <p>Hello,</p>
+                    <p>We wanted to let you know that your password has been successfully reset.</p>
+                    <p>If you did not initiate this change, please contact support immediately.</p>
+                    <br/>
+                    <p>Thank you,<br/>The Team</p>
+                  </body>
+                </html>";
+        await SendEmailAsync(recipientEmail, subject, body);
+    }
+
     private async Task SendEmailAsync(string recipientEmail, string subject, string body)
     {
         var mailMessage = new MailMessage(_fromEmail, recipientEmail)
