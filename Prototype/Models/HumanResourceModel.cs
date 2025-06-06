@@ -10,7 +10,7 @@ public class HumanResourceModel
     [Key]
     public required Guid HumanResourceId { get; set; }
     
-    public Guid UserId { get; set; }
+    public required Guid UserId { get; set; }
     
     [ForeignKey(nameof(UserId))]
     public UserModel User { get; set; }
@@ -35,5 +35,5 @@ public class HumanResourceModel
     public DateTime TerminationDate { get; set; }
     
     [Required]
-    public StatusEnum Status { get; set; }
+    public required StatusEnum Status { get; set; }
 }

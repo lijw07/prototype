@@ -2,5 +2,5 @@ namespace Prototype.DTOs;
 
 public class AddApplicationRequestDto
 {
-    public string ApplicationName { get; set; }
+    public required string ApplicationName { get; set; }
 }

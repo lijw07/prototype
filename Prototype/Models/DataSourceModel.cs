@@ -24,7 +24,7 @@ public class DataSourceModel
     [Required]
     public required DataSourceTypeEnum DataSourceType { get; set; }
     
-    public AuthenticationModel Authentication { get; set; }
+    public required AuthenticationModel Authentication { get; set; }
     
     public string DatabaseName { get; set; }
 }

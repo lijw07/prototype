@@ -6,5 +6,5 @@ public class ResetPasswordRequestDto
 {
     [FromQuery]
     public required string Token { get; set; }
-    public string password { get; set; }
+    public required string password { get; set; }
 }

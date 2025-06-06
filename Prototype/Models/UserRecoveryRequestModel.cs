@@ -15,13 +15,13 @@ public class UserRecoveryRequestModel
     
     [Required]
     [ForeignKey(nameof(UserId))]
-    public UserModel User { get; set; }
+    public required  UserModel User { get; set; }
     
     [Required]
     public required string Token { get; set; }
     
     [Required]
-    public UserRecoveryTypeEnum UserRecoveryType { get; set; }
+    public required  UserRecoveryTypeEnum UserRecoveryType { get; set; }
     
     [Required]
     public required DateTime CreatedAt { get; set; }
