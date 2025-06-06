@@ -1,4 +1,4 @@
-# Prototype Project
+# Centralized-Application-Management-System (CAMS)
 
 This repository is a starter template for a modern web application using **ASP.NET Core MVC** with the classic SPA project structure, **React** for the frontend (integrated via the SPA template), and **Docker** for containerization and deployment. This setup allows for efficient development, testing, and deployment of scalable web applications.
 
