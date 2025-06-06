@@ -1,6 +1,6 @@
 namespace Prototype.DTOs;
 
-public class RegisterRequest
+public class RegisterRequestDto
 { 
     public required string Username { get; set; }
     public required string Password { get; set; }

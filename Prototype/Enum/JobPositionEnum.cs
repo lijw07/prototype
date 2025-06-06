@@ -1,4 +1,4 @@
-namespace Prototype.Utility;
+namespace Prototype.Enum;
 
 public enum JobPositionEnum
 {

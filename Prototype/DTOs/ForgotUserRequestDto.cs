@@ -1,8 +1,9 @@
+using Prototype.Enum;
 using Prototype.Utility;
 
 namespace Prototype.DTOs;
 
-public class ForgotUserRequest
+public class ForgotUserRequestDto
 {
     public required string Email { get; set; }
     

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Prototype.Enum;
 
 namespace Prototype.Models;
 
@@ -23,7 +24,7 @@ public class DataSourceModel
     [Required]
     public required DataSourceTypeEnum DataSourceType { get; set; }
     
-    public AuthenticationModel Authentication { get; set; }
+    public required AuthenticationModel Authentication { get; set; }
     
     public string DatabaseName { get; set; }
 }

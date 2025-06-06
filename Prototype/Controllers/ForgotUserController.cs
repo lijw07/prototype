@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.DTOs;
+using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
 using Prototype.Utility;
@@ -20,23 +21,23 @@ public class ForgotUserController(
     : ControllerBase
 {
     [HttpPost]
-    public async Task<IActionResult> ForgotUser([FromBody] ForgotUserRequest request)
+    public async Task<IActionResult> ForgotUser([FromBody] ForgotUserRequestDto requestDto)
     {
         var user = await context.Users
-            .FirstOrDefaultAsync(u => u.Email == request.Email);
+            .FirstOrDefaultAsync(u => u.Email == requestDto.Email);
 
         if (user == null)
         {
             return BadRequest("Invalid email, No account exist with that email address");
         }
 
-        var userRecoveryLog = entityCreationFactoryService.CreateUserRecoveryRequestFronForgotUser(user, request, verificationService.GenerateVerificationCode());;
+        var userRecoveryLog = entityCreationFactoryService.CreateUserRecoveryRequestFronForgotUser(user, requestDto, verificationService.GenerateVerificationCode());;
         await userRecoveryLogService.CreateAsync(userRecoveryLog);
         
-        var auditLog = entityCreationFactoryService.CreateAuditLogFromForgotUser(user, request, userRecoveryLog);
+        var auditLog = entityCreationFactoryService.CreateAuditLogFromForgotUser(user, requestDto, userRecoveryLog);
         await auditLogService.CreateAsync(auditLog);
 
-        if (request.UserRecoveryType == UserRecoveryTypeEnum.PASSWORD)
+        if (requestDto.UserRecoveryType == UserRecoveryTypeEnum.PASSWORD)
         {
             await emailNotificationService.SendPasswordResetEmail(user.Email, userRecoveryLog.Token);
         }

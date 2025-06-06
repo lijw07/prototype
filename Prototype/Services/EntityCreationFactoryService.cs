@@ -1,4 +1,5 @@
 using Prototype.DTOs;
+using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Utility;
 using UAParser;
@@ -8,17 +9,17 @@ namespace Prototype.Services;
 
 public class EntityCreationFactoryService : IEntityCreationFactoryService
 {
-    public TemporaryUserModel CreateTemporaryUserFromRequest(RegisterRequest request, string verificationCode)
+    public TemporaryUserModel CreateTemporaryUserFromRequest(RegisterRequestDto requestDto, string verificationCode)
     {
         return new TemporaryUserModel
         {
             TemporaryUserId = Guid.NewGuid(),
-            Username = request.Username,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            Email = request.Email,
-            PhoneNumber = request.PhoneNumber,
+            Username = requestDto.Username,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(requestDto.Password),
+            FirstName = requestDto.FirstName,
+            LastName = requestDto.LastName,
+            Email = requestDto.Email,
+            PhoneNumber = requestDto.PhoneNumber,
             CreatedAt = DateTime.Now,
             VerificationCode = verificationCode
         };
@@ -62,7 +63,7 @@ public class EntityCreationFactoryService : IEntityCreationFactoryService
         };
     }
 
-    public UserRecoveryRequestModel CreateUserRecoveryRequestFronForgotUser(UserModel user, ForgotUserRequest request, string token)
+    public UserRecoveryRequestModel CreateUserRecoveryRequestFronForgotUser(UserModel user, ForgotUserRequestDto requestDto, string token)
     {
         return new UserRecoveryRequestModel
         {
@@ -70,15 +71,15 @@ public class EntityCreationFactoryService : IEntityCreationFactoryService
             UserId = user.UserId,
             User = user,
             Token = token,
-            UserRecoveryType = request.UserRecoveryType,
+            UserRecoveryType = requestDto.UserRecoveryType,
             CreatedAt = DateTime.Now,
             ExpiresAt = DateTime.Now.AddMinutes(30)
         };
     }
 
-    public AuditLogModel CreateAuditLogFromForgotUser(UserModel user, ForgotUserRequest request, UserRecoveryRequestModel userRecoveryLog)
+    public AuditLogModel CreateAuditLogFromForgotUser(UserModel user, ForgotUserRequestDto requestDto, UserRecoveryRequestModel userRecoveryLog)
     {
-        var action = request.UserRecoveryType == UserRecoveryTypeEnum.PASSWORD
+        var action = requestDto.UserRecoveryType == UserRecoveryTypeEnum.PASSWORD
             ? ActionTypeEnum.ChangePassword
             : ActionTypeEnum.ForgotUsername;
 
@@ -93,7 +94,7 @@ public class EntityCreationFactoryService : IEntityCreationFactoryService
         {
             user.UserId,
             user.Email,
-            RecoveryType = request.UserRecoveryType.ToString(),
+            RecoveryType = requestDto.UserRecoveryType.ToString(),
             RecoveryRequestId = userRecoveryLog.UserRecoveryRequestId,
             RequestedAt = userRecoveryLog.CreatedAt
         };

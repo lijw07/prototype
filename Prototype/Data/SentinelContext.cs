@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Utility;
 
@@ -35,7 +36,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         
         modelBuilder.Entity<ApplicationConnectionModel>()
             .Property(ac => ac.Status)
-            .HasConversion(s => s.ToString(), s => (StatusEnum) Enum.Parse(typeof(StatusEnum), s));
+            .HasConversion(s => s.ToString(), s => (StatusEnum) System.Enum.Parse(typeof(StatusEnum), s));
         
         #endregion
         
@@ -51,7 +52,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
             .Property(al => al.applicationActionType)
             .HasConversion(
                 aat => aat.ToString(),
-                aat => (ApplicationActionTypeEnum)Enum.Parse(typeof(ApplicationActionTypeEnum), aat)
+                aat => (ApplicationActionTypeEnum)System.Enum.Parse(typeof(ApplicationActionTypeEnum), aat)
             );
         
         #endregion
@@ -76,7 +77,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         
         modelBuilder.Entity<AuditLogModel>()
             .Property(al => al.ActionType)
-            .HasConversion(at => at.ToString(), at => (ActionTypeEnum) Enum.Parse(typeof(ActionTypeEnum), at));
+            .HasConversion(at => at.ToString(), at => (ActionTypeEnum) System.Enum.Parse(typeof(ActionTypeEnum), at));
         
         #endregion
 
@@ -84,7 +85,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
 
         modelBuilder.Entity<AuthenticationModel>()
             .Property(a => a.Authentication)
-            .HasConversion(a => a.ToString(), a => (AuthenticationTypeEnum) Enum.Parse(typeof(AuthenticationTypeEnum), a));
+            .HasConversion(a => a.ToString(), a => (AuthenticationTypeEnum) System.Enum.Parse(typeof(AuthenticationTypeEnum), a));
 
         modelBuilder.Entity<AuthenticationModel>()
             .HasOne(a => a.DataSource)
@@ -110,7 +111,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         
         modelBuilder.Entity<EmployeeModel>()
             .Property(e => e.EmployeePermissionType)
-            .HasConversion(ep => ep.ToString(), ep => (EmployeePermissionTypeEnum) Enum.Parse(typeof(EmployeePermissionTypeEnum), ep));
+            .HasConversion(ep => ep.ToString(), ep => (EmployeePermissionTypeEnum) System.Enum.Parse(typeof(EmployeePermissionTypeEnum), ep));
         
         #endregion
         
@@ -124,15 +125,15 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         
         modelBuilder.Entity<HumanResourceModel>()
             .Property(hr => hr.JobTitle)
-            .HasConversion(jt => jt.ToString(), jt => (JobPositionEnum) Enum.Parse(typeof(JobPositionEnum), jt));
+            .HasConversion(jt => jt.ToString(), jt => (JobPositionEnum) System.Enum.Parse(typeof(JobPositionEnum), jt));
         
         modelBuilder.Entity<HumanResourceModel>()
             .Property(hr => hr.Department)
-            .HasConversion(d => d.ToString(), d => (DepartmentEnum) Enum.Parse(typeof(DepartmentEnum), d));
+            .HasConversion(d => d.ToString(), d => (DepartmentEnum) System.Enum.Parse(typeof(DepartmentEnum), d));
         
         modelBuilder.Entity<HumanResourceModel>()
             .Property(hr => hr.Status)
-            .HasConversion(s => s.ToString(), s => (StatusEnum) Enum.Parse(typeof(StatusEnum), s));
+            .HasConversion(s => s.ToString(), s => (StatusEnum) System.Enum.Parse(typeof(StatusEnum), s));
         
         #endregion
         
@@ -146,7 +147,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         
         modelBuilder.Entity<UserActivityLogModel>()
             .Property(ual => ual.ActionType)
-            .HasConversion(at => at.ToString(), at => (ActionTypeEnum) Enum.Parse(typeof(ActionTypeEnum), at));
+            .HasConversion(at => at.ToString(), at => (ActionTypeEnum) System.Enum.Parse(typeof(ActionTypeEnum), at));
         
         #endregion
 
@@ -166,7 +167,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         
         modelBuilder.Entity<UserRecoveryRequestModel>()
             .Property(urr => urr.UserRecoveryType)
-            .HasConversion(ust => ust.ToString(), ust => (UserRecoveryTypeEnum) Enum.Parse(typeof(UserRecoveryTypeEnum), ust));
+            .HasConversion(ust => ust.ToString(), ust => (UserRecoveryTypeEnum) System.Enum.Parse(typeof(UserRecoveryTypeEnum), ust));
         
         #endregion
     }

@@ -14,12 +14,12 @@ public class LoginController(
     SentinelContext context) : ControllerBase
 {
     [HttpPost]
-    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    public async Task<IActionResult> Login([FromBody] LoginRequestDto requestDto)
     {
         var user = await context.Users
-            .FirstOrDefaultAsync(u => u.Username == request.Username);
+            .FirstOrDefaultAsync(u => u.Username == requestDto.Username);
         
-        if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        if (user == null || !BCrypt.Net.BCrypt.Verify(requestDto.Password, user.PasswordHash))
         {
             return Unauthorized(new {message = "Invalid username or password"});
         }

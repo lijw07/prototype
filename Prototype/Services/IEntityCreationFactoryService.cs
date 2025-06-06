@@ -8,10 +8,10 @@ namespace Prototype.Services;
 /// </summary>
 public interface IEntityCreationFactoryService
 {
-    TemporaryUserModel CreateTemporaryUserFromRequest(RegisterRequest request, string verificationCode);
+    TemporaryUserModel CreateTemporaryUserFromRequest(RegisterRequestDto requestDto, string verificationCode);
     UserModel CreateUserFromTemporaryUser(TemporaryUserModel tempUser);
     UserActivityLogModel CreateUserActivityLogFromLogin(UserModel user,  HttpContext httpContext);
-    UserRecoveryRequestModel CreateUserRecoveryRequestFronForgotUser(UserModel user, ForgotUserRequest request, string generateVerificationCode);
-    AuditLogModel CreateAuditLogFromForgotUser(UserModel user, ForgotUserRequest request, UserRecoveryRequestModel userRecoveryLog);
+    UserRecoveryRequestModel CreateUserRecoveryRequestFronForgotUser(UserModel user, ForgotUserRequestDto requestDto, string generateVerificationCode);
+    AuditLogModel CreateAuditLogFromForgotUser(UserModel user, ForgotUserRequestDto requestDto, UserRecoveryRequestModel userRecoveryLog);
     AuditLogModel CreateAuditLogFromResetPassword(UserRecoveryRequestModel userRecoveryRequest);
 }

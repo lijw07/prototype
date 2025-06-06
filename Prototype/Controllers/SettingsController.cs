@@ -51,7 +51,7 @@ public class SettingsController : ControllerBase
 
     // PUT: /settings/profile
     [HttpPut("profile")]
-    public async Task<IActionResult> UpdateProfile([FromBody] UserProfileUpdateRequest dto)
+    public async Task<IActionResult> UpdateProfile([FromBody] UserProfileUpdateRequestDto dto)
     {
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
@@ -72,7 +72,7 @@ public class SettingsController : ControllerBase
     }
     
     [HttpPut("password")]
-    public async Task<IActionResult> ChangePassword([FromBody] UserProfileUpdatePasswordRequest dto)
+    public async Task<IActionResult> ChangePassword([FromBody] UserProfileUpdatePasswordRequestDto dto)
     {
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
@@ -114,7 +114,7 @@ public class SettingsController : ControllerBase
     }
 
     [HttpPost("applications")]
-    public async Task<IActionResult> AddApplication([FromBody] AddApplicationRequest dto)
+    public async Task<IActionResult> AddApplication([FromBody] AddApplicationRequestDto dto)
     {
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();

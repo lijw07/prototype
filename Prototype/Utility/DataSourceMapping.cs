@@ -1,3 +1,5 @@
+using Prototype.Enum;
+
 namespace Prototype.Utility;
 
 public class DataSourceMapping
