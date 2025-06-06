@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
+using Prototype.DTOs;
 using Prototype.Models;
 using Prototype.Services;
-using ResetPasswordRequest = Prototype.DTOs.ResetPasswordRequest;
 
 namespace Prototype.Controllers;
 
@@ -16,18 +16,18 @@ public class PasswordResetController(
     SentinelContext context) : ControllerBase
 {
     [HttpPost]
-    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto requestDto)
     {
         var userRecoveryRequest = await context.UserRecoveryRequests
             .Include(userRecoveryRequestModel => userRecoveryRequestModel.User)
-            .FirstOrDefaultAsync(r => r.Token == request.Token);
+            .FirstOrDefaultAsync(r => r.Token == requestDto.Token);
 
         if (userRecoveryRequest == null || userRecoveryRequest.ExpiresAt < DateTime.Now)
         {
             return BadRequest("Invalid or expired token.");
         }
         
-        userRecoveryRequest.User.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.password);
+        userRecoveryRequest.User.PasswordHash = BCrypt.Net.BCrypt.HashPassword(requestDto.password);
         context.Users.Update(userRecoveryRequest.User);
         await context.SaveChangesAsync();
         

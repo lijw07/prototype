@@ -10,7 +10,7 @@ public class EmailNotificationService : IEmailNotificationService
     private readonly SmtpClient _smtpClient;
     private readonly string _fromEmail;
 
-    public EmailNotificationService(IOptions<SmtpSettings> smtpOptions)
+    public EmailNotificationService(IOptions<SmtpSettingsPoco> smtpOptions)
     {
         var smtp = smtpOptions.Value;
         _fromEmail = smtp.FromEmail;

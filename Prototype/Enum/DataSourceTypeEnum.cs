@@ -1,3 +1,5 @@
+namespace Prototype.Enum;
+
 public enum DataSourceTypeEnum
 {
     MicrosoftSqlServer,

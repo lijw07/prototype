@@ -3,28 +3,18 @@
     build:
       context: ./Prototype/ClientApp
       dockerfile: Dockerfile
-      target: dev
+      target: prod
     ports:
       - "3000:3000"
-    volumes:
-      - ./Prototype/ClientApp:/app
-      - /app/node_modules
-    environment:
-      - CHOKIDAR_USE_POLLING=true
-      - BROWSER=none
-  
+
   backend:
     build:
       context: ./Prototype
       dockerfile: Dockerfile
-      target: dev
+      target: final
     ports:
       - "8080:8080"
-    volumes:
-      - ./Prototype:/src/Prototype
-      - ~/.nuget/packages:/root/.nuget/packages
     environment:
-      - DOTNET_USE_POLLING_FILE_WATCHER=1
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Server=db,1433;Database=PrototypeDb;User=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True
     depends_on:

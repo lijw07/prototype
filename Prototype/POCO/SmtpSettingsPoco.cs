@@ -1,6 +1,6 @@
 namespace Prototype.POCO;
 
-public class SmtpSettings
+public class SmtpSettingsPoco
 {
     public string Host { get; set; }
     public int Port { get; set; }

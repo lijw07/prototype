@@ -1,6 +1,6 @@
 namespace Prototype.DTOs;
 
-public class UserProfileUpdateRequest
+public class UserProfileUpdateRequestDto
 {
     public string FirstName { get; set; }
     public string LastName { get; set; }

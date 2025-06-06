@@ -1,26 +1,25 @@
-﻿# Base Runetime Image
-FROM node:20 AS base
+﻿FROM node:20 AS base
 WORKDIR /app
 EXPOSE 3000
 
-# Install dependencies only
+# --- Dependencies ---
 FROM base AS deps
 COPY package*.json ./
 RUN npm install
 
-# Development image (hot reload, file watching)
+# --- Dev (hot reload) ---
 FROM deps AS dev
 COPY . .
 ENV CHOKIDAR_USE_POLLING=true
 ENV BROWSER=none
 CMD ["npm", "start"]
 
-# Production build
+# --- Build for Production ---
 FROM deps AS build
 COPY . .
 RUN npm run build
 
-# Production serve image using a minimal Node.js web server (serve or nginx)
+# --- Serve Production ---
 FROM node:20 AS prod
 WORKDIR /app
 COPY --from=build /app/build ./build

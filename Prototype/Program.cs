@@ -11,7 +11,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<SentinelContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-builder.Services.Configure<SmtpSettings>(
+builder.Services.Configure<SmtpSettingsPoco>(
     builder.Configuration.GetSection("Smtp"));
 
 // Custom services
