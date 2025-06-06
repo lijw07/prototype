@@ -7,10 +7,12 @@ namespace Prototype.Data;
 public class SentinelContext(DbContextOptions<SentinelContext> options) : DbContext(options)
 {
     public DbSet<ApplicationConnectionModel> ApplicationConnections { get; set; }
+    public DbSet<ApplicationLogModel> ApplicationLogs { get; set; }
     public DbSet<ApplicationModel> Applications { get; set; }
     public DbSet<AuditLogModel> AuditLogs { get; set; }
     public DbSet<AuthenticationModel> Authentications { get; set; }
     public DbSet<DataSourceModel> DataSources { get; set; }
+    public DbSet<EmployeeModel> Employees { get; set; }
     public DbSet<HumanResourceModel> HumanResources { get; set; }
     public DbSet<PermissionModel> Permissions { get; set; }
     public DbSet<TemporaryUserModel> TemporaryUsers { get; set; }
@@ -34,6 +36,23 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         modelBuilder.Entity<ApplicationConnectionModel>()
             .Property(ac => ac.Status)
             .HasConversion(s => s.ToString(), s => (StatusEnum) Enum.Parse(typeof(StatusEnum), s));
+        
+        #endregion
+        
+        #region ApplicationLogModel
+        
+        modelBuilder.Entity<ApplicationLogModel>()
+            .HasOne(al => al.Application)
+            .WithMany(a => a.ApplicationLog)
+            .HasForeignKey(al => al.ApplicationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ApplicationLogModel>()
+            .Property(al => al.applicationActionType)
+            .HasConversion(
+                aat => aat.ToString(),
+                aat => (ApplicationActionTypeEnum)Enum.Parse(typeof(ApplicationActionTypeEnum), aat)
+            );
         
         #endregion
         
@@ -81,7 +100,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
             .WithOne(a => a.DataSource);
 
         #endregion
-        
+                
         #region EmployeeModel
         
         modelBuilder.Entity<EmployeeModel>()

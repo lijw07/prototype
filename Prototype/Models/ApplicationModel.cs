@@ -22,6 +22,8 @@ public class ApplicationModel
     
     public ICollection<EmployeeModel> Employees { get; set; }
     
+    public ICollection<ApplicationLogModel> ApplicationLog { get; set; }
+    
     [Required]
     public required DateTime CreatedAt { get; set; }
     
