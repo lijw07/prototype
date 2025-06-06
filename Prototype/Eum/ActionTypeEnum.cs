@@ -3,6 +3,7 @@ namespace Prototype.Utility;
 public enum ActionTypeEnum
 {
     Create,
+    CreateUser,
     Read,
     Update,
     Delete,
@@ -18,5 +19,6 @@ public enum ActionTypeEnum
     Approve,
     Reject,
     Enable,
-    Disable
+    Disable,
+    ForgotUsername
 }

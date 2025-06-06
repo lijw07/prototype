@@ -1,18 +1,24 @@
-using Microsoft.AspNetCore.SpaServices.ReactDevelopmentServer;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
+using Prototype.POCO;
+using Prototype.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<SentinelContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.Configure<SmtpSettings>(
+    builder.Configuration.GetSection("Smtp"));
 
-builder.Services.AddSpaStaticFiles(configuration =>
-{
-    configuration.RootPath = "ClientApp/build"; // Production build output folder
-});
+// Custom services
+builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
+builder.Services.AddScoped<IVerificationService, VerificationService>();
+builder.Services.AddScoped<IEntityCreationFactoryService, EntityCreationFactoryService>();
+builder.Services.AddScoped(typeof(IEntitySaveService<>), typeof(EntitySaveService<>));
 
 var app = builder.Build();
 
@@ -24,23 +30,26 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-app.UseSpaStaticFiles();
-
 app.UseRouting();
+
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Prototype API V1");
+    });
+}
 
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller}/{action=Index}/{id?}");
 
-app.UseSpa(spa =>
+using (var scope = app.Services.CreateScope())
 {
-    spa.Options.SourcePath = "ClientApp";
-
-    if (app.Environment.IsDevelopment())
-    {
-        // Starts React dev server automatically when dotnet run in dev mode
-        spa.UseReactDevelopmentServer(npmScript: "start");
-    }
-});
+    var db = scope.ServiceProvider.GetRequiredService<SentinelContext>();
+    db.Database.Migrate();
+}
 
 app.Run();

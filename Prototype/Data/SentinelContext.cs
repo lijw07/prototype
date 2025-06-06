@@ -6,140 +6,168 @@ namespace Prototype.Data;
 
 public class SentinelContext(DbContextOptions<SentinelContext> options) : DbContext(options)
 {
-    private DbSet<ActiveDirectoryModel> ActiveDirectories { get; set; }
-    private DbSet<ApplicationHealthModel> ApplicationHealth { get; set; }
-    private DbSet<ApplicationModel> Applications { get; set; }
-    private DbSet<AuditLogModel> AuditLogs { get; set; }
-    private DbSet<ConnectionCredentialModel> ConnectionCredentials { get; set; }
-    private DbSet<DataSourceConnectionModel> DataSourceConnections { get; set; }
-    private DbSet<EmployeeModel> Employee { get; set; }
-    private DbSet<EmployeePermissionModel> EmployeePermissions { get; set; }
-    private DbSet<EmployeeRoleModel> EmployeeRoles { get; set; }
-    private DbSet<HumanResourceModel> HumanResource { get; set; }
-    private DbSet<UserModel> Users { get; set; }
-    private DbSet<UserSessionModel> UserSessions { get; set; }
-    
+    public DbSet<ApplicationConnectionModel> ApplicationConnections { get; set; }
+    public DbSet<ApplicationLogModel> ApplicationLogs { get; set; }
+    public DbSet<ApplicationModel> Applications { get; set; }
+    public DbSet<AuditLogModel> AuditLogs { get; set; }
+    public DbSet<AuthenticationModel> Authentications { get; set; }
+    public DbSet<DataSourceModel> DataSources { get; set; }
+    public DbSet<EmployeeModel> Employees { get; set; }
+    public DbSet<HumanResourceModel> HumanResources { get; set; }
+    public DbSet<PermissionModel> Permissions { get; set; }
+    public DbSet<TemporaryUserModel> TemporaryUsers { get; set; }
+    public DbSet<UserActivityLogModel> UserActivityLogs { get; set; }
+    public DbSet<UserApplicationModel> UserApplications { get; set; }
+    public DbSet<UserModel> Users { get; set; }
+    public DbSet<UserRecoveryRequestModel> UserRecoveryRequests { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<ActiveDirectoryModel>(entity =>
-        {
-            entity.Property(a => a.ActiveDirectoryId).HasConversion<Guid>();
-        });
-        
-        modelBuilder.Entity<ApplicationHealthModel>(entity =>
-        {
-            entity.Property(ah => ah.ApplicationHealthId).HasConversion<Guid>();
-        });
-        
-        modelBuilder.Entity<ApplicationModel>(entity =>
-        {
-            entity.Property(a => a.ApplicationId).HasConversion<Guid>();
-            
-            entity.Property(a => a.DataSourceConnectionId).HasConversion<Guid>();
-            
-            entity.Property(a => a.Status).HasConversion(
-                a => a.ToString(),
-                a => (StatusEnum)Enum.Parse(typeof(StatusEnum), a));
-            
-            entity.Property(a => a.ApplicationPermission).HasConversion(
-                a => a.ToString(),
-                a => (ApplicationPermissionEnum)Enum.Parse(typeof(ApplicationPermissionEnum), a));
-        });
-        
-        modelBuilder.Entity<AuditLogModel>(entity =>
-        {
-            entity.Property(al => al.AuditLogId).HasConversion<Guid>();
-            
-            entity.Property(al => al.ActionType).HasConversion(
-                al => al.ToString(),
-                al => (ActionTypeEnum)Enum.Parse(typeof(ActionTypeEnum), al));
-        });
-        
-        modelBuilder.Entity<ConnectionCredentialModel>(entity =>
-        {
-            entity.Property(cc => cc.ConnectionCredentialId).HasConversion<Guid>();
-            
-            entity.Property(cc => cc.CredentialType).HasConversion(
-                u => u.ToString(),
-                u => (CredentialTypeEnum)Enum.Parse(typeof(CredentialTypeEnum), u));
-        });
-        
-        modelBuilder.Entity<DataSourceConnectionModel>(entity =>
-        {
-            entity.Property(dc => dc.DataSourceConnectionId).HasConversion<Guid>();
-            
-            entity.Property(dc => dc.DataSourceType).HasConversion(
-                u => u.ToString(),
-                u => (DataSourceTypeEnum)Enum.Parse(typeof(DataSourceTypeEnum), u));
-            
-            entity.Property(dc => dc.ConnectionCredentialId).HasConversion<Guid>();
+        base.OnModelCreating(modelBuilder);
 
-        });
-        
-        modelBuilder.Entity<EmployeeModel>(entity =>
-        {
-            entity.Property(e => e.EmployeeId).HasConversion<Guid>();
-            
-            entity.Property(e => e.Status).HasConversion(
-                e => e.ToString(),
-                e => (StatusEnum)Enum.Parse(typeof(StatusEnum), e));
-            
-            entity.Property(e => e.EmployeePermissionId).HasConversion<Guid>();
-            
-            entity.Property(e => e.EmployeeRoleId).HasConversion<Guid>();
-            
-            entity.Property(e => e.ApplicationId).HasConversion<Guid>();
-        });
+        #region ApplicationConnectionModel
 
-        modelBuilder.Entity<EmployeePermissionModel>(entity =>
-        {
-            entity.Property(ep => ep.EmployeePermissionId).HasConversion<Guid>();
-            
-            entity.Property(ep => ep.Permission).HasConversion(
-                ep => ep.ToString(),
-                ep => (PermissionEnum)Enum.Parse(typeof(PermissionEnum), ep));
-        });
-
-        modelBuilder.Entity<EmployeeRoleModel>(entity =>
-        {
-            entity.Property(er => er.EmployeeRoleId).HasConversion<Guid>();
-        });
+        modelBuilder.Entity<ApplicationConnectionModel>()
+            .HasOne(ac => ac.Application)
+            .WithOne(a => a.ApplicationConnections)
+            .HasForeignKey<ApplicationConnectionModel>(ac => ac.ApplicationId)
+            .OnDelete(DeleteBehavior.Cascade);
         
-        modelBuilder.Entity<HumanResourceModel>(entity =>
-        {
-            entity.Property(hr => hr.HumanResourceId).HasConversion<Guid>();
-            
-            entity.Property(hr => hr.Status).HasConversion(
-                hr => hr.ToString(),
-                hr => (StatusEnum)Enum.Parse(typeof(StatusEnum), hr));
-            
-            entity.Property(hr => hr.Permission).HasConversion(
-                hr => hr.ToString(),
-                hr => (PermissionEnum)Enum.Parse(typeof(PermissionEnum), hr));
-        });
+        modelBuilder.Entity<ApplicationConnectionModel>()
+            .Property(ac => ac.Status)
+            .HasConversion(s => s.ToString(), s => (StatusEnum) Enum.Parse(typeof(StatusEnum), s));
         
-        modelBuilder.Entity<UserModel>(entity =>
-        {
-            entity.Property(u => u.UserId).HasConversion<Guid>();
-            
-            entity.Property(u => u.UserSessionId).HasConversion<Guid>();
-
-            entity.Property(u => u.Permission).HasConversion(
-                u => u.ToString(),
-                u => (PermissionEnum)Enum.Parse(typeof(PermissionEnum), u));
-            
-            entity.Property(u => u.Status).HasConversion(
-                u => u.ToString(),
-                u => (StatusEnum)Enum.Parse(typeof(StatusEnum), u));
-        });
+        #endregion
         
-        modelBuilder.Entity<UserSessionModel>(entity =>
-        {
-            entity.Property(us => us.UserSessionId).HasConversion<Guid>();
+        #region ApplicationLogModel
+        
+        modelBuilder.Entity<ApplicationLogModel>()
+            .HasOne(al => al.Application)
+            .WithMany(a => a.ApplicationLog)
+            .HasForeignKey(al => al.ApplicationId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-            entity.Property(us => us.ActionTypeEnum).HasConversion(
-                us => us.ToString(),
-                us => (ActionTypeEnum)Enum.Parse(typeof(ActionTypeEnum), us));
-        });
+        modelBuilder.Entity<ApplicationLogModel>()
+            .Property(al => al.applicationActionType)
+            .HasConversion(
+                aat => aat.ToString(),
+                aat => (ApplicationActionTypeEnum)Enum.Parse(typeof(ApplicationActionTypeEnum), aat)
+            );
+        
+        #endregion
+        
+        #region ApplicationModel
+        
+        modelBuilder.Entity<ApplicationModel>()
+            .HasOne(a => a.Permission)
+            .WithMany()
+            .HasForeignKey(a => a.PermissionId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        #endregion
+        
+        #region AuditLogModel
+        
+        modelBuilder.Entity<AuditLogModel>()
+            .HasOne(a => a.User)
+            .WithMany(u => u.AuditLogs)
+            .HasForeignKey(a => a.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<AuditLogModel>()
+            .Property(al => al.ActionType)
+            .HasConversion(at => at.ToString(), at => (ActionTypeEnum) Enum.Parse(typeof(ActionTypeEnum), at));
+        
+        #endregion
+
+        #region AuthenticationModel
+
+        modelBuilder.Entity<AuthenticationModel>()
+            .Property(a => a.Authentication)
+            .HasConversion(a => a.ToString(), a => (AuthenticationTypeEnum) Enum.Parse(typeof(AuthenticationTypeEnum), a));
+
+        modelBuilder.Entity<AuthenticationModel>()
+            .HasOne(a => a.DataSource)
+            .WithOne(ds => ds.Authentication)
+            .HasForeignKey<AuthenticationModel>(a => a.DataSourceId);
+
+        #endregion
+
+        #region DataSourceModel
+
+        modelBuilder.Entity<DataSourceModel>()
+            .HasOne(ds => ds.Authentication)
+            .WithOne(a => a.DataSource);
+
+        #endregion
+                
+        #region EmployeeModel
+        
+        modelBuilder.Entity<EmployeeModel>()
+            .HasOne(e => e.Application)
+            .WithMany(a => a.Employees)
+            .HasForeignKey(e => e.ApplicationId);
+        
+        modelBuilder.Entity<EmployeeModel>()
+            .Property(e => e.EmployeePermissionType)
+            .HasConversion(ep => ep.ToString(), ep => (EmployeePermissionTypeEnum) Enum.Parse(typeof(EmployeePermissionTypeEnum), ep));
+        
+        #endregion
+        
+        #region HumanResourceModel
+        
+        modelBuilder.Entity<HumanResourceModel>()
+            .HasOne(hr => hr.User)
+            .WithOne()
+            .HasForeignKey<HumanResourceModel>(hr => hr.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<HumanResourceModel>()
+            .Property(hr => hr.JobTitle)
+            .HasConversion(jt => jt.ToString(), jt => (JobPositionEnum) Enum.Parse(typeof(JobPositionEnum), jt));
+        
+        modelBuilder.Entity<HumanResourceModel>()
+            .Property(hr => hr.Department)
+            .HasConversion(d => d.ToString(), d => (DepartmentEnum) Enum.Parse(typeof(DepartmentEnum), d));
+        
+        modelBuilder.Entity<HumanResourceModel>()
+            .Property(hr => hr.Status)
+            .HasConversion(s => s.ToString(), s => (StatusEnum) Enum.Parse(typeof(StatusEnum), s));
+        
+        #endregion
+        
+        #region UserActivityLogModel
+        
+        modelBuilder.Entity<UserActivityLogModel>()
+            .HasOne(ual => ual.User)
+            .WithMany(u => u.UserActivityLogs)
+            .HasForeignKey(ual => ual.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<UserActivityLogModel>()
+            .Property(ual => ual.ActionType)
+            .HasConversion(at => at.ToString(), at => (ActionTypeEnum) Enum.Parse(typeof(ActionTypeEnum), at));
+        
+        #endregion
+
+        #region UserApplicationModel
+
+        modelBuilder.Entity<UserApplicationModel>()
+            .HasKey(ua => new { ua.UserId, ua.ApplicationId });
+
+        #endregion
+        
+        #region UserRecoveryRequestModel
+        
+        modelBuilder.Entity<UserRecoveryRequestModel>()
+            .HasOne(urr => urr.User)
+            .WithMany(u => u.UserRecoveryRequests)
+            .HasForeignKey(urr => urr.UserId);
+        
+        modelBuilder.Entity<UserRecoveryRequestModel>()
+            .Property(urr => urr.UserRecoveryType)
+            .HasConversion(ust => ust.ToString(), ust => (UserRecoveryTypeEnum) Enum.Parse(typeof(UserRecoveryTypeEnum), ust));
+        
+        #endregion
     }
 }

@@ -1,0 +1,31 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Prototype.Data;
+using Prototype.Models;
+using Prototype.Services;
+
+namespace Prototype.Controllers;
+
+[ApiController]
+[Route("[controller]")]
+public class LoginController(
+    IEntityCreationFactoryService entityCreationFactory,
+    IEntitySaveService<UserActivityLogModel> userService,
+    SentinelContext context) : ControllerBase
+{
+    [HttpPost]
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    {
+        var user = await context.Users
+            .FirstOrDefaultAsync(u => u.Username == request.Username);
+        
+        if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        {
+            return Unauthorized(new {message = "Invalid username or password"});
+        }
+        
+        var userActivityLog = entityCreationFactory.CreateUserActivityLogFromLogin(user, HttpContext);
+        await userService.CreateAsync(userActivityLog);
+        return Ok(new {message = "Login Successful"});
+    }
+}
