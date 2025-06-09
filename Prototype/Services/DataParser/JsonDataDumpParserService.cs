@@ -6,55 +6,53 @@ namespace Prototype.Services.DataParser;
 
 public class JsonDataDumpParserService : IDataDumpParserService
 {
-    public async Task<List<TableSchemaDto>> ParseAndInferSchemasAsync(IFormFile file)
+    public async Task<List<TableSchemaDto>> ParseAndInferSchemasAsync(ICollection<IFormFile> files)
     {
-        using var stream = file.OpenReadStream();
-        var jsonDoc = await JsonDocument.ParseAsync(stream);
-        
-        if (jsonDoc.RootElement.ValueKind != JsonValueKind.Array)
-            return new List<TableSchemaDto>();
+        var allSchemas = new List<TableSchemaDto>();
 
-        var firstRow = jsonDoc.RootElement.EnumerateArray().FirstOrDefault();
-        if (firstRow.ValueKind != JsonValueKind.Object)
-            return new List<TableSchemaDto>();
-
-        var columns = new List<ColumnSchemaDto>();
-
-        foreach (var prop in firstRow.EnumerateObject())
+        foreach (var file in files)
         {
-            columns.Add(new ColumnSchemaDto
+            if (file == null || file.Length == 0)
+                continue;
+
+            using var stream = file.OpenReadStream();
+            try
             {
-                ColumnName = prop.Name,
-                DataType = InferDataType(prop.Value)
-            });
+                var jsonDocument = await JsonDocument.ParseAsync(stream);
+                var root = jsonDocument.RootElement;
+
+                var schema = new TableSchemaDto
+                {
+                    TableName = file.FileName,
+                    Columns = new List<ColumnSchemaDto>()
+                };
+
+                if (root.ValueKind == JsonValueKind.Array && root.GetArrayLength() > 0)
+                {
+                    var firstObject = root[0];
+                    if (firstObject.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var property in firstObject.EnumerateObject())
+                        {
+                            schema.Columns.Add(new ColumnSchemaDto
+                            {
+                                ColumnName = property.Name,
+                                DataType = property.Value.ValueKind.ToString()
+                            });
+                        }
+                    }
+                }
+
+                allSchemas.Add(schema);
+            }
+            catch (JsonException)
+            {
+                // Handle or log JSON parsing errors if necessary
+                // For now, skip this file
+                continue;
+            }
         }
 
-        
-        var tableSchema = new TableSchemaDto
-        {
-            TableName = Path.GetFileNameWithoutExtension(file.FileName),
-            Columns = columns
-        };
-
-        return new List<TableSchemaDto> { tableSchema };
-    }
-
-    private string InferDataType(JsonElement element)
-    {
-        return element.ValueKind switch
-        {
-            JsonValueKind.Number => "number",
-            JsonValueKind.String => IsGuid(element.GetString()) ? "Guid" : "string",
-            JsonValueKind.True or JsonValueKind.False => "bool",
-            JsonValueKind.Object => "object",
-            JsonValueKind.Array => "array",
-            _ => "string"
-        };
-    }
-
-    private bool IsGuid(string? value)
-    {
-        if (value == null) return false;
-        return Guid.TryParse(value, out _);
+        return allSchemas;
     }
 }
