@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
-using Prototype.POCO;
 using Prototype.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,8 +10,6 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<SentinelContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-builder.Services.Configure<SmtpSettingsPoco>(
-    builder.Configuration.GetSection("Smtp"));
 
 // Custom services
 builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
