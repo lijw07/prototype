@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Prototype.Data;
 using Prototype.DTOs;
@@ -8,12 +7,12 @@ namespace Prototype.Controllers;
 
 [ApiController]
 [Route("[controller]")]
-[Authorize]
-public class SettingsController(DataDumpParserFactory parserFactory,
+public class SettingsController(
+    DataDumpParserFactory parserFactory,
     SentinelContext context) : ControllerBase
 {
     [HttpPost("upload")]
-    public async Task<IActionResult> UploadDataDump([FromBody] DataDumpRequestDto requestDto)
+    public async Task<IActionResult> UploadDataDump([FromForm] DataDumpRequestDto requestDto)
     {
         var parser = parserFactory.GetParser(requestDto.DataDumpParseType);
         var schemas = await parser.ParseAndInferSchemasAsync(requestDto.File);

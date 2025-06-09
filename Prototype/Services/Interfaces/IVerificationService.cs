@@ -1,4 +1,4 @@
-namespace Prototype.Services;
+namespace Prototype.Services.Interfaces;
 
 /// <summary>
 /// IVerificationService Is responsible for Generating Verification Codes.

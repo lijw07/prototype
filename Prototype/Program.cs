@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.Services;
+using Prototype.Services.DataParser;
+using Prototype.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +18,13 @@ builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>(
 builder.Services.AddScoped<IVerificationService, VerificationService>();
 builder.Services.AddScoped<IEntityCreationFactoryService, EntityCreationFactoryService>();
 builder.Services.AddScoped(typeof(IEntitySaveService<>), typeof(EntitySaveService<>));
+builder.Services.AddScoped<DataDumpParserFactory>();
+builder.Services.AddTransient<CsvDataDumpParserService>();
+builder.Services.AddTransient<JsonDataDumpParserService>();
+builder.Services.AddTransient<ExcelDataDumpParserService>();
+builder.Services.AddTransient<SqlDataDumpParserService>();
+builder.Services.AddTransient<XmlDataDumpParserService>();
+builder.Services.AddTransient<YamlDataDumpParserService>();
 
 var app = builder.Build();
 
@@ -28,7 +37,6 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
-
 
 if (app.Environment.IsDevelopment())
 {

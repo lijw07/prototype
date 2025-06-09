@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Mail;
 using Prototype.POCO;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
 

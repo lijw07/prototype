@@ -1,5 +1,6 @@
-using Prototype.Data.Parser;
 using Prototype.Enum;
+using Prototype.Services.DataParser;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
 

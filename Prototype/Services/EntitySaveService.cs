@@ -1,4 +1,5 @@
 using Prototype.Data;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
 

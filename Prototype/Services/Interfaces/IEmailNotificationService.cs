@@ -1,4 +1,4 @@
-namespace Prototype.Services;
+namespace Prototype.Services.Interfaces;
 
 /// <summary>
 /// IEmailNotificationService Is responsible for sending emails to users.

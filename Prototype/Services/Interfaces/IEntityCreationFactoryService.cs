@@ -1,7 +1,7 @@
 using Prototype.DTOs;
 using Prototype.Models;
 
-namespace Prototype.Services;
+namespace Prototype.Services.Interfaces;
 
 /// <summary>
 /// IEntityCreationFactoryService Is responsible for creating Entities.
