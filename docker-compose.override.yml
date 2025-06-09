@@ -1,0 +1,26 @@
+services:
+  frontend:
+    build:
+      target: dev
+    volumes:
+      - ./Prototype/ClientApp:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USE_POLLING=true
+      - BROWSER=none
+
+  backend:
+    build:
+      target: dev
+    volumes:
+      - ./Prototype:/src/Prototype:cached
+      - ~/.nuget/packages:/root/.nuget/packages
+    environment:
+      - DOTNET_USE_POLLING_FILE_WATCHER=1
+      - ASPNETCORE_ENVIRONMENT=Development
+    networks:
+      - prototype_default
+
+networks:
+  prototype_default:
+    external: true
