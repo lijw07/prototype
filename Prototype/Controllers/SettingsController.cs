@@ -17,7 +17,7 @@ public class SettingsController(
         var parser = parserFactory.GetParser(requestDto.DataDumpParseType);
         var schemas = await parser.ParseAndInferSchemasAsync(requestDto.File);
 
-        var tableNames = string.Join(", ", schemas.Select(s => s.TableName));
-        return Ok(new { message = $"Processed {schemas.Count} tables: {tableNames}" });
+        var processedFiles = schemas.Select(s => s.TableName).ToList();
+        return Ok(new { message = $"Processed {processedFiles.Count} files", files = processedFiles });
     }
 }
