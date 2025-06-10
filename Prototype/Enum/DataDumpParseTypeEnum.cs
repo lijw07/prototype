@@ -5,7 +5,5 @@ public enum DataDumpParseTypeEnum
     CSV,
     JSON,
     XML,
-    YAML,
-    Excel,
-    SQL
+    Excel
 }

@@ -14,9 +14,8 @@ public class JsonDataDumpParserService : IDataDumpParserService
 
         foreach (var file in files)
         {
-            if (!IsValidFile(file)) continue;
-
-            var tableName = GetTableNameFromFile(file);
+            if (!DataTypeInferenceUtility.IsValidFile(file)) continue;
+            var tableName = DataTypeInferenceUtility.GetTableNameFromFile(file);
             if (processedTableNames.Contains(tableName)) continue;
 
             try
@@ -25,7 +24,7 @@ public class JsonDataDumpParserService : IDataDumpParserService
                 if (columns.Count == 0) continue;
 
                 processedTableNames.Add(tableName);
-                processedSchemas.Add(CreateTableSchema(tableName, columns));
+                processedSchemas.Add(DataTypeInferenceUtility.CreateTableSchema(tableName, columns));
             }
             catch (Exception ex)
             {
@@ -36,19 +35,9 @@ public class JsonDataDumpParserService : IDataDumpParserService
         return processedSchemas;
     }
 
-    private bool IsValidFile(IFormFile? file)
-    {
-        return file != null && file.Length > 0;
-    }
-
-    private string GetTableNameFromFile(IFormFile file)
-    {
-        return Path.GetFileNameWithoutExtension(file.FileName);
-    }
-
     private async Task<List<ColumnSchemaDto>> ExtractSchemaColumnsAsync(IFormFile file)
     {
-        using var stream = file.OpenReadStream();
+        await using var stream = file.OpenReadStream();
         var jsonDoc = await JsonDocument.ParseAsync(stream);
 
         if (jsonDoc.RootElement.ValueKind != JsonValueKind.Array) return new List<ColumnSchemaDto>();
@@ -61,42 +50,6 @@ public class JsonDataDumpParserService : IDataDumpParserService
 
     private List<ColumnSchemaDto> GetColumnSchemasFromJsonObject(JsonElement rowObject)
     {
-        var columns = new List<ColumnSchemaDto>();
-        foreach (var prop in rowObject.EnumerateObject())
-        {
-            columns.Add(new ColumnSchemaDto
-            {
-                ColumnName = prop.Name,
-                DataType = InferColumnDataType(prop.Value)
-            });
-        }
-        return columns;
-    }
-
-    private string InferColumnDataType(JsonElement element)
-    {
-        return element.ValueKind switch
-        {
-            JsonValueKind.Number => "string", // You can refine with extra logic if needed
-            JsonValueKind.String => IsGuid(element.GetString()) ? "Guid" : "string",
-            JsonValueKind.True or JsonValueKind.False => "bool",
-            JsonValueKind.Object => "object",
-            JsonValueKind.Array => "array",
-            _ => "string"
-        };
-    }
-
-    private bool IsGuid(string? value)
-    {
-        return Guid.TryParse(value, out _);
-    }
-
-    private TableSchemaDto CreateTableSchema(string tableName, List<ColumnSchemaDto> columns)
-    {
-        return new TableSchemaDto
-        {
-            TableName = tableName,
-            Columns = columns
-        };
+        return rowObject.EnumerateObject().Select(prop => new ColumnSchemaDto { ColumnName = prop.Name, DataType = DataTypeInferenceUtility.InferColumnDataType(prop.Value.ToString()) }).ToList();
     }
 }

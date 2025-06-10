@@ -6,28 +6,30 @@ using Prototype.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services
+// 1. Configure Services (Dependency Injection)
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
 builder.Services.AddDbContext<SentinelContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Custom services
+// Register Application Services
 builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
-builder.Services.AddScoped<IVerificationService, VerificationService>();
 builder.Services.AddScoped<IEntityCreationFactoryService, EntityCreationFactoryService>();
+builder.Services.AddScoped<IVerificationService, VerificationService>();
 builder.Services.AddScoped(typeof(IEntitySaveService<>), typeof(EntitySaveService<>));
+
+// Register Data Dump Parsers
 builder.Services.AddScoped<DataDumpParserFactory>();
 builder.Services.AddTransient<CsvDataDumpParserService>();
-builder.Services.AddTransient<JsonDataDumpParserService>();
 builder.Services.AddTransient<ExcelDataDumpParserService>();
-builder.Services.AddTransient<SqlDataDumpParserService>();
+builder.Services.AddTransient<JsonDataDumpParserService>();
 builder.Services.AddTransient<XmlDataDumpParserService>();
-builder.Services.AddTransient<YamlDataDumpParserService>();
 
 var app = builder.Build();
 
+// 2. Configure Middleware Pipeline
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
@@ -36,8 +38,10 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
 app.UseRouting();
 
+// Swagger only in development
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -47,14 +51,19 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+// 3. Configure Endpoints
+app.MapControllers();
+
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller}/{action=Index}/{id?}");
 
+// 4. Run Migrations at Startup
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<SentinelContext>();
     db.Database.Migrate();
 }
 
+// 5. Run the Application
 app.Run();
