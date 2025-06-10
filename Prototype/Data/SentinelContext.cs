@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Prototype.Enum;
 using Prototype.Models;
-using Prototype.Utility;
 
 namespace Prototype.Data;
 

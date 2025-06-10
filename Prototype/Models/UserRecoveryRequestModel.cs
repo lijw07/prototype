@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Prototype.Enum;
-using Prototype.Utility;
 
 namespace Prototype.Models;
 
