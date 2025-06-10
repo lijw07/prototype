@@ -14,4 +14,5 @@ public interface IEntityCreationFactoryService
     UserRecoveryRequestModel CreateUserRecoveryRequestFronForgotUser(UserModel user, ForgotUserRequestDto requestDto, string generateVerificationCode);
     AuditLogModel CreateAuditLogFromForgotUser(UserModel user, ForgotUserRequestDto requestDto, UserRecoveryRequestModel userRecoveryLog);
     AuditLogModel CreateAuditLogFromResetPassword(UserRecoveryRequestModel userRecoveryRequest);
+    AuditLogModel CreateAuditLogFromDataDumpService(DataDumpRequestDto requestDto);
 }

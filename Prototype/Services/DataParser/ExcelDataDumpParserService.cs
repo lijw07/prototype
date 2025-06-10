@@ -1,56 +1,98 @@
+using System.Reflection;
 using ClosedXML.Excel;
-using Prototype.DTOs;
 using Prototype.Services.Interfaces;
-using Prototype.Utility;
 
 namespace Prototype.Services.DataParser;
 
+/// <summary>
+/// Parses Excel data dumps into model instances.
+/// </summary>
 public class ExcelDataDumpParserService : IDataDumpParserService
 {
-    public async Task<List<TableSchemaDto>> ParseAndInferSchemasAsync(ICollection<IFormFile> files)
+    public async Task<List<object>> ParseDataDump(ICollection<IFormFile> files, Type modelType)
     {
-        var processedSchemas = new List<TableSchemaDto>();
-        var processedTableNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var resultList = new List<object>();
 
         foreach (var file in files)
         {
-            if (!DataTypeInferenceUtility.IsValidFile(file)) continue;
-            var tableName = DataTypeInferenceUtility.GetTableNameFromFile(file);
-            if (processedTableNames.Contains(tableName)) continue;
-
             try
             {
                 await using var stream = file.OpenReadStream();
                 using var workbook = new XLWorkbook(stream);
-                var worksheet = workbook.Worksheets.FirstOrDefault();
-                if (worksheet == null) continue;
+                var worksheet = workbook.Worksheets.First();
+                var properties = modelType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
-                var columns = new List<ColumnSchemaDto>();
-                int colCount = worksheet.Row(1).CellCount();
-                
-                for (int col = 1; col <= colCount; col++)
+                var headerMap = BuildHeaderMap(worksheet.FirstRowUsed(), properties);
+
+                foreach (var row in worksheet.RowsUsed().Skip(1))
                 {
-                    var colName = worksheet.Cell(1, col).GetString();
-                    var value = worksheet.Cell(2, col).GetString();
-                    columns.Add(new ColumnSchemaDto
+                    var instance = Activator.CreateInstance(modelType);
+
+                    foreach (var (col, prop) in headerMap)
                     {
-                        ColumnName = colName,
-                        DataType = DataTypeInferenceUtility.InferColumnDataType(value)
-                    });
-                }
+                        var cell = row.Cell(col);
+                        if (cell.IsEmpty()) continue;
 
-                processedTableNames.Add(tableName);
-                processedSchemas.Add(new TableSchemaDto
-                {
-                    TableName = tableName,
-                    Columns = columns
-                });
+                        var value = ConvertCellValue(cell, prop.PropertyType, prop.Name);
+                        if (value is SkipCell) continue; // Special marker for collections
+
+                        prop.SetValue(instance, value);
+                    }
+
+                    resultList.Add(instance!);
+                }
             }
             catch (Exception ex)
             {
-                ErrorLogger.Log(ex, file?.FileName);
+                throw new Exception($"Failed to parse file '{file.FileName}': {ex.Message}", ex);
             }
         }
-        return processedSchemas;
+
+        return resultList;
+    }
+
+    private Dictionary<int, PropertyInfo> BuildHeaderMap(IXLRow headerRow, PropertyInfo[] properties)
+    {
+        var map = new Dictionary<int, PropertyInfo>();
+        int colCount = headerRow.CellCount();
+        for (int col = 1; col <= colCount; col++)
+        {
+            var header = headerRow.Cell(col).GetString();
+            var prop = properties.FirstOrDefault(p => p.Name.Equals(header, StringComparison.OrdinalIgnoreCase));
+            if (prop != null)
+                map[col] = prop;
+        }
+        return map;
+    }
+
+    private object? ConvertCellValue(IXLCell cell, Type propType, string propName)
+    {
+        try
+        {
+            if (propType == typeof(Guid))
+                return Guid.Parse(cell.GetString());
+            if (propType == typeof(Guid?))
+                return string.IsNullOrEmpty(cell.GetString()) ? null : Guid.Parse(cell.GetString());
+            if (propType == typeof(DateTime))
+                return DateTime.Parse(cell.GetString());
+            if (propType == typeof(long))
+                return long.Parse(cell.GetString());
+            if (propType.IsEnum)
+                return System.Enum.Parse(propType, cell.GetString());
+            if (propType == typeof(string))
+                return cell.GetString();
+            if (typeof(System.Collections.IEnumerable).IsAssignableFrom(propType) && propType != typeof(string))
+                return SkipCell.Instance; // special marker for skipping collections
+            return Convert.ChangeType(cell.Value, propType);
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"Failed to convert value '{cell.Value}' in column '{propName}' to type '{propType.Name}': {ex.Message}", ex);
+        }
+    }
+
+    private class SkipCell
+    {
+        public static readonly SkipCell Instance = new SkipCell();
     }
 }

@@ -1,49 +1,95 @@
+using System.Collections;
+using System.Reflection;
 using System.Xml.Linq;
-using Prototype.DTOs;
 using Prototype.Services.Interfaces;
-using Prototype.Utility;
 
 namespace Prototype.Services.DataParser;
 
+/// <summary>
+/// Parses XML data dumps into model instances, supporting nested collections.
+/// </summary>
 public class XmlDataDumpParserService : IDataDumpParserService
 {
-    public async Task<List<TableSchemaDto>> ParseAndInferSchemasAsync(ICollection<IFormFile> files)
+    public async Task<List<object>> ParseDataDump(ICollection<IFormFile> files, Type modelType)
     {
-        var processedSchemas = new List<TableSchemaDto>();
-        var processedTableNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var resultList = new List<object>();
 
-        await foreach (var file in GetFilesAsync(files))
+        foreach (var file in files)
         {
-            if (!DataTypeInferenceUtility.IsValidFile(file)) continue;
-            var tableName = DataTypeInferenceUtility.GetTableNameFromFile(file);
-            if (processedTableNames.Contains(tableName)) continue;
-
             try
             {
                 await using var stream = file.OpenReadStream();
-                var doc = await XDocument.LoadAsync(stream, LoadOptions.None, default);
-                
-                var firstRow = doc.Root?.Elements().FirstOrDefault();
-                if (firstRow == null) continue;
+                var doc = XDocument.Load(stream);
 
-                var columns = firstRow.Elements().Select(col => new ColumnSchemaDto { ColumnName = col.Name.LocalName, DataType = DataTypeInferenceUtility.InferColumnDataType(col.Value) }).ToList();
-                processedTableNames.Add(tableName);
-                processedSchemas.Add(DataTypeInferenceUtility.CreateTableSchema(tableName, columns));
+                foreach (var element in doc.Root.Elements())
+                {
+                    var instance = Activator.CreateInstance(modelType);
+
+                    foreach (var prop in modelType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                    {
+                        var child = element.Element(prop.Name);
+                        if (child == null) continue;
+
+                        var value = ConvertXmlElement(child, prop.PropertyType, prop.Name);
+                        prop.SetValue(instance, value);
+                    }
+                    resultList.Add(instance!);
+                }
             }
             catch (Exception ex)
             {
-                ErrorLogger.Log(ex, file?.FileName);
+                throw new Exception($"Failed to parse file '{file.FileName}': {ex.Message}", ex);
             }
         }
-        return processedSchemas;
+
+        return resultList;
     }
 
-    private async IAsyncEnumerable<IFormFile> GetFilesAsync(ICollection<IFormFile> files)
+    private object? ConvertXmlElement(XElement element, Type propType, string propName)
     {
-        foreach (var file in files)
+        // Handle collections
+        if (typeof(System.Collections.IEnumerable).IsAssignableFrom(propType)
+            && propType.IsGenericType
+            && propType.GetGenericTypeDefinition() == typeof(ICollection<>))
         {
-            await Task.Yield();
-            yield return file;
+            var itemType = propType.GetGenericArguments()[0];
+            var listType = typeof(List<>).MakeGenericType(itemType);
+            var list = (IList)Activator.CreateInstance(listType)!;
+            foreach (var subElem in element.Elements())
+            {
+                var itemInstance = Activator.CreateInstance(itemType);
+                foreach (var itemProp in itemType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    var itemChild = subElem.Element(itemProp.Name);
+                    if (itemChild == null) continue;
+                    var itemValue = ConvertXmlElement(itemChild, itemProp.PropertyType, itemProp.Name);
+                    itemProp.SetValue(itemInstance, itemValue);
+                }
+                list.Add(itemInstance!);
+            }
+            return list;
+        }
+
+        var valueStr = element.Value;
+        try
+        {
+            if (propType == typeof(Guid))
+                return Guid.Parse(valueStr);
+            if (propType == typeof(Guid?))
+                return string.IsNullOrEmpty(valueStr) ? null : Guid.Parse(valueStr);
+            if (propType == typeof(DateTime))
+                return DateTime.Parse(valueStr);
+            if (propType == typeof(long))
+                return long.Parse(valueStr);
+            if (propType.IsEnum)
+                return System.Enum.Parse(propType, valueStr);
+            if (propType == typeof(string))
+                return valueStr;
+            return Convert.ChangeType(valueStr, propType);
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"Failed to convert value '{valueStr}' for property '{propName}' to type '{propType.Name}': {ex.Message}", ex);
         }
     }
 }

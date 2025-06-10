@@ -1,8 +1,6 @@
-using Prototype.DTOs;
-
 namespace Prototype.Services.Interfaces;
 
 public interface IDataDumpParserService
 {
-    Task<List<TableSchemaDto>> ParseAndInferSchemasAsync(ICollection<IFormFile> file);
+    Task<List<object>> ParseDataDump(ICollection<IFormFile> files, Type modelType);
 }

@@ -21,7 +21,7 @@ builder.Services.AddScoped<IVerificationService, VerificationService>();
 builder.Services.AddScoped(typeof(IEntitySaveService<>), typeof(EntitySaveService<>));
 
 // Register Data Dump Parsers
-builder.Services.AddScoped<DataDumpParserFactory>();
+builder.Services.AddScoped<DataDumpParserFactoryService>();
 builder.Services.AddTransient<CsvDataDumpParserService>();
 builder.Services.AddTransient<ExcelDataDumpParserService>();
 builder.Services.AddTransient<JsonDataDumpParserService>();

@@ -4,7 +4,7 @@ using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
 
-public class DataDumpParserFactory(IServiceProvider serviceProvider)
+public class DataDumpParserFactoryService(IServiceProvider serviceProvider)
 {
     public IDataDumpParserService GetParser(DataDumpParseTypeEnum parseType)
     {

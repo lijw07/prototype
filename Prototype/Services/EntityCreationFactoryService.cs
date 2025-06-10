@@ -133,4 +133,9 @@ public class EntityCreationFactoryService : IEntityCreationFactoryService
             CreatedAt = DateTime.Now
         };
     }
+
+    public AuditLogModel CreateAuditLogFromDataDumpService(DataDumpRequestDto requestDto)
+    {
+        throw new NotImplementedException();
+    }
 }
