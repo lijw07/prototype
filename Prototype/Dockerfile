@@ -19,7 +19,7 @@ FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
 RUN dotnet publish -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
-# --- Dev (hot reload) ---
+# --- Dev (hot reload/debug) ---
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS dev
 WORKDIR /src/Prototype
 COPY . .
@@ -30,7 +30,6 @@ RUN apt-get update && \
 EXPOSE 8080
 EXPOSE 57404
 ENV DOTNET_USE_POLLING_FILE_WATCHER=1
-
 CMD ["dotnet", "watch", "run", "--urls", "http://0.0.0.0:8080"]
 
 # --- Final Runtime ---
@@ -38,4 +37,3 @@ FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "Prototype.dll"]
-RUN dotnet restore

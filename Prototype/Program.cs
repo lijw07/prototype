@@ -11,6 +11,20 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Register CORS for development (open for local Docker/dev use)
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("AllowAll", policy =>
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        });
+    });
+}
+
 builder.Services.AddDbContext<SentinelContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -30,35 +44,37 @@ builder.Services.AddTransient<XmlDataDumpParserService>();
 var app = builder.Build();
 
 // 2. Configure Middleware Pipeline
-if (!app.Environment.IsDevelopment())
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+    app.UseCors("AllowAll");
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        // Relative path works in Docker, no hardcoded host/port
+        c.SwaggerEndpoint("v1/swagger.json", "Prototype API V1");
+    });
+}
+else
 {
     app.UseExceptionHandler("/Error");
     app.UseHsts();
+    app.UseHttpsRedirection(); // Only redirect in production!
 }
 
-app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
 
-// Swagger only in development
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Prototype API V1");
-    });
-}
-
-// 3. Configure Endpoints
 app.MapControllers();
 
+// Optional: If you want conventional MVC support (not needed for pure APIs)
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller}/{action=Index}/{id?}");
 
-// 4. Run Migrations at Startup
+// 4. Run Migrations at Startup (run *before* requests are handled)
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<SentinelContext>();
