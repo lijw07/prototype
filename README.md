@@ -11,7 +11,7 @@ The application is designed to act as a middleman, connecting to multiple client
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Running with Docker](#running-with-docker)
-  - [Running the .NET/React App (Development)](#running-the-netreact-app-development)
+  - [Running the .NET/React App without docker](#running-.NET/React-App-without-Docker)
 - [Branch Naming Convention](#branch-naming-convention)
 - [Contributing](#contributing)
 - [License](#license)
@@ -63,7 +63,7 @@ docker compose up --build
 
 ---
 
-### Running the .NET/React App (Without Docker)
+### Running .NET/React App without Docker
 
 #### Restore & Install Dependencies
 
