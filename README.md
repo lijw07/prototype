@@ -11,7 +11,7 @@ The application is designed to act as a middleman, connecting to multiple client
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Running with Docker](#running-with-docker)
-  - [Running the .NET/React App without docker](#running-.NET/React-App-without-Docker)
+  - [Running .NET/React App without Docker](#running-netreact-app-without-docker)
 - [Branch Naming Convention](#branch-naming-convention)
 - [Contributing](#contributing)
 - [License](#license)
