@@ -9,13 +9,13 @@ namespace Prototype.Controllers;
 [ApiController]
 [Route("[controller]")]
 public class SettingsController(
-    DataDumpParserFactoryService _parserFactoryService,
-    SentinelContext _context) : ControllerBase
+    DataDumpParserFactoryService parserFactoryService,
+    SentinelContext context) : ControllerBase
 {
     [HttpPost("upload")]
     public async Task<IActionResult> UploadDataDump([FromForm] DataDumpRequestDto requestDto)
     {
-        var parser = _parserFactoryService.GetParser(requestDto.DataDumpParseType);
+        var parser = parserFactoryService.GetParser(requestDto.DataDumpParseType);
 
         foreach (var formFile in requestDto.File)
         {
@@ -43,13 +43,13 @@ public class SettingsController(
 
     private async Task SaveEntitiesToDatabase(Type modelType, IList typedList)
     {
-        var dbSet = _context.GetType().GetMethod("Set", Type.EmptyTypes)!
-            .MakeGenericMethod(modelType).Invoke(_context, null);
+        var dbSet = context.GetType().GetMethod("Set", Type.EmptyTypes)!
+            .MakeGenericMethod(modelType).Invoke(context, null);
 
         var addRangeMethod = dbSet!.GetType().GetMethod("AddRange", new[] { typeof(IEnumerable<>).MakeGenericType(modelType) });
         addRangeMethod!.Invoke(dbSet, new object[] { typedList });
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
     }
 
     private static Type? GetModelTypeFromFileName(string fileName)

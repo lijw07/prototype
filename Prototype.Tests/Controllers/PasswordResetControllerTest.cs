@@ -4,6 +4,7 @@ using Prototype.Controllers;
 using Prototype.Data;
 using Prototype.Models;
 using Prototype.Services;
+using Prototype.Services.Interfaces;
 using Prototype.DTOs;
 using Prototype.Enum;
 using Microsoft.AspNetCore.Mvc;
