@@ -1,13 +1,12 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Prototype.Controllers.Settings;
 
+
 [ApiController]
 [Route("[controller]")]
-public class AudioLogController : ControllerBase
+public class UserActivitySettingsController : ControllerBase
 {
-    
     [HttpGet]
     public async Task<IActionResult> Get()
     {
