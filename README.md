@@ -63,7 +63,7 @@ docker compose up --build
 
 ---
 
-### Running .NET/React App without Docker
+## Running .NET/React App without Docker
 
 #### Restore & Install Dependencies
 
