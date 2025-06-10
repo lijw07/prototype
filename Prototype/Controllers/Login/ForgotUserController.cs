@@ -6,7 +6,7 @@ using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
 
-namespace Prototype.Controllers;
+namespace Prototype.Controllers.Login;
 
 [ApiController]
 [Route("[controller]")]
