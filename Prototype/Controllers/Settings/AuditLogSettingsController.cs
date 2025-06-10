@@ -5,7 +5,7 @@ namespace Prototype.Controllers.Settings;
 
 [ApiController]
 [Route("[controller]")]
-public class AudioLogController : ControllerBase
+public class AuditLogSettingsController : ControllerBase
 {
     
     [HttpGet]
