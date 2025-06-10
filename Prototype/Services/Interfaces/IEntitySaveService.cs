@@ -1,4 +1,4 @@
-namespace Prototype.Services;
+namespace Prototype.Services.Interfaces;
 
 /// <summary>
 /// IEntitySaveService Is responsible for performing an Async operation on an entity and Saving into the Database.

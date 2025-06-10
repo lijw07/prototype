@@ -1,11 +1,10 @@
 using Prototype.DTOs;
 using Prototype.Enum;
 using Prototype.Models;
-using Prototype.Utility;
+using Prototype.Services.Interfaces;
 using UAParser;
 
 namespace Prototype.Services;
-
 
 public class EntityCreationFactoryService : IEntityCreationFactoryService
 {
@@ -133,5 +132,10 @@ public class EntityCreationFactoryService : IEntityCreationFactoryService
             }),
             CreatedAt = DateTime.Now
         };
+    }
+
+    public AuditLogModel CreateAuditLogFromDataDumpService(DataDumpRequestDto requestDto)
+    {
+        throw new NotImplementedException();
     }
 }

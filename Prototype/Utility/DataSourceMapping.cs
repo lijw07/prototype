@@ -6,8 +6,8 @@ public class DataSourceMapping
 {
     public static readonly Dictionary<DataSourceTypeEnum, AuthenticationTypeEnum[]> DataSourceAuthMap = new()
     {
-        [DataSourceTypeEnum.MicrosoftSqlServer] = new[]
-        {
+        [DataSourceTypeEnum.MicrosoftSqlServer] =
+        [
             AuthenticationTypeEnum.UserPassword,
             AuthenticationTypeEnum.Kerberos,
             AuthenticationTypeEnum.AzureAdPassword,
@@ -16,14 +16,14 @@ public class DataSourceMapping
             AuthenticationTypeEnum.AzureAdDefault,
             AuthenticationTypeEnum.AzureAdMsi,
             AuthenticationTypeEnum.NoAuth
-        },
-        [DataSourceTypeEnum.MySql] = new[]
-        {
+        ],
+        [DataSourceTypeEnum.MySql] =
+        [
             AuthenticationTypeEnum.UserPassword,
             AuthenticationTypeEnum.NoAuth
-        },
-        [DataSourceTypeEnum.MongoDb] = new[]
-        {
+        ],
+        [DataSourceTypeEnum.MongoDb] =
+        [
             AuthenticationTypeEnum.UserPassword,
             AuthenticationTypeEnum.ScramSha1,
             AuthenticationTypeEnum.ScramSha256,
@@ -32,24 +32,24 @@ public class DataSourceMapping
             AuthenticationTypeEnum.GssapiKerberos,
             AuthenticationTypeEnum.PlainLdap,
             AuthenticationTypeEnum.NoAuth
-        }
+        ]
     };
     
     public static readonly Dictionary<AuthenticationTypeEnum, string[]> AuthTypeFieldsMap = new()
     {
-        [AuthenticationTypeEnum.UserPassword] = new[] { "Username", "Password" },
-        [AuthenticationTypeEnum.Kerberos] = new[] { "Username", "Password"},
-        [AuthenticationTypeEnum.AzureAdPassword] = new[] { "Username", "Password" },
-        [AuthenticationTypeEnum.AzureAdInteractive] = new[] { "Username" },
-        [AuthenticationTypeEnum.AzureAdIntegrated] = Array.Empty<string>(),
-        [AuthenticationTypeEnum.AzureAdDefault] = Array.Empty<string>(),
-        [AuthenticationTypeEnum.AzureAdMsi] = new[] { "Username" },
-        [AuthenticationTypeEnum.ScramSha1] = new[] { "Username", "Password", "AuthenticationDatabase" },
-        [AuthenticationTypeEnum.ScramSha256] = new[] { "Username", "Password", "AuthenticationDatabase" },
-        [AuthenticationTypeEnum.AwsIam] = new[] { "AWSAccessKeyId", "AWSSecretKey", "AWSSessionToken" },
-        [AuthenticationTypeEnum.X509] = Array.Empty<string>(),
-        [AuthenticationTypeEnum.GssapiKerberos] = new[] { "Principal", "ServiceName", "ServiceRealm", "CanonicalizeHostName" },
-        [AuthenticationTypeEnum.PlainLdap] = new[] { "Username", "Password" },
-        [AuthenticationTypeEnum.NoAuth] = Array.Empty<string>()
+        [AuthenticationTypeEnum.UserPassword] = ["Username", "Password"],
+        [AuthenticationTypeEnum.Kerberos] = ["Username", "Password"],
+        [AuthenticationTypeEnum.AzureAdPassword] = ["Username", "Password"],
+        [AuthenticationTypeEnum.AzureAdInteractive] = ["Username"],
+        [AuthenticationTypeEnum.AzureAdIntegrated] = [],
+        [AuthenticationTypeEnum.AzureAdDefault] = [],
+        [AuthenticationTypeEnum.AzureAdMsi] = ["Username"],
+        [AuthenticationTypeEnum.ScramSha1] = ["Username", "Password", "AuthenticationDatabase"],
+        [AuthenticationTypeEnum.ScramSha256] = ["Username", "Password", "AuthenticationDatabase"],
+        [AuthenticationTypeEnum.AwsIam] = ["AWSAccessKeyId", "AWSSecretKey", "AWSSessionToken"],
+        [AuthenticationTypeEnum.X509] = [],
+        [AuthenticationTypeEnum.GssapiKerberos] = ["Principal", "ServiceName", "ServiceRealm", "CanonicalizeHostName"],
+        [AuthenticationTypeEnum.PlainLdap] = ["Username", "Password"],
+        [AuthenticationTypeEnum.NoAuth] = []
     };
 }

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
 

@@ -1,7 +1,7 @@
 using Prototype.DTOs;
 using Prototype.Models;
 
-namespace Prototype.Services;
+namespace Prototype.Services.Interfaces;
 
 /// <summary>
 /// IEntityCreationFactoryService Is responsible for creating Entities.
@@ -14,4 +14,5 @@ public interface IEntityCreationFactoryService
     UserRecoveryRequestModel CreateUserRecoveryRequestFronForgotUser(UserModel user, ForgotUserRequestDto requestDto, string generateVerificationCode);
     AuditLogModel CreateAuditLogFromForgotUser(UserModel user, ForgotUserRequestDto requestDto, UserRecoveryRequestModel userRecoveryLog);
     AuditLogModel CreateAuditLogFromResetPassword(UserRecoveryRequestModel userRecoveryRequest);
+    AuditLogModel CreateAuditLogFromDataDumpService(DataDumpRequestDto requestDto);
 }
