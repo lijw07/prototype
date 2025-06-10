@@ -1,4 +1,4 @@
-namespace Prototype.Controllers;
+namespace Prototype.DTOs;
 
 public class LoginRequestDto
 {

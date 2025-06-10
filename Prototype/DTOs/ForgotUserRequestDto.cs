@@ -1,5 +1,4 @@
 using Prototype.Enum;
-using Prototype.Utility;
 
 namespace Prototype.DTOs;
 

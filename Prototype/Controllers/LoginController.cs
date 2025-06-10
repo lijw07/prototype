@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
+using Prototype.DTOs;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
 
