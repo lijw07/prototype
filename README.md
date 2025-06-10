@@ -48,13 +48,24 @@ To stop:
 docker compose down
 ```
 
+Unforseen issues try:
+
+```sh
+docker compose down
+```
+remove all containers, iamges, volumes, builds(optional) then run:
+
+```sh
+docker compose up --build
+```
+
 **⚠️ WARNING:** Running `docker compose down` can potientally delete mock data!
 
 ---
 
 ### Running the .NET/React App (Without Docker)
 
-#### 1. Restore & Install Dependencies
+#### Restore & Install Dependencies
 
 ```sh
 dotnet restore
@@ -62,7 +73,7 @@ cd ClientApp
 npm install
 ```
 
-#### 2. Run the React Development Server (optional, for hot reload)
+#### Run the React Development Server (optional, for hot reload)
 
 ```sh
 cd ClientApp
@@ -70,7 +81,7 @@ npm start
 ```
 This runs the React app at [http://localhost:3000](http://localhost:3000), proxying API calls to the backend.
 
-#### 3. Run the ASP.NET Core Backend (Without docker)
+#### Run the ASP.NET Core Backend (Without docker)
 
 From the root project directory:
 
@@ -81,14 +92,14 @@ By default, this runs the ASP.Net Core MVC at [http://localhost:5266](http://loc
 
 ---
 
-### Run Sql Server
+### Run an EF Core Migration
 
-#### 1. Install Entity Framework tool
+#### Install Entity Framework tool if you don't already have
 ```sh
 dotnet tool install --global dotnet-ef
 ```
 
-#### 2. Start Migration Process
+#### Start Migration Process
 
 When running this command, ensure the current directory is /Prototype
 
@@ -103,8 +114,7 @@ Build succeeded.
 Done. To undo this action, use 'ef migrations remove'
 ```
 
-
-#### 4. Upload Migrated Tables to Sql Server
+#### Upload Migrated Tables to Sql Server
 
 Run this follow up script to populate the sql server
 ```sh
@@ -115,11 +125,12 @@ If done correctly, there should be no errors and the last statment should be
 Done.
 ```
 
-If you run into a bug, running those commands should hopefully fix it.
+If you run into a bug, running those commands this should hopefully fix it.
 ```sh
-dotnet clean
 rm -rf bin/
 rm -rf obj/
+dotnet restore
+dotnet clean
 dotnet build
 ```
 
