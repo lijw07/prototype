@@ -12,7 +12,7 @@ namespace Prototype.Controllers.Login;
 public class ForgotUserController(
     IEntityCreationFactoryService entityCreationFactoryService,
     IUnitOfWorkService uows,
-    IVerificationService verificationService,
+    IJwtTokenService jwtTokenService,
     IEmailNotificationService emailNotificationService,
     SentinelContext context)
     : ControllerBase
@@ -25,27 +25,27 @@ public class ForgotUserController(
 
         if (user == null)
         {
-            return BadRequest("Invalid email, No account exists with that email address");
+            return BadRequest("Invalid email, No account exist with that email address");
         }
+        
+        var token = jwtTokenService.BuildUserClaims(user, JwtPurposeTypeEnum.ForgotUser);
 
-        var verificationCode = verificationService.GenerateVerificationCode();
-
-        var userRecoveryLog = entityCreationFactoryService.CreateFromForgotUser(user, requestDto, verificationCode);
-        await uows.UserRecoveryRequests.AddAsync(userRecoveryLog);
-
+        var userRecoveryLog = entityCreationFactoryService.CreateFromForgotUser(user, requestDto, token);
         var auditLog = entityCreationFactoryService.CreateFromForgotUser(user, requestDto, userRecoveryLog);
+        var userActivityLog = entityCreationFactoryService.CreateUserActivityLog(user, ActionTypeEnum.ForgotPassword, HttpContext);
+        await uows.UserActivityLogs.AddAsync(userActivityLog);
+        await uows.UserRecoveryRequests.AddAsync(userRecoveryLog);
         await uows.AuditLogs.AddAsync(auditLog);
         await uows.SaveChangesAsync();
-
         if (requestDto.UserRecoveryType == UserRecoveryTypeEnum.PASSWORD)
         {
-            await emailNotificationService.SendPasswordResetEmail(user.Email, verificationCode);
+            await emailNotificationService.SendPasswordResetEmail(user.Email, token);
         }
         else
         {
             await emailNotificationService.SendUsernameEmail(user.Email, user.Username);
         }
+        return Ok(new {message = "If your account exists, you will receive an email with a link to reset your password."});
 
-        return Ok(new { message = "If your account exists, you will receive an email with a link to reset your password." });
     }
 }

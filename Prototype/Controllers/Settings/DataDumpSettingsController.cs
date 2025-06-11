@@ -1,24 +1,24 @@
 using System.Collections;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.DTOs;
+using Prototype.Enum;
+using Prototype.Models;
 using Prototype.Services;
 using Prototype.Services.Interfaces;
-using System.Security.Claims;
-using Microsoft.EntityFrameworkCore;
-using Prototype.Models;
 
 namespace Prototype.Controllers.Settings;
 
 [ApiController]
-[Authorize]
 [Route("[controller]")]
+[Authorize]
 public class DataDumpSettingsController(
     DataDumpParserFactoryService parserFactoryService,
     IEntityCreationFactoryService entityCreationFactory,
-    SentinelContext context)
-    : ControllerBase
+    SentinelContext context) : ControllerBase
 {
     private const string ModelNamespace = "Prototype.Models";
 
@@ -26,49 +26,46 @@ public class DataDumpSettingsController(
     public async Task<IActionResult> UploadDataDump([FromForm] DataDumpRequestDto requestDto)
     {
         var parser = parserFactoryService.GetParser(requestDto.DataDumpParseType);
-        if (parser == null)
-            return BadRequest("Parser not found for provided type.");
-
-        var user = await GetCurrentUserAsync();
+        var user = await GetAuthenticatedUserAsync();
         if (user is null)
-            return Unauthorized("User not found.");
-        
+            return Unauthorized("Authenticated user not found.");
+
         var affectedTables = new List<string>();
-        foreach (var formFile in requestDto.File)
+
+        foreach (var file in requestDto.File)
         {
-            var modelType = ResolveModelTypeFromFileName(formFile.FileName);
+            var modelType = ResolveModelTypeFromFileName(file.FileName);
             if (modelType == null)
-                return BadRequest($"Model type for '{formFile.FileName}' not found.");
+                return BadRequest($"Unknown model type for file '{file.FileName}'.");
 
             try
             {
-                await ProcessFileAsync(formFile, parser, modelType);
-
+                await ProcessAndSaveFileAsync(file, parser, modelType);
                 affectedTables.Add(modelType.Name);
-                var activityLog = entityCreationFactory.CreateFromDataDump(user, HttpContext);
-                var auditLog = entityCreationFactory.CreateFromDataDump(user, requestDto, affectedTables);
-
-                await context.UserActivityLogs.AddAsync(activityLog);
-                await context.AuditLogs.AddAsync(auditLog);
             }
             catch (Exception ex)
             {
-                return UnprocessableEntity($"Failed to process file '{formFile.FileName}': {ex.Message}");
+                return UnprocessableEntity($"Failed to process '{file.FileName}': {ex.Message}");
             }
         }
-
+        
+        var activityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.DataDumpUpload, HttpContext);
+        var auditLog = entityCreationFactory.CreateFromDataDump(user, requestDto, affectedTables);
+        await context.UserActivityLogs.AddAsync(activityLog);
+        await context.AuditLogs.AddAsync(auditLog);
         await context.SaveChangesAsync();
-        return Ok("Upload and processing successful.");
+
+        return Ok("Upload and processing completed successfully.");
     }
 
-    private async Task ProcessFileAsync(
+    private async Task ProcessAndSaveFileAsync(
         IFormFile formFile,
         IDataDumpParserService parser,
         Type modelType)
     {
         var entities = await parser.ParseDataDump(new List<IFormFile> { formFile }, modelType);
         var typedList = CreateTypedList(modelType, entities);
-        await SaveEntitiesToDatabaseAsync(modelType, typedList);
+        await SaveToDbContextAsync(modelType, typedList);
     }
 
     private static Type? ResolveModelTypeFromFileName(string fileName)
@@ -87,16 +84,16 @@ public class DataDumpSettingsController(
         return typedList;
     }
 
-    private async Task SaveEntitiesToDatabaseAsync(Type modelType, IList typedList)
+    private Task SaveToDbContextAsync(Type modelType, IList list)
     {
         var dbSet = context.GetType().GetMethod("Set", Type.EmptyTypes)!
             .MakeGenericMethod(modelType).Invoke(context, null);
-
-        var addRangeMethod = dbSet!.GetType().GetMethod("AddRange", new[] { typedList.GetType() });
-        addRangeMethod!.Invoke(dbSet, new object[] { typedList });
+        var addRangeMethod = dbSet!.GetType().GetMethod("AddRange", [list.GetType()]);
+        addRangeMethod!.Invoke(dbSet, [list]);
+        return Task.CompletedTask;
     }
 
-    private async Task<UserModel?> GetCurrentUserAsync()
+    private async Task<UserModel?> GetAuthenticatedUserAsync()
     {
         var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return Guid.TryParse(userIdStr, out var userId)

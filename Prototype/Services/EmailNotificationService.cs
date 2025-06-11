@@ -1,10 +1,6 @@
-using System.IdentityModel.Tokens.Jwt;
 using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Mail;
-using System.Security.Claims;
-using System.Text;
-using Microsoft.IdentityModel.Tokens;
 using Prototype.POCO;
 using Prototype.Services.Interfaces;
 
@@ -15,11 +11,18 @@ public class EmailNotificationService : IEmailNotificationService
     private readonly SmtpClient _smtpClient;
     private readonly string _fromEmail;
     private readonly string _jwtKey;
+    private readonly IJwtTokenService _jwtTokenService;
 
-    public EmailNotificationService(IOptions<SmtpSettingsPoco> smtpOptions, IConfiguration config)
+    public EmailNotificationService(
+        IOptions<SmtpSettingsPoco> smtpOptions,
+        IConfiguration config,
+        IJwtTokenService jwtTokenService)
     {
+        _jwtTokenService = jwtTokenService;
+
         var smtp = smtpOptions.Value;
         ValidateSmtpSettings(smtp);
+
         _fromEmail = smtp.FromEmail;
         _smtpClient = new SmtpClient(smtp.Host)
         {
@@ -31,13 +34,19 @@ public class EmailNotificationService : IEmailNotificationService
         _jwtKey = config["JwtSettings:Key"] ?? throw new InvalidOperationException("JwtSettings:Key is missing in configuration.");
     }
 
-    public async Task SendVerificationEmail(string recipientEmail, string verificationCode)
+    public async Task SendVerificationEmail(string recipientEmail, string token)
     {
-        var token = GenerateJwtToken(recipientEmail, verificationCode);
         var verificationLink = $"http://localhost:8080/verify?token={token}";
-
         var subject = "Verify your account";
         var body = GenerateEmailHtml("Verify Email", verificationLink);
+        await SendEmailAsync(recipientEmail, subject, body);
+    }
+
+    public async Task SendPasswordResetEmail(string recipientEmail, string token)
+    {
+        var resetLink = $"http://localhost:8080/reset-password?token={token}";
+        var subject = "Reset Your Password";
+        var body = GenerateEmailHtml("Reset Password", resetLink);
         await SendEmailAsync(recipientEmail, subject, body);
     }
 
@@ -54,16 +63,6 @@ public class EmailNotificationService : IEmailNotificationService
                 <p>Thanks,<br/>The Team</p>
               </body>
             </html>";
-        await SendEmailAsync(recipientEmail, subject, body);
-    }
-
-    public async Task SendPasswordResetEmail(string recipientEmail, string verificationCode)
-    {
-        var token = GenerateJwtToken(recipientEmail, verificationCode);
-        var resetLink = $"http://localhost:8080/reset-password?token={token}";
-
-        var subject = "Reset Your Password";
-        var body = GenerateEmailHtml("Reset Password", resetLink);
         await SendEmailAsync(recipientEmail, subject, body);
     }
 
@@ -129,28 +128,6 @@ public class EmailNotificationService : IEmailNotificationService
             throw new ArgumentException("SMTP username is required.", nameof(smtp.Username));
         if (string.IsNullOrWhiteSpace(smtp.Password))
             throw new ArgumentException("SMTP password is required.", nameof(smtp.Password));
-    }
-
-    private string GenerateJwtToken(string email, string code)
-    {
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.UTF8.GetBytes(_jwtKey);
-
-        var tokenDescriptor = new SecurityTokenDescriptor
-        {
-            Subject = new ClaimsIdentity(new[]
-            {
-                new Claim("email", email),
-                new Claim("code", code)
-            }),
-            Expires = DateTime.UtcNow.AddMinutes(15),
-            SigningCredentials = new SigningCredentials(
-                new SymmetricSecurityKey(key),
-                SecurityAlgorithms.HmacSha256Signature)
-        };
-
-        var token = tokenHandler.CreateToken(tokenDescriptor);
-        return tokenHandler.WriteToken(token);
     }
 
     private string GenerateEmailHtml(string action, string link)

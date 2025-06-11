@@ -1,11 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 using Prototype.Data;
 using Prototype.DTOs;
-using Prototype.Models;
+using Prototype.Enum;
 using Prototype.Services.Interfaces;
+using Prototype.Utility;
 
 namespace Prototype.Controllers.Settings;
 
@@ -14,12 +13,13 @@ namespace Prototype.Controllers.Settings;
 [Route("settings/user")]
 public class UserSettingsController(
     IEntityCreationFactoryService entityCreationFactory,
+    IAuthenticatedUserAccessor userAccessor,
     SentinelContext context) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetUserSettings()
     {
-        var user = await GetCurrentUserAsync();
+        var user = await userAccessor.GetUserAsync(User);
         if (user is null)
             return NotFound("User not found.");
 
@@ -34,7 +34,7 @@ public class UserSettingsController(
     [HttpPut("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto request)
     {
-        var user = await GetCurrentUserAsync();
+        var user = await userAccessor.GetUserAsync(User);
         if (user is null)
             return NotFound("User not found.");
 
@@ -47,7 +47,7 @@ public class UserSettingsController(
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
 
-        var userActivityLog = entityCreationFactory.CreateFromPasswordChange(user, HttpContext);
+        var userActivityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.ChangePassword, HttpContext);
         var auditLog = entityCreationFactory.CreateFromPasswordChange(user);
 
         await context.UserActivityLogs.AddAsync(userActivityLog);
@@ -55,14 +55,5 @@ public class UserSettingsController(
         await context.SaveChangesAsync();
 
         return Ok(new { message = "Password updated successfully." });
-    }
-
-    private async Task<UserModel?> GetCurrentUserAsync()
-    {
-        var idValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(idValue, out var userId))
-            throw new UnauthorizedAccessException("User ID claim is missing or invalid.");
-
-        return await context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
     }
 }

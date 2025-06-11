@@ -7,6 +7,7 @@ using Prototype.Services;
 using Prototype.Services.DataParser;
 using Prototype.Services.Factory;
 using Prototype.Services.Interfaces;
+using Prototype.Utility;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,9 +44,10 @@ builder.Services.AddScoped<IUserFactoryService, UserFactoryService>();
 builder.Services.AddScoped<IUserActivityLogFactoryService, UserActivityLogFactoryService>();
 builder.Services.AddScoped<IAuditLogFactoryService, AuditLogFactoryService>();
 builder.Services.AddScoped<IUserRecoveryRequestFactoryService, UserRecoveryFactoryService>();
-builder.Services.AddScoped<IVerificationService, VerificationService>();
 builder.Services.AddScoped(typeof(IRepositoryService<>), typeof(RepositoryService<>));
 builder.Services.AddScoped<IUnitOfWorkService, UnitOfWorkService>();
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthenticatedUserAccessor, AuthenticatedUserAccessor>();
 
 // Register Data Dump Parsers
 builder.Services.AddScoped<DataDumpParserFactoryService>();

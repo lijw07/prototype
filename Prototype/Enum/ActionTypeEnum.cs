@@ -21,5 +21,6 @@ public enum ActionTypeEnum
     Enable,
     Disable,
     ForgotUsername,
-    DataDumpUpload
+    DataDumpUpload,
+    ForgotPassword
 }
