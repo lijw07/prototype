@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Prototype.Services.Interfaces;
 
 namespace Prototype.Services.DataParser;

@@ -1,6 +1,10 @@
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Mail;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.IdentityModel.Tokens;
 using Prototype.POCO;
 using Prototype.Services.Interfaces;
 
@@ -10,10 +14,12 @@ public class EmailNotificationService : IEmailNotificationService
 {
     private readonly SmtpClient _smtpClient;
     private readonly string _fromEmail;
+    private readonly string _jwtKey;
 
-    public EmailNotificationService(IOptions<SmtpSettingsPoco> smtpOptions)
+    public EmailNotificationService(IOptions<SmtpSettingsPoco> smtpOptions, IConfiguration config)
     {
         var smtp = smtpOptions.Value;
+        ValidateSmtpSettings(smtp);
         _fromEmail = smtp.FromEmail;
         _smtpClient = new SmtpClient(smtp.Host)
         {
@@ -21,25 +27,17 @@ public class EmailNotificationService : IEmailNotificationService
             Credentials = new NetworkCredential(smtp.Username, smtp.Password),
             EnableSsl = true
         };
+
+        _jwtKey = config["JwtSettings:Key"] ?? throw new InvalidOperationException("JwtSettings:Key is missing in configuration.");
     }
 
     public async Task SendVerificationEmail(string recipientEmail, string verificationCode)
     {
+        var token = GenerateJwtToken(recipientEmail, verificationCode);
+        var verificationLink = $"http://localhost:8080/verify?token={token}";
+
         var subject = "Verify your account";
-        var body = $@"
-            <html>
-              <body>
-                <p>Hello,</p>
-                <p>Please click the button below to verify your account:</p>
-                <a href='http://localhost:8080/verify?email={recipientEmail}&code={verificationCode}' 
-                   style='display: inline-block; padding: 10px 20px; font-size: 16px;
-                          color: #fff; background-color: #007BFF; text-decoration: none; border-radius: 5px;'>
-                  Verify Email
-                </a>
-                <p>If the button doesn't work, you can also copy and paste the link into your browser:</p>
-                <p>http://localhost:8080/verify?email={recipientEmail}&code={verificationCode}</p>
-              </body>
-            </html>";
+        var body = GenerateEmailHtml("Verify Email", verificationLink);
         await SendEmailAsync(recipientEmail, subject, body);
     }
 
@@ -59,22 +57,13 @@ public class EmailNotificationService : IEmailNotificationService
         await SendEmailAsync(recipientEmail, subject, body);
     }
 
-    public async Task SendPasswordResetEmail(string recipientEmail, string resetLink)
+    public async Task SendPasswordResetEmail(string recipientEmail, string verificationCode)
     {
+        var token = GenerateJwtToken(recipientEmail, verificationCode);
+        var resetLink = $"http://localhost:8080/reset-password?token={token}";
+
         var subject = "Reset Your Password";
-        var body = $@"
-            <html>
-              <body>
-                <p>Hello,</p>
-                <p>We received a request to reset your password. Click the button below to proceed:</p>
-                <a href='{resetLink}' 
-                   style='display: inline-block; padding: 10px 20px; font-size: 16px;
-                          color: #fff; background-color: #dc3545; text-decoration: none; border-radius: 5px;'>
-                  Reset Password
-                </a>
-                <p>If you didn’t request this, you can safely ignore this email.</p>
-              </body>
-            </html>";
+        var body = GenerateEmailHtml("Reset Password", resetLink);
         await SendEmailAsync(recipientEmail, subject, body);
     }
 
@@ -126,5 +115,59 @@ public class EmailNotificationService : IEmailNotificationService
         };
 
         await _smtpClient.SendMailAsync(mailMessage);
+    }
+
+    private void ValidateSmtpSettings(SmtpSettingsPoco smtp)
+    {
+        if (string.IsNullOrWhiteSpace(smtp.Host))
+            throw new ArgumentException("SMTP host is required.", nameof(smtp.Host));
+        if (smtp.Port <= 0)
+            throw new ArgumentOutOfRangeException(nameof(smtp.Port), "SMTP port must be greater than 0.");
+        if (string.IsNullOrWhiteSpace(smtp.FromEmail))
+            throw new ArgumentException("FromEmail is required.", nameof(smtp.FromEmail));
+        if (string.IsNullOrWhiteSpace(smtp.Username))
+            throw new ArgumentException("SMTP username is required.", nameof(smtp.Username));
+        if (string.IsNullOrWhiteSpace(smtp.Password))
+            throw new ArgumentException("SMTP password is required.", nameof(smtp.Password));
+    }
+
+    private string GenerateJwtToken(string email, string code)
+    {
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var key = Encoding.UTF8.GetBytes(_jwtKey);
+
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(new[]
+            {
+                new Claim("email", email),
+                new Claim("code", code)
+            }),
+            Expires = DateTime.UtcNow.AddMinutes(15),
+            SigningCredentials = new SigningCredentials(
+                new SymmetricSecurityKey(key),
+                SecurityAlgorithms.HmacSha256Signature)
+        };
+
+        var token = tokenHandler.CreateToken(tokenDescriptor);
+        return tokenHandler.WriteToken(token);
+    }
+
+    private string GenerateEmailHtml(string action, string link)
+    {
+        return $@"
+            <html>
+              <body>
+                <p>Hello,</p>
+                <p>We received a request to {action.ToLower()}. Click the button below to proceed:</p>
+                <a href='{link}' 
+                   style='display: inline-block; padding: 10px 20px; font-size: 16px;
+                          color: #fff; background-color: #007BFF; text-decoration: none; border-radius: 5px;'>
+                  {action}
+                </a>
+                <p>If the button doesn't work, you can also copy and paste the link into your browser:</p>
+                <p>{link}</p>
+              </body>
+            </html>";
     }
 }

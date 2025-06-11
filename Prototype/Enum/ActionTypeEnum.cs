@@ -20,5 +20,6 @@ public enum ActionTypeEnum
     Reject,
     Enable,
     Disable,
-    ForgotUsername
+    ForgotUsername,
+    DataDumpUpload
 }

@@ -1,6 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using Prototype.Utility;
 
 namespace Prototype.Models;
 
@@ -34,6 +32,8 @@ public class UserModel
     public ICollection<AuditLogModel> AuditLogs { get; set; }
     
     public ICollection<UserRecoveryRequestModel> UserRecoveryRequests { get; set; }
+    
+    public ICollection<UserPermissionModel> UserPermissions { get; set; }
     
     public required DateTime CreatedAt { get; set; }
     

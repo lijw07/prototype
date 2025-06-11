@@ -1,31 +1,36 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Prototype.Enum;
-using Prototype.Utility;
 
 namespace Prototype.Models;
 
 public class UserRecoveryRequestModel
 {
     [Key]
-    public required Guid UserRecoveryRequestId { get; set; }
+    public Guid UserRecoveryRequestId { get; set; }
+
+    [Required]
+    public Guid UserId { get; set; }
+
+    [ForeignKey("UserId")]
+    public required UserModel User { get; set; }
+
+    [Required]
+    [MaxLength(128)]
+    public required string VerificationCode { get; set; }
     
     [Required]
-    public required Guid UserId { get; set; }
+    public bool IsUsed { get; set; } = false;
     
     [Required]
-    [ForeignKey(nameof(UserId))]
-    public required  UserModel User { get; set; }
+    public string RecoveryType { get; set; }
     
     [Required]
-    public required string Token { get; set; }
-    
+    public UserRecoveryTypeEnum UserRecoveryType { get; set; }
+
     [Required]
-    public required  UserRecoveryTypeEnum UserRecoveryType { get; set; }
-    
+    public DateTime RequestedAt { get; set; }
+
     [Required]
-    public required DateTime CreatedAt { get; set; }
-    
-    [Required]
-    public required DateTime ExpiresAt { get; set; }
+    public DateTime ExpiresAt { get; set; }
 }

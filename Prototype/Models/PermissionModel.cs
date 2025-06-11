@@ -15,6 +15,8 @@ public class PermissionModel
     
     public ICollection<ApplicationModel> Applications { get; set; }
     
+    public ICollection<UserPermissionModel> UserPermissions { get; set; }
+    
     [Required]
     public required DateTime CreatedAt { get; set; }
     
