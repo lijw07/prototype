@@ -4,8 +4,11 @@ import Layout from './components/Layout';
 import Home from './components/Home';
 import Counter from './components/Counter';
 import FetchData from './components/FetchData';
-import Accounts
- from './components/Accounts';
+import Accounts from './components/Accounts';
+import Login from './components/login/Login';
+import Signup from './components/login/Signup';
+import Dashboard from './components/Dashboard'
+
 export default function App() {
   return (
     <Layout>
@@ -14,6 +17,8 @@ export default function App() {
         <Route path="/counter" element={<Counter />} />
         <Route path="/fetch-data" element={<FetchData />} />
         <Route path="/accounts" element={<Accounts />} />
+        <Route path="/sign-in" element={<Login />} />
+        <Route path="/sign-up" element={<Signup />} />
       </Routes>
     </Layout>
   );
