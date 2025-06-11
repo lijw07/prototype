@@ -1,7 +1,11 @@
+using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Prototype.Data;
+using Prototype.POCO;
 using Prototype.Services;
 using Prototype.Services.DataParser;
+using Prototype.Services.Factory;
 using Prototype.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,11 +32,20 @@ if (builder.Environment.IsDevelopment())
 builder.Services.AddDbContext<SentinelContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// Bind SMTP Settings
+builder.Services.Configure<SmtpSettingsPoco>(
+    builder.Configuration.GetSection("Smtp"));
+
 // Register Application Services
 builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
 builder.Services.AddScoped<IEntityCreationFactoryService, EntityCreationFactoryService>();
+builder.Services.AddScoped<IUserFactoryService, UserFactoryService>();
+builder.Services.AddScoped<IUserActivityLogFactoryService, UserActivityLogFactoryService>();
+builder.Services.AddScoped<IAuditLogFactoryService, AuditLogFactoryService>();
+builder.Services.AddScoped<IUserRecoveryRequestFactoryService, UserRecoveryFactoryService>();
 builder.Services.AddScoped<IVerificationService, VerificationService>();
-builder.Services.AddScoped(typeof(IEntitySaveService<>), typeof(EntitySaveService<>));
+builder.Services.AddScoped(typeof(IRepositoryService<>), typeof(RepositoryService<>));
+builder.Services.AddScoped<IUnitOfWorkService, UnitOfWorkService>();
 
 // Register Data Dump Parsers
 builder.Services.AddScoped<DataDumpParserFactoryService>();
@@ -40,6 +53,26 @@ builder.Services.AddTransient<CsvDataDumpParserService>();
 builder.Services.AddTransient<ExcelDataDumpParserService>();
 builder.Services.AddTransient<JsonDataDumpParserService>();
 builder.Services.AddTransient<XmlDataDumpParserService>();
+
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+
+builder.Services.AddAuthentication("Bearer")
+    .AddJwtBearer("Bearer", options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidAudience = jwtSettings["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSettings["Key"]!))
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
@@ -62,6 +95,10 @@ else
     app.UseHsts();
     app.UseHttpsRedirection(); // Only redirect in production!
 }
+
+// JWT middleware
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.UseStaticFiles();
 

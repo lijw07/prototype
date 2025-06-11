@@ -1,16 +1,22 @@
 using System.Collections;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Services;
 using Prototype.Services.Interfaces;
+using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
+using Prototype.Models;
 
 namespace Prototype.Controllers.Settings;
 
 [ApiController]
+[Authorize]
 [Route("[controller]")]
 public class DataDumpSettingsController(
     DataDumpParserFactoryService parserFactoryService,
+    IEntityCreationFactoryService entityCreationFactory,
     SentinelContext context)
     : ControllerBase
 {
@@ -23,6 +29,11 @@ public class DataDumpSettingsController(
         if (parser == null)
             return BadRequest("Parser not found for provided type.");
 
+        var user = await GetCurrentUserAsync();
+        if (user is null)
+            return Unauthorized("User not found.");
+        
+        var affectedTables = new List<string>();
         foreach (var formFile in requestDto.File)
         {
             var modelType = ResolveModelTypeFromFileName(formFile.FileName);
@@ -32,13 +43,21 @@ public class DataDumpSettingsController(
             try
             {
                 await ProcessFileAsync(formFile, parser, modelType);
+
+                affectedTables.Add(modelType.Name);
+                var activityLog = entityCreationFactory.CreateFromDataDump(user, HttpContext);
+                var auditLog = entityCreationFactory.CreateFromDataDump(user, requestDto, affectedTables);
+
+                await context.UserActivityLogs.AddAsync(activityLog);
+                await context.AuditLogs.AddAsync(auditLog);
             }
             catch (Exception ex)
             {
-                // Consider logging ex here with ILogger!
                 return UnprocessableEntity($"Failed to process file '{formFile.FileName}': {ex.Message}");
             }
         }
+
+        await context.SaveChangesAsync();
         return Ok("Upload and processing successful.");
     }
 
@@ -48,9 +67,7 @@ public class DataDumpSettingsController(
         Type modelType)
     {
         var entities = await parser.ParseDataDump(new List<IFormFile> { formFile }, modelType);
-        
         var typedList = CreateTypedList(modelType, entities);
-        
         await SaveEntitiesToDatabaseAsync(modelType, typedList);
     }
 
@@ -72,13 +89,18 @@ public class DataDumpSettingsController(
 
     private async Task SaveEntitiesToDatabaseAsync(Type modelType, IList typedList)
     {
-        // Get DbSet dynamically and add range
         var dbSet = context.GetType().GetMethod("Set", Type.EmptyTypes)!
             .MakeGenericMethod(modelType).Invoke(context, null);
 
         var addRangeMethod = dbSet!.GetType().GetMethod("AddRange", new[] { typedList.GetType() });
         addRangeMethod!.Invoke(dbSet, new object[] { typedList });
+    }
 
-        await context.SaveChangesAsync();
+    private async Task<UserModel?> GetCurrentUserAsync()
+    {
+        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return Guid.TryParse(userIdStr, out var userId)
+            ? await context.Users.FirstOrDefaultAsync(u => u.UserId == userId)
+            : null;
     }
 }

@@ -33,6 +33,8 @@ public class UserModel
     
     public ICollection<UserRecoveryRequestModel> UserRecoveryRequests { get; set; }
     
+    public ICollection<UserPermissionModel> UserPermissions { get; set; }
+    
     public required DateTime CreatedAt { get; set; }
     
     public required DateTime UpdatedAt { get; set; }

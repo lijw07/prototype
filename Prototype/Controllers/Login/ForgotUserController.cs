@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Enum;
-using Prototype.Models;
 using Prototype.Services.Interfaces;
 
 namespace Prototype.Controllers.Login;
@@ -12,8 +11,7 @@ namespace Prototype.Controllers.Login;
 [Route("[controller]")]
 public class ForgotUserController(
     IEntityCreationFactoryService entityCreationFactoryService,
-    IEntitySaveService<AuditLogModel> auditLogService,
-    IEntitySaveService<UserRecoveryRequestModel> userRecoveryLogService,
+    IUnitOfWorkService uows,
     IVerificationService verificationService,
     IEmailNotificationService emailNotificationService,
     SentinelContext context)
@@ -27,24 +25,27 @@ public class ForgotUserController(
 
         if (user == null)
         {
-            return BadRequest("Invalid email, No account exist with that email address");
+            return BadRequest("Invalid email, No account exists with that email address");
         }
 
-        var userRecoveryLog = entityCreationFactoryService.CreateUserRecoveryRequestFronForgotUser(user, requestDto, verificationService.GenerateVerificationCode());;
-        await userRecoveryLogService.CreateAsync(userRecoveryLog);
-        
-        var auditLog = entityCreationFactoryService.CreateAuditLogFromForgotUser(user, requestDto, userRecoveryLog);
-        await auditLogService.CreateAsync(auditLog);
+        var verificationCode = verificationService.GenerateVerificationCode();
+
+        var userRecoveryLog = entityCreationFactoryService.CreateFromForgotUser(user, requestDto, verificationCode);
+        await uows.UserRecoveryRequests.AddAsync(userRecoveryLog);
+
+        var auditLog = entityCreationFactoryService.CreateFromForgotUser(user, requestDto, userRecoveryLog);
+        await uows.AuditLogs.AddAsync(auditLog);
+        await uows.SaveChangesAsync();
 
         if (requestDto.UserRecoveryType == UserRecoveryTypeEnum.PASSWORD)
         {
-            await emailNotificationService.SendPasswordResetEmail(user.Email, userRecoveryLog.Token);
+            await emailNotificationService.SendPasswordResetEmail(user.Email, verificationCode);
         }
         else
         {
             await emailNotificationService.SendUsernameEmail(user.Email, user.Username);
         }
-        return Ok(new {message = "If your account exists, you will receive an email with a link to reset your password."});
 
+        return Ok(new { message = "If your account exists, you will receive an email with a link to reset your password." });
     }
 }

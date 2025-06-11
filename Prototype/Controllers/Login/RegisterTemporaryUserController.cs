@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.DTOs;
-using Prototype.Models;
 using Prototype.Services.Interfaces;
 
 namespace Prototype.Controllers.Login;
@@ -10,7 +9,7 @@ namespace Prototype.Controllers.Login;
 [ApiController]
 [Route("[controller]")]
 public class RegisterTemporaryUserController(
-    IEntitySaveService<TemporaryUserModel> tempUserService,
+    IUnitOfWorkService uows,
     IVerificationService verificationService,
     IEntityCreationFactoryService tempUserFactory,
     IEmailNotificationService emailNotificationService,
@@ -23,10 +22,14 @@ public class RegisterTemporaryUserController(
         if (await context.Users.AnyAsync(u => u.Email == requestDto.Email))
             return Conflict(new { message = "Email already exists!" });
 
+        if (await context.TemporaryUsers.AnyAsync(tu => tu.Email == requestDto.Email))
+            return Conflict(new { message = "Temporary registration already exists for this email!" });
+
         var verificationCode = verificationService.GenerateVerificationCode();
-        var tempUser = tempUserFactory.CreateTemporaryUserFromRequest(requestDto, verificationCode);
-        var createdUser = await tempUserService.CreateAsync(tempUser);
-        await emailNotificationService.SendVerificationEmail(createdUser.Email, verificationCode);
+        var tempUser = tempUserFactory.CreateTemporaryUser(requestDto, verificationCode);
+        await uows.TemporaryUser.AddAsync(tempUser);
+        await uows.SaveChangesAsync();
+        await emailNotificationService.SendVerificationEmail(tempUser.Email, verificationCode);
         return Ok(new { id = tempUser.TemporaryUserId, message = "Registration successful. Please check your email to verify your account." });
     }
 }
