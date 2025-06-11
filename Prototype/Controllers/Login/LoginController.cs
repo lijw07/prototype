@@ -19,15 +19,28 @@ public class LoginController(
     [HttpPost]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto requestDto)
     {
-        var user = await GetUserWithPermissionsAsync(requestDto.Username);
+        var usernameMissing = string.IsNullOrWhiteSpace(requestDto.Username);
+        var passwordMissing = string.IsNullOrWhiteSpace(requestDto.Password);
 
+        if (usernameMissing && passwordMissing)
+            return BadRequest(new { message = "Username and password cannot be empty" });
+
+        if (usernameMissing)
+            return BadRequest(new { message = "Username cannot be empty" });
+
+        if (passwordMissing)
+            return BadRequest(new { message = "Password cannot be empty" });
+        
+        var user = await GetUserWithPermissionsAsync(requestDto.Username);
         if (user is null || !IsPasswordValid(requestDto.Password, user.PasswordHash))
             return Unauthorized(new { message = "Invalid username or password" });
         
         var userActivityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.Login, HttpContext);
         await uows.UserActivityLogs.AddAsync(userActivityLog);
         await uows.SaveChangesAsync();
-        return Ok(new { token = jwtTokenService.BuildUserClaims(user, JwtPurposeTypeEnum.Login) });
+        
+        var token = jwtTokenService.BuildUserClaims(user, JwtPurposeTypeEnum.Login);
+        return Ok(new { token });
     }
 
     private async Task<UserModel?> GetUserWithPermissionsAsync(string username)
