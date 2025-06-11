@@ -27,7 +27,7 @@ FROM nginx:alpine AS prod
 RUN rm /etc/nginx/conf.d/default.conf
 
 # Copy custom NGINX config into container
-COPY ../../nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 
 # Copy React build output to NGINX's public folder
 COPY --from=build /app/build /usr/share/nginx/html
