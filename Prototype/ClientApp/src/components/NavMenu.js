@@ -18,6 +18,9 @@ export default function NavMenu() {
         <NavItem>
           <NavLink tag={Link} to="/accounts" className="text-dark">Accounts</NavLink>
         </NavItem>
+        <NavItem>
+          <NavLink tag={Link} to="/login" className="text-dark">Login</NavLink>
+        </NavItem>
       </Nav>
     </nav>
   );

@@ -17,7 +17,7 @@ export default function App() {
         <Route path="/counter" element={<Counter />} />
         <Route path="/fetch-data" element={<FetchData />} />
         <Route path="/accounts" element={<Accounts />} />
-        <Route path="/sign-in" element={<Login />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/sign-up" element={<Signup />} />
       </Routes>
     </Layout>
