@@ -6,17 +6,6 @@
       target: dev
     ports:
       - "3000:3000"
-    environment:
-      - CHOKIDAR_USE_POLLING=true
-      - BROWSER=none
-      - REACT_APP_API_URL=http://backend:8080
-    volumes:
-      - ./Prototype/ClientApp:/app
-      - /app/node_modules
-    depends_on:
-      - backend
-    networks:
-      - prototype_default
 
   backend:
     build:
@@ -25,22 +14,6 @@
       target: dev
     ports:
       - "8080:8080"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__DefaultConnection=Server=db,1433;Database=PrototypeDb;User=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True
-    volumes:
-      - ./Prototype:/src/Prototype:cached
-      - ~/.nuget/packages:/root/.nuget/packages
-    depends_on:
-      - db
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    networks:
-      - prototype_default
 
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest

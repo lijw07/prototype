@@ -18,7 +18,7 @@ public class UserFactoryService : IUserFactoryService
             Email = requestDto.Email,
             PhoneNumber = requestDto.PhoneNumber,
             CreatedAt = DateTime.Now,
-            VerificationCode = verificationCode
+            token = verificationCode,
         };
     }
 

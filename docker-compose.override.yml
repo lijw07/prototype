@@ -2,24 +2,37 @@ services:
   frontend:
     build:
       target: dev
-    volumes:
-      # Mount source for live reload
-      - ./Prototype/ClientApp:/app
-      - /app/node_modules
     environment:
       - CHOKIDAR_USE_POLLING=true
       - BROWSER=none
-    restart: unless-stopped
+      - REACT_APP_API_URL=http://backend:8080
+    volumes:
+      - ./Prototype/ClientApp:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - prototype_default
 
   backend:
     build:
       target: dev
-    volumes:
-      # Mount backend source for hot reload (cached = better perf on macOS/Windows)
-      - ./Prototype:/src/Prototype:cached
-      # Use local NuGet cache for faster restore
-      - ~/.nuget/packages:/root/.nuget/packages:cached
     environment:
-      - DOTNET_USE_POLLING_FILE_WATCHER=1
       - ASPNETCORE_ENVIRONMENT=Development
-    restart: unless-stopped
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Server=db,1433;Database=PrototypeDb;User=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True
+    volumes:
+      - ./Prototype:/src/Prototype:cached
+      - ~/.nuget/packages:/root/.nuget/packages
+    depends_on:
+      - db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - prototype_default
+
+networks:
+  prototype_default:
