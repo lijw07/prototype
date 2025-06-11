@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Prototype.DTOs;
+using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
 
@@ -13,21 +14,15 @@ public class EntityCreationFactoryService(
     : IEntityCreationFactoryService
 {
     // IUserFactoryService
-    public TemporaryUserModel CreateTemporaryUser(RegisterRequestDto dto, string verificationCode) =>
-        userFactory.CreateTemporaryUser(dto, verificationCode);
+    public TemporaryUserModel CreateTemporaryUser(RegisterRequestDto dto, string token) =>
+        userFactory.CreateTemporaryUser(dto, token);
 
     public UserModel CreateUserFromTemporary(TemporaryUserModel tempUser) =>
         userFactory.CreateUserFromTemporary(tempUser);
 
     // IUserActivityLogFactoryService
-    public UserActivityLogModel CreateFromLogin(UserModel user, HttpContext context) =>
-        activityLogFactory.CreateFromLogin(user, context);
-
-    public UserActivityLogModel CreateFromPasswordChange(UserModel user, HttpContext context) =>
-        activityLogFactory.CreateFromPasswordChange(user, context);
-
-    public UserActivityLogModel CreateFromDataDump(UserModel user, HttpContext context) =>
-        activityLogFactory.CreateFromDataDump(user, context);
+    public UserActivityLogModel CreateUserActivityLog(UserModel user, ActionTypeEnum action, HttpContext context) =>
+        activityLogFactory.CreateUserActivityLog(user, action, context);
 
     // IAuditLogFactoryService
     public AuditLogModel CreateFromForgotUser(UserModel user, ForgotUserRequestDto request, UserRecoveryRequestModel recoveryLog) =>
@@ -43,6 +38,6 @@ public class EntityCreationFactoryService(
         auditLogFactory.CreateFromDataDump(user, request, affectedTables);
 
     // IUserRecoveryRequestFactoryService
-    public UserRecoveryRequestModel CreateFromForgotUser(UserModel user, ForgotUserRequestDto dto, string verificationCode) =>
-        recoveryFactory.CreateFromForgotUser(user, dto, verificationCode);
+    public UserRecoveryRequestModel CreateFromForgotUser(UserModel user, ForgotUserRequestDto dto, string token) =>
+        recoveryFactory.CreateFromForgotUser(user, dto, token);
 }

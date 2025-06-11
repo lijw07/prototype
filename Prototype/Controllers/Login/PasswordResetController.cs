@@ -1,94 +1,59 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Services.Interfaces;
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
+using Prototype.Enum;
 
 namespace Prototype.Controllers.Login;
 
 [ApiController]
 [Route("[controller]")]
 public class PasswordResetController(
-    IEntityCreationFactoryService entityCreationFactoryService,
+    IEntityCreationFactoryService entityFactory,
     IUnitOfWorkService uows,
-    IEmailNotificationService emailNotificationService,
-    IConfiguration config,
-    SentinelContext context) : ControllerBase
+    IJwtTokenService jwtTokenService,
+    IEmailNotificationService emailService,
+    SentinelContext dbContext) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto requestDto)
     {
-        try
-        {
-            var principal = ValidateJwtToken(requestDto.Token, config["JwtSettings:Key"]);
-            if (principal == null)
-                return BadRequest("Invalid or tampered token.");
+        if (!jwtTokenService.ValidateToken(requestDto.Token, out ClaimsPrincipal principal))
+            return BadRequest("Invalid or expired token.");
 
-            var email = principal.FindFirstValue("email");
-            var code = principal.FindFirstValue("code");
+        var email = principal.FindFirst("email")?.Value;
+        var code = principal.FindFirst("code")?.Value;
 
-            var userRecoveryRequest = await context.UserRecoveryRequests
-                .Include(r => r.User)
-                .FirstOrDefaultAsync(r =>
-                    r.User.Email == email &&
-                    r.VerificationCode == code);
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(code))
+            return BadRequest("Registered account does not exist!");
 
-            if (userRecoveryRequest == null ||
-                userRecoveryRequest.ExpiresAt < DateTime.UtcNow ||
-                userRecoveryRequest.IsUsed)
-            {
-                return BadRequest("Invalid or expired token.");
-            }
+        var recoveryRequest = await dbContext.UserRecoveryRequests
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r =>
+                r.User.Email == email &&
+                r.VerificationCode == code);
 
-            userRecoveryRequest.User.PasswordHash = BCrypt.Net.BCrypt.HashPassword(requestDto.password);
-            userRecoveryRequest.IsUsed = true;
+        if (recoveryRequest is null || recoveryRequest.IsUsed)
+            return BadRequest("This link is no longer valid or has already been used.");
+        
+        if (recoveryRequest.ExpiresAt < DateTime.Now)
+            return BadRequest("This link has expired.");
+        
+        recoveryRequest.User.PasswordHash = BCrypt.Net.BCrypt.HashPassword(requestDto.Password);
+        recoveryRequest.IsUsed = true;
 
-            context.Users.Update(userRecoveryRequest.User);
-            context.UserRecoveryRequests.Update(userRecoveryRequest);
+        dbContext.Users.Update(recoveryRequest.User);
+        dbContext.UserRecoveryRequests.Update(recoveryRequest);
 
-            var auditLog = entityCreationFactoryService.CreateFromResetPassword(userRecoveryRequest);
-            await uows.AuditLogs.AddAsync(auditLog);
-            await context.SaveChangesAsync();
+        var auditLog = entityFactory.CreateFromResetPassword(recoveryRequest);
+        var userActivityLog = entityFactory.CreateUserActivityLog(recoveryRequest.User, ActionTypeEnum.ChangePassword, HttpContext);
+        await uows.UserActivityLogs.AddAsync(userActivityLog);
+        await uows.AuditLogs.AddAsync(auditLog);
+        await dbContext.SaveChangesAsync();
 
-            await emailNotificationService.SendPasswordResetVerificationEmail(userRecoveryRequest.User.Email);
-            return Ok("Password has been successfully reset.");
-        }
-        catch (SecurityTokenException)
-        {
-            return BadRequest("Invalid or tampered token.");
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, $"Unexpected error: {ex.Message}");
-        }
-    }
-
-    private static ClaimsPrincipal? ValidateJwtToken(string token, string secretKey)
-    {
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.UTF8.GetBytes(secretKey);
-
-        var validationParams = new TokenValidationParameters
-        {
-            ValidateIssuer = false,
-            ValidateAudience = false,
-            ValidateLifetime = true,
-            IssuerSigningKey = new SymmetricSecurityKey(key),
-            ValidateIssuerSigningKey = true,
-            ClockSkew = TimeSpan.FromMinutes(1)
-        };
-
-        try
-        {
-            return tokenHandler.ValidateToken(token, validationParams, out _);
-        }
-        catch
-        {
-            return null;
-        }
+        await emailService.SendPasswordResetVerificationEmail(recoveryRequest.User.Email);
+        return Ok("Your password has been successfully reset.");
     }
 }

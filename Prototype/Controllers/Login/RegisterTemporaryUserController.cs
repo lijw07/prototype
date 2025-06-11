@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.DTOs;
+using Prototype.Enum;
 using Prototype.Services.Interfaces;
 
 namespace Prototype.Controllers.Login;
@@ -10,7 +11,7 @@ namespace Prototype.Controllers.Login;
 [Route("[controller]")]
 public class RegisterTemporaryUserController(
     IUnitOfWorkService uows,
-    IVerificationService verificationService,
+    IJwtTokenService jwtTokenService,
     IEntityCreationFactoryService tempUserFactory,
     IEmailNotificationService emailNotificationService,
     SentinelContext context)
@@ -25,11 +26,11 @@ public class RegisterTemporaryUserController(
         if (await context.TemporaryUsers.AnyAsync(tu => tu.Email == requestDto.Email))
             return Conflict(new { message = "Temporary registration already exists for this email!" });
 
-        var verificationCode = verificationService.GenerateVerificationCode();
-        var tempUser = tempUserFactory.CreateTemporaryUser(requestDto, verificationCode);
+        var token = jwtTokenService.BuildUserClaims(requestDto, JwtPurposeTypeEnum.Verification);
+        var tempUser = tempUserFactory.CreateTemporaryUser(requestDto, token);
         await uows.TemporaryUser.AddAsync(tempUser);
         await uows.SaveChangesAsync();
-        await emailNotificationService.SendVerificationEmail(tempUser.Email, verificationCode);
+        await emailNotificationService.SendVerificationEmail(tempUser.Email, token);
         return Ok(new { id = tempUser.TemporaryUserId, message = "Registration successful. Please check your email to verify your account." });
     }
 }
