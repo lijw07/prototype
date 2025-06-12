@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Services.Interfaces;
 using System.Security.Claims;
 using Prototype.Enum;
+using Prototype.Models;
+using Prototype.Utility;
 
 namespace Prototype.Controllers.Login;
 
@@ -14,46 +14,54 @@ public class PasswordResetController(
     IEntityCreationFactoryService entityFactory,
     IUnitOfWorkService uows,
     IJwtTokenService jwtTokenService,
-    IEmailNotificationService emailService,
-    SentinelContext dbContext) : ControllerBase
+    IEmailNotificationService emailService, 
+    IAuthenticatedUserAccessor userAccessor) : ControllerBase
 {
     [HttpPost]
-    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto requestDto)
+    public async Task<IActionResult> PasswordReset([FromBody] ResetPasswordRequestDto requestDto)
     {
         if (!jwtTokenService.ValidateToken(requestDto.Token, out ClaimsPrincipal principal))
             return BadRequest("Invalid or expired token.");
 
-        var email = principal.FindFirst("email")?.Value;
-        var code = principal.FindFirst("code")?.Value;
+        var email = principal.FindFirst(ClaimTypes.Email)?.Value;
+        if (string.IsNullOrWhiteSpace(email))
+            return BadRequest("Token does not contain a valid email.");
+        
+        var user = await userAccessor.FindUserByEmail(email);
 
-        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(code))
+        if (user is null)
             return BadRequest("Registered account does not exist!");
+        
+        var userRecovery = await userAccessor.FindUserRecoveryRequest(user.UserId);
 
-        var recoveryRequest = await dbContext.UserRecoveryRequests
-            .Include(r => r.User)
-            .FirstOrDefaultAsync(r =>
-                r.User.Email == email &&
-                r.VerificationCode == code);
-
-        if (recoveryRequest is null || recoveryRequest.IsUsed)
+        if (userRecovery is null || userRecovery.ExpiresAt < DateTime.Now)
             return BadRequest("This link is no longer valid or has already been used.");
-        
-        if (recoveryRequest.ExpiresAt < DateTime.Now)
-            return BadRequest("This link has expired.");
-        
-        recoveryRequest.User.PasswordHash = BCrypt.Net.BCrypt.HashPassword(requestDto.Password);
-        recoveryRequest.IsUsed = true;
 
-        dbContext.Users.Update(recoveryRequest.User);
-        dbContext.UserRecoveryRequests.Update(recoveryRequest);
-
-        var auditLog = entityFactory.CreateFromResetPassword(recoveryRequest);
-        var userActivityLog = entityFactory.CreateUserActivityLog(recoveryRequest.User, ActionTypeEnum.ChangePassword, HttpContext);
+        if (!requestDto.Password.Equals(requestDto.ReTypePassword))
+            return BadRequest("Passwords do not match.");
+        
+        userRecovery.IsUsed = true;
+        
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(requestDto.Password);
+        user.UpdatedAt = DateTime.Now;
+        
+        var userActivityLog = entityFactory.CreateUserActivityLog(user, ActionTypeEnum.ChangePassword, HttpContext);
+        
+        var affectedEntities = new List<string>
+        {
+            nameof(UserModel),
+            nameof(UserRecoveryRequestModel)
+        };
+        
+        var auditLog = entityFactory.CreateAuditLog(user, ActionTypeEnum.ChangePassword, affectedEntities);
+        
+        await uows.UserRecoveryRequests.AddAsync(userRecovery);
+        await uows.Users.AddAsync(user);
         await uows.UserActivityLogs.AddAsync(userActivityLog);
         await uows.AuditLogs.AddAsync(auditLog);
-        await dbContext.SaveChangesAsync();
+        await uows.SaveChangesAsync();
 
-        await emailService.SendPasswordResetVerificationEmail(recoveryRequest.User.Email);
+        await emailService.SendPasswordResetVerificationEmail(user.Email);
         return Ok("Your password has been successfully reset.");
     }
 }

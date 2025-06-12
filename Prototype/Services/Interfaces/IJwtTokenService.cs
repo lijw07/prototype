@@ -7,8 +7,8 @@ namespace Prototype.Services.Interfaces;
 
 public interface IJwtTokenService
 {
-    string BuildUserClaims(UserModel user, JwtPurposeTypeEnum purpose);
-    string BuildUserClaims(RegisterRequestDto requestDto, JwtPurposeTypeEnum verification);
+    string BuildUserClaims(UserModel user, ActionTypeEnum action);
+    string BuildUserClaims(RegisterRequestDto requestDto, ActionTypeEnum action);
     bool ValidateToken(string token, out ClaimsPrincipal principal);
 
 }

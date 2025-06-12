@@ -9,7 +9,7 @@ public class UserActivityLogFactoryService : IUserActivityLogFactoryService
 {
     public UserActivityLogModel CreateUserActivityLog(UserModel user, ActionTypeEnum action, HttpContext httpContext)
     {
-        var userAgent = httpContext.Request.Headers["User-Agent"].ToString();
+        var userAgent = httpContext.Request.Headers.UserAgent.ToString();
         var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString();
         var uaParser = Parser.GetDefault();
         var clientInfo = uaParser.Parse(userAgent);

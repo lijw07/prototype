@@ -4,6 +4,7 @@ using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Enum;
 using Prototype.Services.Interfaces;
+using Prototype.Utility;
 
 namespace Prototype.Controllers.Login;
 
@@ -14,23 +15,25 @@ public class RegisterTemporaryUserController(
     IJwtTokenService jwtTokenService,
     IEntityCreationFactoryService tempUserFactory,
     IEmailNotificationService emailNotificationService,
-    SentinelContext context)
-    : ControllerBase
+    IAuthenticatedUserAccessor userAccessor) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Register([FromBody] RegisterRequestDto requestDto)
     {
-        if (await context.Users.AnyAsync(u => u.Email == requestDto.Email))
+        if (await userAccessor.EmailExistsAsync(requestDto.Email))
             return Conflict(new { message = "Email already exists!" });
-
-        if (await context.TemporaryUsers.AnyAsync(tu => tu.Email == requestDto.Email))
-            return Conflict(new { message = "Temporary registration already exists for this email!" });
-
-        var token = jwtTokenService.BuildUserClaims(requestDto, JwtPurposeTypeEnum.Verification);
+        
+        if (!await userAccessor.UsernameExistsAsync(requestDto.Username))
+            return Conflict(new { message = "Username already in use!" });
+        
+        var token = jwtTokenService.BuildUserClaims(requestDto, ActionTypeEnum.CreateUser);
         var tempUser = tempUserFactory.CreateTemporaryUser(requestDto, token);
+        
         await uows.TemporaryUser.AddAsync(tempUser);
         await uows.SaveChangesAsync();
+        
         await emailNotificationService.SendVerificationEmail(tempUser.Email, token);
+        
         return Ok(new { id = tempUser.TemporaryUserId, message = "Registration successful. Please check your email to verify your account." });
     }
 }

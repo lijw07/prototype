@@ -1,33 +1,21 @@
 using Microsoft.AspNetCore.Mvc;
 using Prototype.DTOs;
+using Prototype.Services.Interfaces;
+using Prototype.Utility;
 
 namespace Prototype.Controllers.Settings;
 
 [ApiController]
 [Route("[controller]")]
-public class ApplicationSettingsController : ControllerBase
+public class ApplicationSettingsController(
+    IAuthenticatedUserAccessor userAccessor,
+    IUnitOfWorkService uows,
+    IJwtTokenService jwtTokenService,
+    IEntityCreationFactoryService entityCreationFactory): ControllerBase
 {
 
     [HttpPost]
     public async Task<IActionResult> CreateApplication([FromBody] ApplicationRequestDto dto)
-    {
-        throw new NotImplementedException();
-    }
-    
-    [HttpGet]
-    public async Task<IActionResult> GetApplication(int id)
-    {
-        throw new NotImplementedException();
-    }
-
-    [HttpPut("applications/{id}")]
-    public async Task<IActionResult> UpdateApplication(int id, [FromBody] ApplicationRequestDto dto)
-    {
-        throw new NotImplementedException();
-    }
-
-    [HttpDelete("applications/{id}")]
-    public async Task<IActionResult> DeleteApplication(int id)
     {
         throw new NotImplementedException();
     }

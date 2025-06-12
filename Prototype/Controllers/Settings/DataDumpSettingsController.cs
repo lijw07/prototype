@@ -7,7 +7,7 @@ using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Enum;
 using Prototype.Models;
-using Prototype.Services;
+using Prototype.Services.Factory;
 using Prototype.Services.Interfaces;
 
 namespace Prototype.Controllers.Settings;
@@ -50,7 +50,7 @@ public class DataDumpSettingsController(
         }
         
         var activityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.DataDumpUpload, HttpContext);
-        var auditLog = entityCreationFactory.CreateFromDataDump(user, requestDto, affectedTables);
+        var auditLog = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.DataDumpUpload, affectedTables);
         await context.UserActivityLogs.AddAsync(activityLog);
         await context.AuditLogs.AddAsync(auditLog);
         await context.SaveChangesAsync();

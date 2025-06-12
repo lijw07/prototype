@@ -6,14 +6,14 @@ using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
 
-public class EmailNotificationService : IEmailNotificationService
+public class EmailNotificationFactoryService : IEmailNotificationService
 {
     private readonly SmtpClient _smtpClient;
     private readonly string _fromEmail;
     private readonly string _jwtKey;
     private readonly IJwtTokenService _jwtTokenService;
 
-    public EmailNotificationService(
+    public EmailNotificationFactoryService(
         IOptions<SmtpSettingsPoco> smtpOptions,
         IConfiguration config,
         IJwtTokenService jwtTokenService)

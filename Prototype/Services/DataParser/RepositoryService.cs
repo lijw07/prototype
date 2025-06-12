@@ -7,7 +7,6 @@ namespace Prototype.Services.DataParser;
 public class RepositoryService<T>(SentinelContext context) : IRepositoryService<T>
     where T : class
 {
-    private readonly SentinelContext _context = context;
     private readonly DbSet<T> _dbSet = context.Set<T>();
 
     public async Task AddAsync(T entity)

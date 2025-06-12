@@ -2,7 +2,7 @@ using Prototype.Enum;
 using Prototype.Services.DataParser;
 using Prototype.Services.Interfaces;
 
-namespace Prototype.Services;
+namespace Prototype.Services.Factory;
 
 public class DataDumpParserFactoryService(IServiceProvider serviceProvider)
 {

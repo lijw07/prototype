@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Enum;
+using Prototype.Models;
 using Prototype.Services.Interfaces;
+using Prototype.Utility;
 
 namespace Prototype.Controllers.Login;
 
@@ -13,38 +13,51 @@ public class ForgotUserController(
     IEntityCreationFactoryService entityCreationFactoryService,
     IUnitOfWorkService uows,
     IJwtTokenService jwtTokenService,
-    IEmailNotificationService emailNotificationService,
-    SentinelContext context)
-    : ControllerBase
+    IEmailNotificationService emailNotificationService, 
+    IAuthenticatedUserAccessor userAccessor) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> ForgotUser([FromBody] ForgotUserRequestDto requestDto)
     {
-        var user = await context.Users
-            .FirstOrDefaultAsync(u => u.Email == requestDto.Email);
-
-        if (user == null)
-        {
-            return BadRequest("Invalid email, No account exist with that email address");
-        }
+        if (string.IsNullOrWhiteSpace(requestDto.Email))
+            return BadRequest("Email cannot be empty");
         
-        var token = jwtTokenService.BuildUserClaims(user, JwtPurposeTypeEnum.ForgotUser);
+        var user = await userAccessor.FindUserByEmail(requestDto.Email);
 
-        var userRecoveryLog = entityCreationFactoryService.CreateFromForgotUser(user, requestDto, token);
-        var auditLog = entityCreationFactoryService.CreateFromForgotUser(user, requestDto, userRecoveryLog);
-        var userActivityLog = entityCreationFactoryService.CreateUserActivityLog(user, ActionTypeEnum.ForgotPassword, HttpContext);
-        await uows.UserActivityLogs.AddAsync(userActivityLog);
-        await uows.UserRecoveryRequests.AddAsync(userRecoveryLog);
-        await uows.AuditLogs.AddAsync(auditLog);
-        await uows.SaveChangesAsync();
+        if (user is null) 
+            return BadRequest("No account exist with that email address");
+        
+        var token = jwtTokenService.BuildUserClaims(user, ActionTypeEnum.ForgotPassword);
+        
+        UserActivityLogModel userActivityLog;
+
+        
         if (requestDto.UserRecoveryType == UserRecoveryTypeEnum.PASSWORD)
         {
             await emailNotificationService.SendPasswordResetEmail(user.Email, token);
+            userActivityLog = entityCreationFactoryService.CreateUserActivityLog(user, ActionTypeEnum.ForgotPassword, HttpContext);
         }
         else
         {
             await emailNotificationService.SendUsernameEmail(user.Email, user.Username);
+            userActivityLog = entityCreationFactoryService.CreateUserActivityLog(user, ActionTypeEnum.ForgotUsername, HttpContext);
         }
+        
+        var userRecoveryLog = entityCreationFactoryService.CreateUserRecoveryRequest(user, requestDto, token);
+
+        var affectedEntities = new List<string>
+        {
+            nameof(UserRecoveryRequestModel),
+            nameof(UserActivityLogModel)
+        };
+        
+        var auditLog = entityCreationFactoryService.CreateAuditLog(user, ActionTypeEnum.ForgotPassword, affectedEntities);
+        
+        await uows.UserActivityLogs.AddAsync(userActivityLog);
+        await uows.UserRecoveryRequests.AddAsync(userRecoveryLog);
+        await uows.AuditLogs.AddAsync(auditLog);
+        await uows.SaveChangesAsync();
+        
         return Ok(new {message = "If your account exists, you will receive an email with a link to reset your password."});
 
     }

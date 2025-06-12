@@ -3,9 +3,9 @@ using Prototype.Models;
 using Prototype.Services.DataParser;
 using Prototype.Services.Interfaces;
 
-namespace Prototype.Services;
+namespace Prototype.Services.Factory;
 
-public class UnitOfWorkService(SentinelContext context) : IUnitOfWorkService
+public class UnitOfWorkFactoryService(SentinelContext context) : IUnitOfWorkService
 {
     public IRepositoryService<UserModel> Users { get; } = new RepositoryService<UserModel>(context);
     public IRepositoryService<ApplicationModel> Applications { get; } = new RepositoryService<ApplicationModel>(context);

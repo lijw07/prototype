@@ -20,9 +20,6 @@ public class AuditLogModel
     public required  ActionTypeEnum ActionType { get; set; }
     
     [Required]
-    public required string Description { get; set; }
-    
-    [Required]
     public required string Metadata { get; set; }
     
     [Required]

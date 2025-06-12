@@ -38,15 +38,15 @@ builder.Services.Configure<SmtpSettingsPoco>(
     builder.Configuration.GetSection("Smtp"));
 
 // Register Application Services
-builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
+builder.Services.AddScoped<IEmailNotificationService, EmailNotificationFactoryService>();
 builder.Services.AddScoped<IEntityCreationFactoryService, EntityCreationFactoryService>();
 builder.Services.AddScoped<IUserFactoryService, UserFactoryService>();
 builder.Services.AddScoped<IUserActivityLogFactoryService, UserActivityLogFactoryService>();
 builder.Services.AddScoped<IAuditLogFactoryService, AuditLogFactoryService>();
 builder.Services.AddScoped<IUserRecoveryRequestFactoryService, UserRecoveryFactoryService>();
 builder.Services.AddScoped(typeof(IRepositoryService<>), typeof(RepositoryService<>));
-builder.Services.AddScoped<IUnitOfWorkService, UnitOfWorkService>();
-builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IUnitOfWorkService, UnitOfWorkFactoryService>();
+builder.Services.AddScoped<IJwtTokenService, JwtTokenFactoryService>();
 builder.Services.AddScoped<IAuthenticatedUserAccessor, AuthenticatedUserAccessor>();
 
 // Register Data Dump Parsers

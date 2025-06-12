@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Http;
 using Prototype.DTOs;
 using Prototype.Enum;
 using Prototype.Models;
@@ -25,19 +24,11 @@ public class EntityCreationFactoryService(
         activityLogFactory.CreateUserActivityLog(user, action, context);
 
     // IAuditLogFactoryService
-    public AuditLogModel CreateFromForgotUser(UserModel user, ForgotUserRequestDto request, UserRecoveryRequestModel recoveryLog) =>
-        auditLogFactory.CreateFromForgotUser(user, request, recoveryLog);
-
-    public AuditLogModel CreateFromResetPassword(UserRecoveryRequestModel recoveryRequest) =>
-        auditLogFactory.CreateFromResetPassword(recoveryRequest);
-
-    public AuditLogModel CreateFromPasswordChange(UserModel user) =>
-        auditLogFactory.CreateFromPasswordChange(user);
-
-    public AuditLogModel CreateFromDataDump(UserModel user, DataDumpRequestDto request, List<string> affectedTables) =>
-        auditLogFactory.CreateFromDataDump(user, request, affectedTables);
-
+    
+    public AuditLogModel CreateAuditLog(UserModel user, ActionTypeEnum action, List<string> affectedTables) =>
+        auditLogFactory.CreateAuditLog(user, action, affectedTables);
+    
     // IUserRecoveryRequestFactoryService
-    public UserRecoveryRequestModel CreateFromForgotUser(UserModel user, ForgotUserRequestDto dto, string token) =>
-        recoveryFactory.CreateFromForgotUser(user, dto, token);
+    public UserRecoveryRequestModel CreateUserRecoveryRequest(UserModel user, ForgotUserRequestDto dto, string token) =>
+        recoveryFactory.CreateUserRecoveryRequest(user, dto, token);
 }

@@ -7,5 +7,12 @@ namespace Prototype.Utility;
 
 public interface IAuthenticatedUserAccessor
 {
-    Task<UserModel?> GetUserAsync(ClaimsPrincipal user);
+    Task<UserModel?> GetUserFromTokenAsync(ClaimsPrincipal user);
+    Task<bool> ValidateUser(string username, string password);
+    Task<UserModel?> GetUser(string username, string password);
+    Task<bool> UsernameExistsAsync(string username);
+    Task<bool> EmailExistsAsync(string email);
+    Task<TemporaryUserModel?> FindTemporaryUserByEmail(string email);
+    Task<UserModel?> FindUserByEmail(string email);
+    Task<UserRecoveryRequestModel?> FindUserRecoveryRequest(Guid userId);
 }

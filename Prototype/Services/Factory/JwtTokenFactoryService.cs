@@ -7,9 +7,9 @@ using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
 
-namespace Prototype.Services;
+namespace Prototype.Services.Factory;
 
-public class JwtTokenService(IConfiguration config) : IJwtTokenService
+public class JwtTokenFactoryService(IConfiguration config) : IJwtTokenService
 {
     private readonly string _key = config["JwtSettings:Key"]!;
     private readonly string _issuer = config["JwtSettings:Issuer"]!;
@@ -33,25 +33,25 @@ public class JwtTokenService(IConfiguration config) : IJwtTokenService
     }
 
     //TODO: Add permission claims
-    public string BuildUserClaims(UserModel user, JwtPurposeTypeEnum purpose)
+    public string BuildUserClaims(UserModel user, ActionTypeEnum action)
     {
         //var permission = user.UserPermissions.Permission.PermissionId.ToString();
 
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-            new Claim("purpose", purpose.ToString())
+            new Claim("ActionType", action.ToString())
         };
 
         return GenerateToken(claims, 15);
     }
 
-    public string BuildUserClaims(RegisterRequestDto requestDto, JwtPurposeTypeEnum purpose)
+    public string BuildUserClaims(RegisterRequestDto requestDto, ActionTypeEnum action)
     {
         var claims = new[]
         {
             new Claim(ClaimTypes.Email, requestDto.Email),
-            new Claim("purpose", purpose.ToString())
+            new Claim("ActionType", action.ToString())
         };
         
         return GenerateToken(claims, 15);

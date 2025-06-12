@@ -5,6 +5,7 @@ using Prototype.DTOs;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
 using Prototype.Enum;
+using Prototype.Utility;
 
 namespace Prototype.Controllers.Login;
 
@@ -13,8 +14,8 @@ namespace Prototype.Controllers.Login;
 public class LoginController(
     IEntityCreationFactoryService entityCreationFactory,
     IUnitOfWorkService uows,
-    IJwtTokenService jwtTokenService,
-    SentinelContext context) : ControllerBase
+    IAuthenticatedUserAccessor userAccessor,
+    IJwtTokenService jwtTokenService) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto requestDto)
@@ -31,28 +32,15 @@ public class LoginController(
         if (passwordMissing)
             return BadRequest(new { message = "Password cannot be empty" });
         
-        var user = await GetUserWithPermissionsAsync(requestDto.Username);
-        if (user is null || !IsPasswordValid(requestDto.Password, user.PasswordHash))
+        if (!await userAccessor.ValidateUser(requestDto.Username, requestDto.Password))
             return Unauthorized(new { message = "Invalid username or password" });
         
+        var user = await userAccessor.GetUser(requestDto.Username, requestDto.Password);
         var userActivityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.Login, HttpContext);
         await uows.UserActivityLogs.AddAsync(userActivityLog);
         await uows.SaveChangesAsync();
         
-        var token = jwtTokenService.BuildUserClaims(user, JwtPurposeTypeEnum.Login);
+        var token = jwtTokenService.BuildUserClaims(user, ActionTypeEnum.Login);
         return Ok(new { token });
-    }
-
-    private async Task<UserModel?> GetUserWithPermissionsAsync(string username)
-    {
-        return await context.Users
-            .Include(u => u.UserPermissions)
-                .ThenInclude(up => up.Permission)
-            .FirstOrDefaultAsync(u => u.Username == username);
-    }
-
-    private static bool IsPasswordValid(string plainTextPassword, string hashedPassword)
-    {
-        return BCrypt.Net.BCrypt.Verify(plainTextPassword, hashedPassword);
     }
 }

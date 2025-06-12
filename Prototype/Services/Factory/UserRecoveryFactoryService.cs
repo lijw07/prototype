@@ -6,7 +6,7 @@ namespace Prototype.Services.Factory;
 
 public class UserRecoveryFactoryService : IUserRecoveryRequestFactoryService
 {
-    public UserRecoveryRequestModel CreateFromForgotUser(UserModel user, ForgotUserRequestDto dto, string verificationCode)
+    public UserRecoveryRequestModel CreateUserRecoveryRequest(UserModel user, ForgotUserRequestDto dto, string verificationCode)
     {
         return new UserRecoveryRequestModel
         {
