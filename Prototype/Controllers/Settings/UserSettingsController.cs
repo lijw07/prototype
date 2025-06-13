@@ -12,7 +12,7 @@ namespace Prototype.Controllers.Settings;
 [Authorize]
 [Route("settings/user")]
 public class UserSettingsController(
-    IEntityCreationFactoryService entityCreationFactory,
+    IEntityCreationService entityCreation,
     IAuthenticatedUserAccessor userAccessor,
     IUnitOfWorkService uows) : ControllerBase
 {
@@ -59,7 +59,7 @@ public class UserSettingsController(
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
         user.UpdatedAt = DateTime.Now;
 
-        var userActivityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.ChangePassword, HttpContext);
+        var userActivityLog = entityCreation.CreateUserActivityLog(user, ActionTypeEnum.ChangePassword, HttpContext);
 
         var affectedEntities = new List<string>
         {
@@ -67,7 +67,7 @@ public class UserSettingsController(
             nameof(UserActivityLogModel)
         };
         
-        var auditLog = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.ChangePassword, affectedEntities);
+        var auditLog = entityCreation.CreateAuditLog(user, ActionTypeEnum.ChangePassword, affectedEntities);
 
         await uows.Users.AddAsync(user);
         await uows.UserActivityLogs.AddAsync(userActivityLog);

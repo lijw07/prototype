@@ -1,10 +1,10 @@
-using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Mail;
+using Microsoft.Extensions.Options;
 using Prototype.POCO;
 using Prototype.Services.Interfaces;
 
-namespace Prototype.Services;
+namespace Prototype.Services.Factory;
 
 public class EmailNotificationFactoryService : IEmailNotificationService
 {

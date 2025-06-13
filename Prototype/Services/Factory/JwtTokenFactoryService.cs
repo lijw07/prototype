@@ -16,7 +16,7 @@ public class JwtTokenFactoryService(IConfiguration config) : IJwtTokenService
     private readonly string _audience = config["JwtSettings:Audience"]!;
     private readonly double _defaultExpiry = double.Parse(config["JwtSettings:ExpiresInMinutes"]!);
 
-    public string GenerateToken(IEnumerable<Claim> claims, double? expiresInMinutes = null)
+    private string GenerateToken(IEnumerable<Claim> claims, double? expiresInMinutes = null)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_key));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

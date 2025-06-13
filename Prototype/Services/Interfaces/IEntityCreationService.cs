@@ -6,7 +6,7 @@ namespace Prototype.Services.Interfaces;
 /// <summary>
 /// IEntityCreationFactoryService Is responsible for creating Entities.
 /// </summary>
-public interface IEntityCreationFactoryService :
+public interface IEntityCreationService :
     IUserFactoryService,
     IUserActivityLogFactoryService,
     IAuditLogFactoryService,

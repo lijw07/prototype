@@ -9,7 +9,7 @@ namespace Prototype.Controllers.Login;
 [Route("[controller]")]
 public class VerifyUserController(
     IUnitOfWorkService unitOfWork,
-    IEntityCreationFactoryService entityFactory,
+    IEntityCreationService entity,
     IEmailNotificationService emailService,
     IJwtTokenService jwtTokenService,
     IAuthenticatedUserAccessor userAccessor) : ControllerBase
@@ -26,7 +26,7 @@ public class VerifyUserController(
         if (tempUser is null || string.IsNullOrWhiteSpace(tempUser.Email))
             return BadRequest("Registered account does not exist!");
         
-        var newUser = entityFactory.CreateUserFromTemporary(tempUser);
+        var newUser = entity.CreateUserFromTemporary(tempUser);
         await unitOfWork.Users.AddAsync(newUser);
     
         unitOfWork.TemporaryUser.Delete(tempUser);

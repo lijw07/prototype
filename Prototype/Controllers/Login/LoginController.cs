@@ -12,7 +12,7 @@ namespace Prototype.Controllers.Login;
 [ApiController]
 [Route("[controller]")]
 public class LoginController(
-    IEntityCreationFactoryService entityCreationFactory,
+    IEntityCreationService entityCreation,
     IUnitOfWorkService uows,
     IAuthenticatedUserAccessor userAccessor,
     IJwtTokenService jwtTokenService) : ControllerBase
@@ -36,7 +36,7 @@ public class LoginController(
             return Unauthorized(new { message = "Invalid username or password" });
         
         var user = await userAccessor.GetUser(requestDto.Username, requestDto.Password);
-        var userActivityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.Login, HttpContext);
+        var userActivityLog = entityCreation.CreateUserActivityLog(user, ActionTypeEnum.Login, HttpContext);
         await uows.UserActivityLogs.AddAsync(userActivityLog);
         await uows.SaveChangesAsync();
         

@@ -11,17 +11,6 @@ public class ApplicationModel
     [Required]
     public required string ApplicationName { get; set; }
     
-    [Required]
-    public Guid PermissionId { get; set; }
-    
-    [Required]
-    [ForeignKey(nameof(PermissionId))]
-    public PermissionModel Permission { get; set; }
-    
-    public ApplicationConnectionModel ApplicationConnections { get; set; }
-    
-    public ICollection<EmployeeModel> Employees { get; set; }
-    
     public ICollection<ApplicationLogModel> ApplicationLog { get; set; }
     
     [Required]

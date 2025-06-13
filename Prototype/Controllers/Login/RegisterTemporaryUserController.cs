@@ -13,7 +13,7 @@ namespace Prototype.Controllers.Login;
 public class RegisterTemporaryUserController(
     IUnitOfWorkService uows,
     IJwtTokenService jwtTokenService,
-    IEntityCreationFactoryService tempUserFactory,
+    IEntityCreationService entityCreationService,
     IEmailNotificationService emailNotificationService,
     IAuthenticatedUserAccessor userAccessor) : ControllerBase
 {
@@ -27,7 +27,7 @@ public class RegisterTemporaryUserController(
             return Conflict(new { message = "Username already in use!" });
         
         var token = jwtTokenService.BuildUserClaims(requestDto, ActionTypeEnum.CreateUser);
-        var tempUser = tempUserFactory.CreateTemporaryUser(requestDto, token);
+        var tempUser = entityCreationService.CreateTemporaryUser(requestDto, token);
         
         await uows.TemporaryUser.AddAsync(tempUser);
         await uows.SaveChangesAsync();

@@ -11,7 +11,7 @@ namespace Prototype.Controllers.Login;
 [ApiController]
 [Route("[controller]")]
 public class PasswordResetController(
-    IEntityCreationFactoryService entityFactory,
+    IEntityCreationService entity,
     IUnitOfWorkService uows,
     IJwtTokenService jwtTokenService,
     IEmailNotificationService emailService, 
@@ -45,7 +45,7 @@ public class PasswordResetController(
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(requestDto.Password);
         user.UpdatedAt = DateTime.Now;
         
-        var userActivityLog = entityFactory.CreateUserActivityLog(user, ActionTypeEnum.ChangePassword, HttpContext);
+        var userActivityLog = entity.CreateUserActivityLog(user, ActionTypeEnum.ChangePassword, HttpContext);
         
         var affectedEntities = new List<string>
         {
@@ -53,7 +53,7 @@ public class PasswordResetController(
             nameof(UserRecoveryRequestModel)
         };
         
-        var auditLog = entityFactory.CreateAuditLog(user, ActionTypeEnum.ChangePassword, affectedEntities);
+        var auditLog = entity.CreateAuditLog(user, ActionTypeEnum.ChangePassword, affectedEntities);
         
         await uows.UserRecoveryRequests.AddAsync(userRecovery);
         await uows.Users.AddAsync(user);

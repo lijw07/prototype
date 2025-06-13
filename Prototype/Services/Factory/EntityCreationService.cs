@@ -5,12 +5,12 @@ using Prototype.Services.Interfaces;
 
 namespace Prototype.Services.Factory;
 
-public class EntityCreationFactoryService(
+public class EntityCreationService(
     IUserFactoryService userFactory,
     IUserActivityLogFactoryService activityLogFactory,
     IAuditLogFactoryService auditLogFactory,
-    IUserRecoveryRequestFactoryService recoveryFactory)
-    : IEntityCreationFactoryService
+    IUserRecoveryRequestFactoryService recovery)
+    : IEntityCreationService
 {
     // IUserFactoryService
     public TemporaryUserModel CreateTemporaryUser(RegisterRequestDto dto, string token) =>
@@ -30,5 +30,5 @@ public class EntityCreationFactoryService(
     
     // IUserRecoveryRequestFactoryService
     public UserRecoveryRequestModel CreateUserRecoveryRequest(UserModel user, ForgotUserRequestDto dto, string token) =>
-        recoveryFactory.CreateUserRecoveryRequest(user, dto, token);
+        recovery.CreateUserRecoveryRequest(user, dto, token);
 }

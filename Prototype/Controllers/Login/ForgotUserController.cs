@@ -10,7 +10,7 @@ namespace Prototype.Controllers.Login;
 [ApiController]
 [Route("[controller]")]
 public class ForgotUserController(
-    IEntityCreationFactoryService entityCreationFactoryService,
+    IEntityCreationService entityCreationService,
     IUnitOfWorkService uows,
     IJwtTokenService jwtTokenService,
     IEmailNotificationService emailNotificationService, 
@@ -35,15 +35,15 @@ public class ForgotUserController(
         if (requestDto.UserRecoveryType == UserRecoveryTypeEnum.PASSWORD)
         {
             await emailNotificationService.SendPasswordResetEmail(user.Email, token);
-            userActivityLog = entityCreationFactoryService.CreateUserActivityLog(user, ActionTypeEnum.ForgotPassword, HttpContext);
+            userActivityLog = entityCreationService.CreateUserActivityLog(user, ActionTypeEnum.ForgotPassword, HttpContext);
         }
         else
         {
             await emailNotificationService.SendUsernameEmail(user.Email, user.Username);
-            userActivityLog = entityCreationFactoryService.CreateUserActivityLog(user, ActionTypeEnum.ForgotUsername, HttpContext);
+            userActivityLog = entityCreationService.CreateUserActivityLog(user, ActionTypeEnum.ForgotUsername, HttpContext);
         }
         
-        var userRecoveryLog = entityCreationFactoryService.CreateUserRecoveryRequest(user, requestDto, token);
+        var userRecoveryLog = entityCreationService.CreateUserRecoveryRequest(user, requestDto, token);
 
         var affectedEntities = new List<string>
         {
@@ -51,7 +51,7 @@ public class ForgotUserController(
             nameof(UserActivityLogModel)
         };
         
-        var auditLog = entityCreationFactoryService.CreateAuditLog(user, ActionTypeEnum.ForgotPassword, affectedEntities);
+        var auditLog = entityCreationService.CreateAuditLog(user, ActionTypeEnum.ForgotPassword, affectedEntities);
         
         await uows.UserActivityLogs.AddAsync(userActivityLog);
         await uows.UserRecoveryRequests.AddAsync(userRecoveryLog);

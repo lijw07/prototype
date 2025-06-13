@@ -1,6 +1,5 @@
 using Prototype.Data;
 using Prototype.Models;
-using Prototype.Services.DataParser;
 using Prototype.Services.Interfaces;
 
 namespace Prototype.Services.Factory;

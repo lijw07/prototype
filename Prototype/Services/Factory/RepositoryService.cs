@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.Services.Interfaces;
 
-namespace Prototype.Services.DataParser;
+namespace Prototype.Services.Factory;
 
 public class RepositoryService<T>(SentinelContext context) : IRepositoryService<T>
     where T : class

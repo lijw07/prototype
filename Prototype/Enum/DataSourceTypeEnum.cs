@@ -1,8 +1,8 @@
 namespace Prototype.Enum;
 
-public enum DataSourceTypeEnum
+public enum CloudProviderRequestDto
 {
-    MicrosoftSqlServer,
-    MySql,
-    MongoDb,
+    AWS,
+    Azure,
+    GCP
 }
