@@ -1,7 +1,7 @@
 import React from 'react';
 import { useEffect, useState } from 'react';
 
-const Home = () => {
+export default function Dashboard() {
    const [seconds, setSeconds] = useState(0);
 
 useEffect(() => {
@@ -15,10 +15,9 @@ useEffect(() => {
 
   return (
     <div>
-      <h1>Sentinel Prototype Home Page</h1>
+      <h1>CAMS Home Page</h1>
       <p>Seconds: {seconds}</p>
     </div>
   );
 }
 
-export default Home;

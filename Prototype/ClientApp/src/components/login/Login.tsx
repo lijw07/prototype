@@ -1,7 +1,17 @@
-import React, { Component } from 'react';
+import React, { Component, ChangeEvent, FormEvent } from 'react';
 
-class LoginForm extends Component {
-  constructor(props) {
+// ✅ Define state interface
+interface LoginFormState {
+  username: string;
+  password: string;
+  error: string;
+}
+
+// ✅ Define props interface (empty for now)
+interface LoginFormProps {}
+
+class LoginForm extends Component<LoginFormProps, LoginFormState> {
+  constructor(props: LoginFormProps) {
     super(props);
     this.state = {
       username: '',
@@ -10,11 +20,11 @@ class LoginForm extends Component {
     };
   }
 
-  handleChange = (e) => {
-    this.setState({ [e.target.name]: e.target.value });
+  handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    this.setState({ [e.target.name]: e.target.value } as Pick<LoginFormState, keyof LoginFormState>);
   };
 
-  handleSubmit = async (e) => {
+  handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const { username, password } = this.state;
 
@@ -35,15 +45,18 @@ class LoginForm extends Component {
       const data = await response.json();
       console.log('Login success, token:', data.token);
 
-      // You can store the token in localStorage or a context for authenticated requests
       localStorage.setItem('authToken', data.token);
-    } catch (error) {
-      console.error('Login failed:', error.message);
-      this.setState({ error: error.message });
+    } catch (error: unknown) {
+      const errorMsg =
+        error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('Login failed:', errorMsg);
+      this.setState({ error: errorMsg });
     }
   };
 
   render() {
+    const { username, password, error } = this.state;
+
     return (
       <form onSubmit={this.handleSubmit}>
         <div className="mb-3">
@@ -53,7 +66,7 @@ class LoginForm extends Component {
             type="text"
             className="form-control"
             placeholder="Enter username"
-            value={this.state.username}
+            value={username}
             onChange={this.handleChange}
           />
         </div>
@@ -65,14 +78,12 @@ class LoginForm extends Component {
             type="password"
             className="form-control"
             placeholder="Enter password"
-            value={this.state.password}
+            value={password}
             onChange={this.handleChange}
           />
         </div>
 
-        {this.state.error && (
-          <div className="alert alert-danger">{this.state.error}</div>
-        )}
+        {error && <div className="alert alert-danger">{error}</div>}
 
         <div className="d-grid">
           <button type="submit" className="btn btn-primary">
