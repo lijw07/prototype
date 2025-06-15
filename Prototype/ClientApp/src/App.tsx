@@ -1,10 +1,10 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
-import Accounts from './components/Accounts';
+import Accounts from './components/account/Accounts';
 import Login from './components/login/Login';
 import Signup from './components/login/Signup';
-import Dashboard from './components/Dashboard';
+import Dashboard from './components/dashboard/Dashboard';
 
 export default function App() {
   return (

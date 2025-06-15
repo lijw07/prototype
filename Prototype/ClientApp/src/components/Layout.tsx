@@ -1,6 +1,6 @@
 import React, { ReactNode } from 'react';
 import { Container } from 'reactstrap';
-import NavMenu from './NavMenu';
+import NavMenu from './nav/NavMenu';
 
 interface LayoutProps {
   children: ReactNode; // Typing children correctly
