@@ -9,7 +9,10 @@ public class EntityCreationFactoryService(
     IUserFactoryService userFactory,
     IUserActivityLogFactoryService activityLogFactory,
     IAuditLogFactoryService auditLogFactory,
-    IUserRecoveryRequestFactoryService recoveryFactory)
+    IUserRecoveryRequestFactoryService recoveryFactory,
+    IApplicationFactoryService applicationFactory,
+    IApplicationLogFactoryService applicationLogFactory,
+    IUserApplicationFactoryService userApplicationFactory)
     : IEntityCreationFactoryService
 {
     // IUserFactoryService
@@ -31,4 +34,16 @@ public class EntityCreationFactoryService(
     // IUserRecoveryRequestFactoryService
     public UserRecoveryRequestModel CreateUserRecoveryRequest(UserModel user, ForgotUserRequestDto dto, string token) =>
         recoveryFactory.CreateUserRecoveryRequest(user, dto, token);
+
+    // IApplicationFactoryService
+    public ApplicationModel CreateApplication(ApplicationRequestDto requestDto) =>
+        applicationFactory.CreateApplication(requestDto);
+    
+    // IApplicationLogFactoryService
+    public ApplicationLogModel CreateApplicationLog(ApplicationModel application, ApplicationActionTypeEnum actionType, List<string> affectedEntities) =>
+        applicationLogFactory.CreateApplicationLog(application, actionType, affectedEntities);
+    
+    // IUserApplicationFactoryService
+    public UserApplicationModel CreateUserApplication(UserModel user, ApplicationModel application) =>
+        userApplicationFactory.CreateUserApplication(user, application);
 }

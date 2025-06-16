@@ -1,5 +1,6 @@
 using Prototype.DTOs;
 using Prototype.Models;
+using Prototype.Services.Factory;
 
 namespace Prototype.Services.Interfaces;
 
@@ -10,5 +11,8 @@ public interface IEntityCreationFactoryService :
     IUserFactoryService,
     IUserActivityLogFactoryService,
     IAuditLogFactoryService,
-    IUserRecoveryRequestFactoryService
+    IUserRecoveryRequestFactoryService,
+    IApplicationFactoryService,
+    IApplicationLogFactoryService,
+    IUserApplicationFactoryService
 { }

@@ -13,13 +13,8 @@ public class UserPermissionModel
     public required Guid UserId { get; set; }
     
     [Required]
+    [ForeignKey(nameof(UserId))]
     public required UserModel User { get; set; }
-
-    [Required]
-    public required Guid PermissionId { get; set; }
-    
-    [Required]
-    public required PermissionModel Permission { get; set; }
 
     [Required]
     public required DateTime CreatedAt { get; set; }

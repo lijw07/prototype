@@ -4,7 +4,6 @@ using Microsoft.IdentityModel.Tokens;
 using Prototype.Data;
 using Prototype.POCO;
 using Prototype.Services;
-using Prototype.Services.DataParser;
 using Prototype.Services.Factory;
 using Prototype.Services.Interfaces;
 using Prototype.Utility;
@@ -44,17 +43,12 @@ builder.Services.AddScoped<IUserFactoryService, UserFactoryService>();
 builder.Services.AddScoped<IUserActivityLogFactoryService, UserActivityLogFactoryService>();
 builder.Services.AddScoped<IAuditLogFactoryService, AuditLogFactoryService>();
 builder.Services.AddScoped<IUserRecoveryRequestFactoryService, UserRecoveryFactoryService>();
-builder.Services.AddScoped(typeof(IRepositoryService<>), typeof(RepositoryService<>));
+builder.Services.AddScoped(typeof(IRepositoryService<>), typeof(RepositoryFactoryService<>));
 builder.Services.AddScoped<IUnitOfWorkService, UnitOfWorkFactoryService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenFactoryService>();
 builder.Services.AddScoped<IAuthenticatedUserAccessor, AuthenticatedUserAccessor>();
-
-// Register Data Dump Parsers
-builder.Services.AddScoped<DataDumpParserFactoryService>();
-builder.Services.AddTransient<CsvDataDumpParserService>();
-builder.Services.AddTransient<ExcelDataDumpParserService>();
-builder.Services.AddTransient<JsonDataDumpParserService>();
-builder.Services.AddTransient<XmlDataDumpParserService>();
+builder.Services.AddScoped<IApplicationFactoryService, ApplicationFactoryService>();
+builder.Services.AddScoped<IApplicationLogFactoryService, ApplicationLogFactoryService>();
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 

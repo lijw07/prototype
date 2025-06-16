@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Prototype.Enum;
 
 namespace Prototype.Models;
 
@@ -11,18 +12,11 @@ public class ApplicationModel
     [Required]
     public required string ApplicationName { get; set; }
     
-    [Required]
-    public Guid PermissionId { get; set; }
+    public string ApplicationDescription { get; set; }
     
-    [Required]
-    [ForeignKey(nameof(PermissionId))]
-    public PermissionModel Permission { get; set; }
+    public required DataSourceTypeEnum ApplicationDataSourceType { get; set; }
     
     public ApplicationConnectionModel ApplicationConnections { get; set; }
-    
-    public ICollection<EmployeeModel> Employees { get; set; }
-    
-    public ICollection<ApplicationLogModel> ApplicationLog { get; set; }
     
     [Required]
     public required DateTime CreatedAt { get; set; }

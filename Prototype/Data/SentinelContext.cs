@@ -12,9 +12,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
     public DbSet<AuditLogModel> AuditLogs { get; set; }
     public DbSet<AuthenticationModel> Authentications { get; set; }
     public DbSet<DataSourceModel> DataSources { get; set; }
-    public DbSet<EmployeeModel> Employees { get; set; }
     public DbSet<HumanResourceModel> HumanResources { get; set; }
-    public DbSet<PermissionModel> Permissions { get; set; }
     public DbSet<TemporaryUserModel> TemporaryUsers { get; set; }
     public DbSet<UserActivityLogModel> UserActivityLogs { get; set; }
     public DbSet<UserApplicationModel> UserApplications { get; set; }
@@ -26,27 +24,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
     {
         base.OnModelCreating(modelBuilder);
 
-        #region ApplicationConnectionModel
-
-        modelBuilder.Entity<ApplicationConnectionModel>()
-            .HasOne(ac => ac.Application)
-            .WithOne(a => a.ApplicationConnections)
-            .HasForeignKey<ApplicationConnectionModel>(ac => ac.ApplicationId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        modelBuilder.Entity<ApplicationConnectionModel>()
-            .Property(ac => ac.Status)
-            .HasConversion(s => s.ToString(), s => (StatusEnum)System.Enum.Parse(typeof(StatusEnum), s));
-
-        #endregion
-
         #region ApplicationLogModel
-
-        modelBuilder.Entity<ApplicationLogModel>()
-            .HasOne(al => al.Application)
-            .WithMany(a => a.ApplicationLog)
-            .HasForeignKey(al => al.ApplicationId)
-            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<ApplicationLogModel>()
             .Property(al => al.applicationActionType)
@@ -54,16 +32,6 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
                 aat => aat.ToString(),
                 aat => (ApplicationActionTypeEnum)System.Enum.Parse(typeof(ApplicationActionTypeEnum), aat)
             );
-
-        #endregion
-
-        #region ApplicationModel
-
-        modelBuilder.Entity<ApplicationModel>()
-            .HasOne(a => a.Permission)
-            .WithMany()
-            .HasForeignKey(a => a.PermissionId)
-            .OnDelete(DeleteBehavior.Cascade);
 
         #endregion
 
@@ -102,19 +70,6 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
 
         #endregion
 
-        #region EmployeeModel
-
-        modelBuilder.Entity<EmployeeModel>()
-            .HasOne(e => e.Application)
-            .WithMany(a => a.Employees)
-            .HasForeignKey(e => e.ApplicationId);
-
-        modelBuilder.Entity<EmployeeModel>()
-            .Property(e => e.EmployeePermissionType)
-            .HasConversion(ep => ep.ToString(), ep => (EmployeePermissionTypeEnum)System.Enum.Parse(typeof(EmployeePermissionTypeEnum), ep));
-
-        #endregion
-
         #region HumanResourceModel
 
         modelBuilder.Entity<HumanResourceModel>()
@@ -122,14 +77,6 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
             .WithOne()
             .HasForeignKey<HumanResourceModel>(hr => hr.UserId)
             .OnDelete(DeleteBehavior.Cascade);
-
-        modelBuilder.Entity<HumanResourceModel>()
-            .Property(hr => hr.JobTitle)
-            .HasConversion(jt => jt.ToString(), jt => (JobPositionEnum)System.Enum.Parse(typeof(JobPositionEnum), jt));
-
-        modelBuilder.Entity<HumanResourceModel>()
-            .Property(hr => hr.Department)
-            .HasConversion(d => d.ToString(), d => (DepartmentEnum)System.Enum.Parse(typeof(DepartmentEnum), d));
 
         modelBuilder.Entity<HumanResourceModel>()
             .Property(hr => hr.Status)
