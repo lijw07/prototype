@@ -12,6 +12,6 @@ public interface IUnitOfWorkService
     IRepositoryService<UserRecoveryRequestModel> UserRecoveryRequests { get; }
     IRepositoryService<TemporaryUserModel> TemporaryUser { get; }
     IRepositoryService<UserApplicationModel> UserApplications { get; }
-
+    
     Task<int> SaveChangesAsync();
 }

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Prototype.DTOs;
 using Prototype.Enum;
 using Prototype.Models;
@@ -61,5 +62,95 @@ public class ApplicationSettingsController(
         await uows.SaveChangesAsync();
         
         return Ok(new { message = "Successfully created application(s)" });
+    }
+    
+
+    [HttpGet("get-applications")]
+    public async Task<IActionResult> GetApplications()
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        var userAppIds = await uows.UserApplications
+            .Query()
+            .Where(ua => ua.UserId == user.UserId)
+            .Select(ua => ua.ApplicationId)
+            .ToListAsync();
+
+        var apps = await uows.Applications
+            .Query()
+            .Where(app => userAppIds.Contains(app.ApplicationId))
+            .ToListAsync();
+
+        return Ok(apps);
+    }
+    
+    [HttpPut("update-application/{applicationId}")]
+    public async Task<IActionResult> UpdateApplication(Guid applicationId, [FromBody] ApplicationRequestDto dto)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        
+        var userApp = await uows.UserApplications
+            .Query()
+            .Include(ua => ua.Application)
+            .ThenInclude(app => app.ApplicationConnections)
+            .FirstOrDefaultAsync(ua => ua.UserId == user.UserId && ua.ApplicationId == applicationId);
+
+        if (userApp == null || userApp.Application == null)
+            return NotFound("Application not associated with the user.");
+        
+        var application = entityCreationFactory.UpdateApplication(userApp.Application, dto);
+
+        var affectedEntities = new List<string> { nameof(ApplicationModel) };
+
+        var log = entityCreationFactory.CreateApplicationLog(application, ApplicationActionTypeEnum.ApplicationUpdated, affectedEntities);
+        var activity = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.Update, HttpContext);
+        var audit = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.Update, affectedEntities);
+
+        await uows.ApplicationLogs.AddAsync(log);
+        await uows.UserActivityLogs.AddAsync(activity);
+        await uows.AuditLogs.AddAsync(audit);
+        await uows.SaveChangesAsync();
+
+        return Ok(new { message = "Application updated." });
+    }
+    
+    [HttpDelete("delete-application/{applicationId}")]
+    public async Task<IActionResult> DeleteApplication(Guid applicationId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        var userApp = await uows.UserApplications
+            .Query()
+            .Include(ua => ua.Application)
+            .ThenInclude(app => app.ApplicationConnections)
+            .FirstOrDefaultAsync(ua => ua.UserId == user.UserId && ua.ApplicationId == applicationId);
+
+        if (userApp == null || userApp.Application == null)
+            return NotFound("Application not found or not associated with the user.");
+
+        var application = userApp.Application;
+
+        var affectedEntities = new List<string>
+        {
+            nameof(UserApplicationModel),
+            nameof(ApplicationModel),
+            nameof(ApplicationConnectionModel)
+        };
+
+        var log = entityCreationFactory.CreateApplicationLog(application, ApplicationActionTypeEnum.ApplicationRemoved, affectedEntities);
+        var activity = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.Delete, HttpContext);
+        var audit = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.Delete, affectedEntities);
+        
+        uows.Applications.Delete(application);
+
+        await uows.ApplicationLogs.AddAsync(log);
+        await uows.UserActivityLogs.AddAsync(activity);
+        await uows.AuditLogs.AddAsync(audit);
+        await uows.SaveChangesAsync();
+
+        return Ok(new { message = "Application deleted." });
     }
 }

@@ -1,4 +1,5 @@
 using Prototype.DTOs;
+using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
 
@@ -45,5 +46,35 @@ public class ApplicationFactoryService : IApplicationFactoryService
             CreatedAt = DateTime.Now,
             UpdatedAt = DateTime.Now
         };
+    }
+
+    public ApplicationModel UpdateApplication(ApplicationModel application, ApplicationRequestDto requestDto)
+    {
+        application.ApplicationName = requestDto.ApplicationName;
+        application.ApplicationDescription = requestDto.ApplicationDescription;
+        application.ApplicationDataSourceType = requestDto.DataSourceType;
+        application.UpdatedAt = DateTime.Now;
+        
+        var conn = application.ApplicationConnections;
+
+        conn.Instance = requestDto.ConnectionSource.Instance;
+        conn.Host = requestDto.ConnectionSource.Host;
+        conn.Port = requestDto.ConnectionSource.Port;
+        conn.AuthenticationType = requestDto.ConnectionSource.AuthenticationType;
+        conn.DatabaseName = requestDto.ConnectionSource.DatabaseName;
+        conn.Url = requestDto.ConnectionSource.Url;
+        conn.Username = requestDto.ConnectionSource.Username;
+        conn.Password = requestDto.ConnectionSource.Password;
+        conn.AuthenticationDatabase = requestDto.ConnectionSource.AuthenticationDatabase;
+        conn.AwsAccessKeyId = requestDto.ConnectionSource.AwsAccessKeyId;
+        conn.AwsSecretAccessKey = requestDto.ConnectionSource.AwsSecretAccessKey;
+        conn.AwsSessionToken = requestDto.ConnectionSource.AwsSessionToken;
+        conn.Principal = requestDto.ConnectionSource.Principal;
+        conn.ServiceName = requestDto.ConnectionSource.ServiceName;
+        conn.ServiceRealm = requestDto.ConnectionSource.ServiceRealm;
+        conn.CanonicalizeHostName = requestDto.ConnectionSource.CanonicalizeHostName;
+        conn.UpdatedAt = DateTime.Now;
+
+        return application;
     }
 }

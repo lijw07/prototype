@@ -13,6 +13,10 @@ public class ApplicationConnectionModel
     public required Guid ApplicationId { get; set; }
     
     [Required]
+    [ForeignKey(nameof(ApplicationId))]
+    public ApplicationModel Application { get; set; }
+    
+    [Required]
     public required string Instance { get; set; }
     
     [Required]

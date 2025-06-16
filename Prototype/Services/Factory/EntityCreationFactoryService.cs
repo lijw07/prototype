@@ -38,7 +38,10 @@ public class EntityCreationFactoryService(
     // IApplicationFactoryService
     public ApplicationModel CreateApplication(ApplicationRequestDto requestDto) =>
         applicationFactory.CreateApplication(requestDto);
-    
+
+    public ApplicationModel UpdateApplication(ApplicationModel application, ApplicationRequestDto requestDto) =>
+        applicationFactory.UpdateApplication(application, requestDto);
+
     // IApplicationLogFactoryService
     public ApplicationLogModel CreateApplicationLog(ApplicationModel application, ApplicationActionTypeEnum actionType, List<string> affectedEntities) =>
         applicationLogFactory.CreateApplicationLog(application, actionType, affectedEntities);

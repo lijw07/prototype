@@ -12,5 +12,6 @@ public enum ApplicationActionTypeEnum
     HealthCheck,
     ResponseTimeMeasured,
     ErrorLogged,
-    Other
+    Other,
+    ApplicationUpdated
 }

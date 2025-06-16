@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
+using Prototype.Models;
 using Prototype.Services.Interfaces;
 
 namespace Prototype.Services.Factory;

@@ -35,6 +35,24 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
 
         #endregion
 
+        #region ApplicationModel
+
+        modelBuilder.Entity<ApplicationModel>()
+            .HasOne(a => a.ApplicationConnections)
+            .WithOne(c => c.Application)
+            .HasForeignKey<ApplicationConnectionModel>(c => c.ApplicationId)
+            .IsRequired();
+        
+        modelBuilder.Entity<ApplicationModel>()
+            .HasOne(app => app.ApplicationConnections)
+            .WithOne(conn => conn.Application)
+            .HasForeignKey<ApplicationConnectionModel>(conn => conn.ApplicationId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        
+
+        #endregion
+
         #region AuditLogModel
 
         modelBuilder.Entity<AuditLogModel>()
@@ -102,7 +120,19 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
 
         modelBuilder.Entity<UserApplicationModel>()
             .HasKey(ua => new { ua.UserId, ua.ApplicationId });
-
+        
+        modelBuilder.Entity<UserApplicationModel>()
+            .HasOne(ua => ua.Application)
+            .WithMany()
+            .HasForeignKey(ua => ua.ApplicationId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<UserApplicationModel>()
+            .HasOne(ua => ua.User)
+            .WithMany(u => u.Applications)
+            .HasForeignKey(ua => ua.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
         #endregion
 
         #region UserRecoveryRequestModel
