@@ -14,7 +14,7 @@ namespace Prototype.Controllers.Settings;
 public class UserSettingsController(
     IEntityCreationFactoryService entityCreationFactory,
     IAuthenticatedUserAccessor userAccessor,
-    IUnitOfWorkService uows) : ControllerBase
+    IUnitOfWorkFactoryService uows) : ControllerBase
 {
     
     private UserModel? _user;

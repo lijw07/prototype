@@ -5,7 +5,6 @@ using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
 using Prototype.Utility;
-using ApplicationModel = Microsoft.AspNetCore.Mvc.ApplicationModels.ApplicationModel;
 
 namespace Prototype.Controllers.Settings;
 
@@ -13,7 +12,7 @@ namespace Prototype.Controllers.Settings;
 [Route("[controller]")]
 public class ApplicationSettingsController(
     IAuthenticatedUserAccessor userAccessor,
-    IUnitOfWorkService uows,
+    IUnitOfWorkFactoryService uows,
     IEntityCreationFactoryService entityCreationFactory): ControllerBase
 {
     

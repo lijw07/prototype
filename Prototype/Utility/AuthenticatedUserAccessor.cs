@@ -62,4 +62,14 @@ public class AuthenticatedUserAccessor(SentinelContext context) : IAuthenticated
     {
         return await context.UserRecoveryRequests.FirstOrDefaultAsync(u => u.UserId == userId);
     }
+
+    public async Task<bool> TemporaryEmailExistsAsync(string requestDtoEmail)
+    {
+        return await context.TemporaryUsers.AnyAsync(u => u.Email == requestDtoEmail);
+    }
+
+    public async Task<bool> TemporaryUsernameExistsAsync(string requestDtoUsername)
+    {
+        return await context.TemporaryUsers.AnyAsync(u => u.Username == requestDtoUsername);
+    }
 }

@@ -1,6 +1,6 @@
 namespace Prototype.Services.Interfaces;
 
-public interface IRepositoryService<T> where T : class
+public interface IRepositoryFactoryService<T> where T : class
 {
     Task AddAsync(T entity);
     void Update(T entity);

@@ -37,15 +37,15 @@ builder.Services.Configure<SmtpSettingsPoco>(
     builder.Configuration.GetSection("Smtp"));
 
 // Register Application Services
-builder.Services.AddScoped<IEmailNotificationService, EmailNotificationFactoryService>();
+builder.Services.AddScoped<IEmailNotificationFactoryService, EmailNotificationFactoryFactoryService>();
 builder.Services.AddScoped<IEntityCreationFactoryService, EntityCreationFactoryService>();
 builder.Services.AddScoped<IUserFactoryService, UserFactoryService>();
 builder.Services.AddScoped<IUserActivityLogFactoryService, UserActivityLogFactoryService>();
 builder.Services.AddScoped<IAuditLogFactoryService, AuditLogFactoryService>();
 builder.Services.AddScoped<IUserRecoveryRequestFactoryService, UserRecoveryFactoryService>();
-builder.Services.AddScoped(typeof(IRepositoryService<>), typeof(RepositoryFactoryService<>));
-builder.Services.AddScoped<IUnitOfWorkService, UnitOfWorkFactoryService>();
-builder.Services.AddScoped<IJwtTokenService, JwtTokenFactoryService>();
+builder.Services.AddScoped(typeof(IRepositoryFactoryService<>), typeof(RepositoryFactoryFactoryService<>));
+builder.Services.AddScoped<IUnitOfWorkFactoryService, UnitOfWorkFactoryFactoryService>();
+builder.Services.AddScoped<IJwtTokenFactoryService, JwtTokenFactoryFactoryService>();
 builder.Services.AddScoped<IAuthenticatedUserAccessor, AuthenticatedUserAccessor>();
 builder.Services.AddScoped<IApplicationFactoryService, ApplicationFactoryService>();
 builder.Services.AddScoped<IApplicationLogFactoryService, ApplicationLogFactoryService>();

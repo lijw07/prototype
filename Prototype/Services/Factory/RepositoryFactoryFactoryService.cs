@@ -1,11 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
-using Prototype.Models;
 using Prototype.Services.Interfaces;
 
 namespace Prototype.Services.Factory;
 
-public class RepositoryFactoryService<T>(SentinelContext context) : IRepositoryService<T>
+public class RepositoryFactoryFactoryService<T>(SentinelContext context) : IRepositoryFactoryService<T>
     where T : class
 {
     private readonly DbSet<T> _dbSet = context.Set<T>();

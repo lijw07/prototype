@@ -1,6 +1,4 @@
 using System.Security.Claims;
-using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
 using Prototype.Models;
 
 namespace Prototype.Utility;
@@ -15,4 +13,6 @@ public interface IAuthenticatedUserAccessor
     Task<TemporaryUserModel?> FindTemporaryUserByEmail(string email);
     Task<UserModel?> FindUserByEmail(string email);
     Task<UserRecoveryRequestModel?> FindUserRecoveryRequest(Guid userId);
+    Task<bool> TemporaryEmailExistsAsync(string requestDtoEmail);
+    Task<bool> TemporaryUsernameExistsAsync(string requestDtoUsername);
 }

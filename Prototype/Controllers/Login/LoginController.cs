@@ -1,8 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
 using Prototype.DTOs;
-using Prototype.Models;
 using Prototype.Services.Interfaces;
 using Prototype.Enum;
 using Prototype.Utility;
@@ -13,9 +10,9 @@ namespace Prototype.Controllers.Login;
 [Route("[controller]")]
 public class LoginController(
     IEntityCreationFactoryService entityCreationFactory,
-    IUnitOfWorkService uows,
+    IUnitOfWorkFactoryService uows,
     IAuthenticatedUserAccessor userAccessor,
-    IJwtTokenService jwtTokenService) : ControllerBase
+    IJwtTokenFactoryService jwtTokenFactoryService) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto requestDto)
@@ -40,7 +37,7 @@ public class LoginController(
         await uows.UserActivityLogs.AddAsync(userActivityLog);
         await uows.SaveChangesAsync();
         
-        var token = jwtTokenService.BuildUserClaims(user, ActionTypeEnum.Login);
+        var token = jwtTokenFactoryService.BuildUserClaims(user, ActionTypeEnum.Login);
         return Ok(new { token });
     }
 }

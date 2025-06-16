@@ -11,9 +11,9 @@ namespace Prototype.Controllers.Login;
 [Route("[controller]")]
 public class ForgotUserController(
     IEntityCreationFactoryService entityCreationFactoryService,
-    IUnitOfWorkService uows,
-    IJwtTokenService jwtTokenService,
-    IEmailNotificationService emailNotificationService, 
+    IUnitOfWorkFactoryService uows,
+    IJwtTokenFactoryService jwtTokenFactoryService,
+    IEmailNotificationFactoryService emailNotificationFactoryService, 
     IAuthenticatedUserAccessor userAccessor) : ControllerBase
 {
     [HttpPost]
@@ -27,19 +27,19 @@ public class ForgotUserController(
         if (user is null) 
             return BadRequest("No account exist with that email address");
         
-        var token = jwtTokenService.BuildUserClaims(user, ActionTypeEnum.ForgotPassword);
+        var token = jwtTokenFactoryService.BuildUserClaims(user, ActionTypeEnum.ForgotPassword);
         
         UserActivityLogModel userActivityLog;
 
         
         if (requestDto.UserRecoveryType == UserRecoveryTypeEnum.PASSWORD)
         {
-            await emailNotificationService.SendPasswordResetEmail(user.Email, token);
+            await emailNotificationFactoryService.SendPasswordResetEmail(user.Email, token);
             userActivityLog = entityCreationFactoryService.CreateUserActivityLog(user, ActionTypeEnum.ForgotPassword, HttpContext);
         }
         else
         {
-            await emailNotificationService.SendUsernameEmail(user.Email, user.Username);
+            await emailNotificationFactoryService.SendUsernameEmail(user.Email, user.Username);
             userActivityLog = entityCreationFactoryService.CreateUserActivityLog(user, ActionTypeEnum.ForgotUsername, HttpContext);
         }
         
