@@ -49,6 +49,7 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenFactoryService>();
 builder.Services.AddScoped<IAuthenticatedUserAccessor, AuthenticatedUserAccessor>();
 builder.Services.AddScoped<IApplicationFactoryService, ApplicationFactoryService>();
 builder.Services.AddScoped<IApplicationLogFactoryService, ApplicationLogFactoryService>();
+builder.Services.AddScoped<IUserApplicationFactoryService, UserApplicationFactoryService>();
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 
