@@ -7,6 +7,7 @@ import Signup from './components/login/Signup';
 import Dashboard from './components/dashboard/Dashboard';
 import Settings from './components/settings/Settings';
 import VerifyEmailPage from "./components/account/VerifyEmailPage";
+import ResetPassword from "./components/account/ResetPassword";
 export default function App() {
   return (
     <Layout>
@@ -16,7 +17,8 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/sign-up" element={<Signup />} />
         <Route path="/settings" element={<Settings />} />
-          <Route path="/verify" element={<VerifyEmailPage />} />
+        <Route path="/verify" element={<VerifyEmailPage />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
       </Routes>
     </Layout>
   );

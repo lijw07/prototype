@@ -16,7 +16,6 @@ public class UserRecoveryRequestModel
     public required UserModel User { get; set; }
 
     [Required]
-    [MaxLength(128)]
     public required string VerificationCode { get; set; }
     
     [Required]

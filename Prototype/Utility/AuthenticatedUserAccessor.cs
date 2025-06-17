@@ -51,21 +51,27 @@ public class AuthenticatedUserAccessor(SentinelContext context) : IAuthenticated
         return await context.Users.AnyAsync(u => u.Email == email);
     }
 
-    public async Task<TemporaryUserModel?> FindTemporaryUserByEmail(string email)
+    public async Task<TemporaryUserModel> FindTemporaryUserByEmail(string email)
     {
-        return await context.TemporaryUsers
-            .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+        return await context.TemporaryUsers.FirstOrDefaultAsync(u => u.Email == email);
     }
 
     public async Task<UserModel?> FindUserByEmail(string email)
     {
         return await context.Users.FirstOrDefaultAsync(u => u.Email == email);
     }
-    
+
+    public async Task<UserModel?> FindUserById(Guid userId)
+    {
+        return await context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+    }
+
     public async Task<UserRecoveryRequestModel?> FindUserRecoveryRequest(Guid userId)
     {
-        return await context.UserRecoveryRequests.FirstOrDefaultAsync(u => u.UserId == userId);
+        return await context.UserRecoveryRequests
+            .Where(u => u.UserId == userId && !u.IsUsed && u.ExpiresAt > DateTime.UtcNow)
+            .OrderByDescending(u => u.RequestedAt)
+            .FirstOrDefaultAsync();
     }
 
     public async Task<bool> TemporaryEmailExistsAsync(string requestDtoEmail)

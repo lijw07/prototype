@@ -52,7 +52,7 @@ class LoginForm extends Component<LoginFormProps, LoginFormState> {
 
       const data = await response.json();
       localStorage.setItem('authToken', data.token);
-      window.location.href = '/settings'; // or your landing/dashboard page
+      window.location.href = '/settings';
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
       this.setState({ error: errorMsg });

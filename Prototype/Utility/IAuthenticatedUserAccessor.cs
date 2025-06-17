@@ -12,6 +12,7 @@ public interface IAuthenticatedUserAccessor
     Task<bool> EmailExistsAsync(string email);
     Task<TemporaryUserModel?> FindTemporaryUserByEmail(string email);
     Task<UserModel?> FindUserByEmail(string email);
+    Task<UserModel?> FindUserById(Guid userId);
     Task<UserRecoveryRequestModel?> FindUserRecoveryRequest(Guid userId);
     Task<bool> TemporaryEmailExistsAsync(string requestDtoEmail);
     Task<bool> TemporaryUsernameExistsAsync(string requestDtoUsername);

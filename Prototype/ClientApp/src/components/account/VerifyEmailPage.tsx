@@ -1,15 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 
 const VerifyEmailPage: React.FC = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const hasRunRef = useRef(false);
 
     const [status, setStatus] = useState<'pending' | 'success' | 'error'>('pending');
     const [message, setMessage] = useState('');
 
     useEffect(() => {
+        if (hasRunRef.current) return;
+        hasRunRef.current = true;
+
         const token = searchParams.get('token');
+        console.log('Verification token from URL:', token);
 
         if (!token) {
             setStatus('error');
@@ -21,18 +26,23 @@ const VerifyEmailPage: React.FC = () => {
             try {
                 const response = await fetch(`/VerifyUser?token=${encodeURIComponent(token)}`);
 
-                if (response.ok) {
-                    const msg = await response.text();
-                    setStatus('success');
-                    setMessage(msg || 'Your email has been successfully verified!');
+                const contentType = response.headers.get('content-type');
+                let responseText = '';
 
-                    setTimeout(() => {
-                        navigate('/login');
-                    }, 5000); // auto-redirect in 5 seconds
+                if (contentType?.includes('application/json')) {
+                    const data = await response.json();
+                    responseText = data.message || '';
                 } else {
-                    const errText = await response.text();
+                    responseText = await response.text();
+                }
+
+                if (response.ok) {
+                    setStatus('success');
+                    setMessage(responseText || 'Your email has been successfully verified!');
+                } else {
+                    console.error('Verification failed response:', responseText);
                     setStatus('error');
-                    setMessage(errText || 'Verification failed.');
+                    setMessage(responseText || 'Verification failed.');
                 }
             } catch (err) {
                 console.error('Verification error:', err);
@@ -42,11 +52,7 @@ const VerifyEmailPage: React.FC = () => {
         };
 
         verifyEmail();
-    }, [searchParams, navigate]);
-
-    const handleLoginRedirect = () => {
-        navigate('/login');
-    };
+    }, [searchParams]);
 
     return (
         <div className="container mt-5">
@@ -57,8 +63,7 @@ const VerifyEmailPage: React.FC = () => {
                     {status === 'success' && (
                         <>
                             <div className="alert alert-success">{message}</div>
-                            <p>You will be redirected to login shortly.</p>
-                            <button className="btn btn-primary mt-3" onClick={handleLoginRedirect}>
+                            <button className="btn btn-primary mt-3" onClick={() => navigate('/login')}>
                                 Go to Login
                             </button>
                         </>
@@ -67,7 +72,7 @@ const VerifyEmailPage: React.FC = () => {
                     {status === 'error' && (
                         <>
                             <div className="alert alert-danger">{message}</div>
-                            <button className="btn btn-secondary mt-3" onClick={handleLoginRedirect}>
+                            <button className="btn btn-secondary mt-3" onClick={() => navigate('/login')}>
                                 Back to Login
                             </button>
                         </>

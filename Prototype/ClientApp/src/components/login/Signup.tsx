@@ -1,84 +1,103 @@
-import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import React, { useState, FormEvent, ChangeEvent } from 'react';
 
-const VerifyEmailPage: React.FC = () => {
-    const [searchParams] = useSearchParams();
-    const navigate = useNavigate();
+const RegisterForm: React.FC = () => {
+    const [formData, setFormData] = useState({
+        firstName: '',
+        lastName: '',
+        username: '',
+        email: '',
+        phoneNumber: '',
+        password: '',
+        reEnterPassword: '',
+    });
 
-    const [status, setStatus] = useState<'pending' | 'success' | 'error'>('pending');
-    const [message, setMessage] = useState('');
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
 
-    useEffect(() => {
-        const token = searchParams.get('token');
+    const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
 
-        console.log('Verification token from URL:', token); // ✅ Log the token
+    const handleSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
 
-        if (!token) {
-            setStatus('error');
-            setMessage('Invalid or missing token.');
+        const {
+            firstName,
+            lastName,
+            username,
+            email,
+            phoneNumber,
+            password,
+            reEnterPassword,
+        } = formData;
+
+        if (password !== reEnterPassword) {
+            setError('Passwords do not match.');
             return;
         }
 
-        const verifyEmail = async () => {
-            try {
-                const response = await fetch(`/VerifyUser?token=${encodeURIComponent(token)}`);
+        try {
+            const payload = {
+                firstName,
+                lastName,
+                username,
+                email,
+                phoneNumber,
+                password,
+                reEnterPassword,
+            };
 
-                if (response.ok) {
-                    const msg = await response.text();
-                    setStatus('success');
-                    setMessage(msg || 'Your email has been successfully verified!');
+            console.log("Sending register payload:", payload);
 
-                    setTimeout(() => {
-                        navigate('/login');
-                    }, 5000); // auto-redirect in 5 seconds
-                } else {
-                    const errText = await response.text();
-                    console.error('Verification failed response:', errText); // ✅ Log error response
-                    setStatus('error');
-                    setMessage(errText || 'Verification failed.');
-                }
-            } catch (err) {
-                console.error('Verification error:', err);
-                setStatus('error');
-                setMessage('An error occurred during verification.');
+            const response = await fetch('/Register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                setError(data.message || 'Registration failed.');
+                return;
             }
-        };
 
-        verifyEmail();
-    }, [searchParams, navigate]);
+            setSuccess(data.message);
 
-    const handleLoginRedirect = () => {
-        navigate('/login');
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 3000);
+        } catch (err) {
+            console.error('Registration error:', err);
+            setError('Something went wrong.');
+        }
     };
 
     return (
-        <div className="container mt-5">
-            <div className="card shadow p-4">
-                <div className="card-body text-center">
-                    {status === 'pending' && <p>Verifying your email...</p>}
+        <form onSubmit={handleSubmit}>
+            <h2 className="mb-4 text-center">Register</h2>
 
-                    {status === 'success' && (
-                        <>
-                            <div className="alert alert-success">{message}</div>
-                            <p>You will be redirected to login shortly.</p>
-                            <button className="btn btn-primary mt-3" onClick={handleLoginRedirect}>
-                                Go to Login
-                            </button>
-                        </>
-                    )}
+            <input name="firstName" placeholder="First Name" value={formData.firstName} onChange={handleChange} className="form-control mb-2" required />
+            <input name="lastName" placeholder="Last Name" value={formData.lastName} onChange={handleChange} className="form-control mb-2" required />
+            <input name="username" placeholder="Username" value={formData.username} onChange={handleChange} className="form-control mb-2" required />
+            <input name="email" type="email" placeholder="Email" value={formData.email} onChange={handleChange} className="form-control mb-2" required />
+            <input name="phoneNumber" type="tel" placeholder="Phone Number" value={formData.phoneNumber} onChange={handleChange} className="form-control mb-2" required />
+            <input name="password" type="password" placeholder="Password" value={formData.password} onChange={handleChange} className="form-control mb-2" required />
+            <input name="reEnterPassword" type="password" placeholder="Re-enter Password" value={formData.reEnterPassword} onChange={handleChange} className="form-control mb-3" required />
 
-                    {status === 'error' && (
-                        <>
-                            <div className="alert alert-danger">{message}</div>
-                            <button className="btn btn-secondary mt-3" onClick={handleLoginRedirect}>
-                                Back to Login
-                            </button>
-                        </>
-                    )}
-                </div>
+            {error && <div className="alert alert-danger">{error}</div>}
+            {success && <div className="alert alert-success">{success}</div>}
+
+            <button type="submit" className="btn btn-primary w-100">Register</button>
+
+            <div className="text-center mt-3">
+                Already registered? <a href="/login">Sign in</a>
             </div>
-        </div>
+        </form>
     );
 };
 
-export default VerifyEmailPage;
+export default RegisterForm;

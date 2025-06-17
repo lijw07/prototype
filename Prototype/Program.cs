@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Prototype.Data;
@@ -9,7 +10,6 @@ using Prototype.Data.Strategy.Mongodb;
 using Prototype.Data.Strategy.MySql;
 using Prototype.Data.Validator;
 using Prototype.POCO;
-using Prototype.Services;
 using Prototype.Services.Factory;
 using Prototype.Services.Interfaces;
 using Prototype.Utility;
@@ -17,7 +17,10 @@ using Prototype.Utility;
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Configure Services (Dependency Injection)
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -120,8 +123,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseStaticFiles();
-
-
 
 app.MapControllers();
 

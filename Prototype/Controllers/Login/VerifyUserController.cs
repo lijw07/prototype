@@ -15,7 +15,6 @@ public class VerifyUserController(
     IAuthenticatedUserAccessor userAccessor) : ControllerBase
 {
     [HttpGet]
-    [HttpGet]
     public async Task<IActionResult> VerifyEmail([FromQuery] string token)
     {
         if (!jwtTokenFactoryService.ValidateToken(token, out ClaimsPrincipal principal))
@@ -26,14 +25,14 @@ public class VerifyUserController(
         if (string.IsNullOrWhiteSpace(email))
             return BadRequest("Email claim is missing.");
 
-        Console.WriteLine($"Extracted email: {email}");
-
+        if (await userAccessor.FindUserByEmail(email) != null)
+            return Ok("Account already verified.");
+        
         var tempUser = await userAccessor.FindTemporaryUserByEmail(email);
-
+        
         if (tempUser is null)
             return BadRequest("Registered temporary account does not exist.");
-
-        Console.WriteLine("Temporary user found.");
+        
 
         var newUser = entityFactory.CreateUserFromTemporary(tempUser);
         await unitOfWorkFactory.Users.AddAsync(newUser);

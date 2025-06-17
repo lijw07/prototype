@@ -30,7 +30,6 @@ public class ForgotUserController(
         var token = jwtTokenFactoryService.BuildUserClaims(user, ActionTypeEnum.ForgotPassword);
         
         UserActivityLogModel userActivityLog;
-
         
         if (requestDto.UserRecoveryType == UserRecoveryTypeEnum.PASSWORD)
         {
