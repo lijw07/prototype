@@ -4,30 +4,23 @@ import Button from '../shared/button';
 interface SettingsProps {}
 
 export interface User {
-  userId: string;          // Guid from C# as string in JS
+  userId: string;      
   firstName: string;
   lastName: string;
   username: string;
   email: string;
   phoneNumber: string;
-  createdAt: string;       // DateTime as ISO string
+  createdAt: string;       
   updatedAt: string;
-
-  // Optional collections — you can omit or type them if you use them
-  applications?: any[];           // or create interface UserApplicationModel
-  userActivityLogs?: any[];
-  auditLogs?: any[];
-  userRecoveryRequests?: any[];
-  userPermissions?: any;          // or define UserPermissionModel interface
 }
 
 export interface AuditLog {
   id: number;
   userId: number;
-  user: User;
   actionType: number;
+  metadata: string;
   createdAt: string;
-  // other properties you want to display
+
 }
 export default function Settings(props: SettingsProps) {
     const [logs, setLogs] = useState<AuditLog[] | null>(null);
@@ -105,7 +98,7 @@ export default function Settings(props: SettingsProps) {
             <ul style={{ marginTop: '1rem' }}>
           {logs.map(log => (
             <li key={log.id}>
-              <strong>{log.user.firstName}</strong> at {new Date(log.createdAt).toLocaleString()}
+              <strong>{log.userId}</strong> at {new Date(log.createdAt).toLocaleString()}
             </li>
           ))}
         </ul>
