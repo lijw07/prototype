@@ -9,7 +9,7 @@ using Prototype.Services.Interfaces;
 
 namespace Prototype.Services.Factory;
 
-public class JwtTokenFactoryService(IConfiguration config) : IJwtTokenService
+public class JwtTokenFactoryFactoryService(IConfiguration config) : IJwtTokenFactoryService
 {
     private readonly string _key = config["JwtSettings:Key"]!;
     private readonly string _issuer = config["JwtSettings:Issuer"]!;

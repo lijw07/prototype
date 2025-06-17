@@ -3,7 +3,7 @@ namespace Prototype.Services.Interfaces;
 /// <summary>
 /// IEmailNotificationService Is responsible for sending emails to users.
 /// </summary>
-public interface IEmailNotificationService
+public interface IEmailNotificationFactoryService
 {
     Task SendVerificationEmail(string recipientEmail, string token);
     Task SendAccountCreationEmail(string recipientEmail, string username);

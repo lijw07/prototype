@@ -8,16 +8,16 @@ namespace Prototype.Controllers.Login;
 [ApiController]
 [Route("[controller]")]
 public class VerifyUserController(
-    IUnitOfWorkService unitOfWork,
+    IUnitOfWorkFactoryService unitOfWorkFactory,
     IEntityCreationFactoryService entityFactory,
-    IEmailNotificationService emailService,
-    IJwtTokenService jwtTokenService,
+    IEmailNotificationFactoryService emailFactoryService,
+    IJwtTokenFactoryService jwtTokenFactoryService,
     IAuthenticatedUserAccessor userAccessor) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> VerifyEmail([FromQuery] string token)
     {
-        if (!jwtTokenService.ValidateToken(token, out ClaimsPrincipal principal))
+        if (!jwtTokenFactoryService.ValidateToken(token, out ClaimsPrincipal principal))
             return BadRequest("Invalid or expired token.");
         
         var tempUser = await userAccessor.FindTemporaryUserByEmail(
@@ -27,12 +27,12 @@ public class VerifyUserController(
             return BadRequest("Registered account does not exist!");
         
         var newUser = entityFactory.CreateUserFromTemporary(tempUser);
-        await unitOfWork.Users.AddAsync(newUser);
+        await unitOfWorkFactory.Users.AddAsync(newUser);
     
-        unitOfWork.TemporaryUser.Delete(tempUser);
-        await unitOfWork.SaveChangesAsync();
+        unitOfWorkFactory.TemporaryUser.Delete(tempUser);
+        await unitOfWorkFactory.SaveChangesAsync();
 
-        await emailService.SendAccountCreationEmail(newUser.Email, newUser.Username);
+        await emailFactoryService.SendAccountCreationEmail(newUser.Email, newUser.Username);
         return Ok("Your email has been verified!");
     }
 }
