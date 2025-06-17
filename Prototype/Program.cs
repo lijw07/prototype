@@ -2,9 +2,10 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Prototype.Data;
+using Prototype.Data.Interface;
+using Prototype.Data.Validator;
 using Prototype.POCO;
 using Prototype.Services;
-using Prototype.Services.DataParser;
 using Prototype.Services.Factory;
 using Prototype.Services.Interfaces;
 using Prototype.Utility;
@@ -38,23 +39,24 @@ builder.Services.Configure<SmtpSettingsPoco>(
     builder.Configuration.GetSection("Smtp"));
 
 // Register Application Services
-builder.Services.AddScoped<IEmailNotificationService, EmailNotificationFactoryService>();
+builder.Services.AddScoped<IEmailNotificationFactoryService, EmailNotificationFactoryFactoryService>();
 builder.Services.AddScoped<IEntityCreationFactoryService, EntityCreationFactoryService>();
 builder.Services.AddScoped<IUserFactoryService, UserFactoryService>();
 builder.Services.AddScoped<IUserActivityLogFactoryService, UserActivityLogFactoryService>();
 builder.Services.AddScoped<IAuditLogFactoryService, AuditLogFactoryService>();
 builder.Services.AddScoped<IUserRecoveryRequestFactoryService, UserRecoveryFactoryService>();
-builder.Services.AddScoped(typeof(IRepositoryService<>), typeof(RepositoryService<>));
-builder.Services.AddScoped<IUnitOfWorkService, UnitOfWorkFactoryService>();
-builder.Services.AddScoped<IJwtTokenService, JwtTokenFactoryService>();
+builder.Services.AddScoped(typeof(IRepositoryFactoryService<>), typeof(RepositoryFactoryFactoryService<>));
+builder.Services.AddScoped<IUnitOfWorkFactoryService, UnitOfWorkFactoryFactoryService>();
+builder.Services.AddScoped<IJwtTokenFactoryService, JwtTokenFactoryFactoryService>();
 builder.Services.AddScoped<IAuthenticatedUserAccessor, AuthenticatedUserAccessor>();
-
-// Register Data Dump Parsers
-builder.Services.AddScoped<DataDumpParserFactoryService>();
-builder.Services.AddTransient<CsvDataDumpParserService>();
-builder.Services.AddTransient<ExcelDataDumpParserService>();
-builder.Services.AddTransient<JsonDataDumpParserService>();
-builder.Services.AddTransient<XmlDataDumpParserService>();
+builder.Services.AddScoped<IApplicationFactoryService, ApplicationFactoryService>();
+builder.Services.AddScoped<IApplicationLogFactoryService, ApplicationLogFactoryService>();
+builder.Services.AddScoped<IUserApplicationFactoryService, UserApplicationFactoryService>();
+builder.Services.AddScoped<IDatabaseConnectionValidator, DatabaseConnectionValidator>();
+builder.Services.AddScoped<MicrosoftSqlValidator>();
+builder.Services.AddScoped<MySqlValidator>();
+builder.Services.AddScoped<MongoDbValidator>();
+builder.Services.AddScoped<MicrosoftSqlValidator>();
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 

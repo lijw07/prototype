@@ -18,21 +18,14 @@ public class HumanResourceModel
     public required Guid EmployeeNumber { get; set; }
     
     [Required]
-    public required JobPositionEnum JobTitle { get; set; }
-    
-    [Required]
-    public required DepartmentEnum Department { get; set; }
-    
-    public Guid Manager { get; set; }
-    
-    [Required]
     public required string Location { get; set; }
     
     [Required]
-    public required DateTime HireDate { get; set; }
-    
-    public DateTime TerminationDate { get; set; }
+    public required StatusEnum Status { get; set; }
     
     [Required]
-    public required StatusEnum Status { get; set; }
+    public required DateTime CreatedAt { get; set; }
+    
+    [Required]
+    public required DateTime UpdateAt { get; set; }
 }

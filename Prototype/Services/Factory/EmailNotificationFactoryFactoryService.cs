@@ -1,24 +1,24 @@
-using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Mail;
+using Microsoft.Extensions.Options;
 using Prototype.POCO;
 using Prototype.Services.Interfaces;
 
-namespace Prototype.Services;
+namespace Prototype.Services.Factory;
 
-public class EmailNotificationFactoryService : IEmailNotificationService
+public class EmailNotificationFactoryFactoryService : IEmailNotificationFactoryService
 {
     private readonly SmtpClient _smtpClient;
     private readonly string _fromEmail;
     private readonly string _jwtKey;
-    private readonly IJwtTokenService _jwtTokenService;
+    private readonly IJwtTokenFactoryService _jwtTokenFactoryService;
 
-    public EmailNotificationFactoryService(
+    public EmailNotificationFactoryFactoryService(
         IOptions<SmtpSettingsPoco> smtpOptions,
         IConfiguration config,
-        IJwtTokenService jwtTokenService)
+        IJwtTokenFactoryService jwtTokenFactoryService)
     {
-        _jwtTokenService = jwtTokenService;
+        _jwtTokenFactoryService = jwtTokenFactoryService;
 
         var smtp = smtpOptions.Value;
         ValidateSmtpSettings(smtp);

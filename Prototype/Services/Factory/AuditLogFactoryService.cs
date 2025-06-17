@@ -8,10 +8,33 @@ public class AuditLogFactoryService : IAuditLogFactoryService
 {
     public AuditLogModel CreateAuditLog(UserModel user, ActionTypeEnum action, List<string> affectedTables)
     {
-        var latestRecovery = user.UserRecoveryRequests?
-            .Where(r => r.UserId == user.UserId)
-            .OrderByDescending(r => r.RequestedAt)
-            .FirstOrDefault();
+        
+        object? metadata = action switch
+        {
+            ActionTypeEnum.ForgotPassword or ActionTypeEnum.ChangePassword => user.UserRecoveryRequests?
+                .Where(r => r.UserId == user.UserId)
+                .OrderByDescending(r => r.RequestedAt)
+                .Select(r => new
+                {
+                    r.UserRecoveryRequestId,
+                    RecoveryType = r.UserRecoveryType.ToString(),
+                    r.VerificationCode,
+                    r.RequestedAt
+                })
+                .FirstOrDefault(),
+
+            ActionTypeEnum.Login or ActionTypeEnum.FailedLogin => new
+            {
+                UserId = user.UserId,
+                UserEmail = user.Email,
+                UserUpdateAt = user.UpdatedAt
+            },
+            _ => new
+            {
+                user.UserId,
+                Info = "Generic metadata"
+            }
+        };
 
         return new AuditLogModel
         {
@@ -21,14 +44,11 @@ public class AuditLogFactoryService : IAuditLogFactoryService
             ActionType = action,
             Metadata = System.Text.Json.JsonSerializer.Serialize(new
             {
-                RecoveryRequestId = latestRecovery?.UserRecoveryRequestId,
-                RecoveryType = latestRecovery?.UserRecoveryType.ToString(),
-                Token = latestRecovery?.VerificationCode,
-                RequestedAt = latestRecovery?.RequestedAt,
-                ResetAt = DateTime.UtcNow,
-                AffectedEntities = affectedTables
+                Metadata = metadata,
+                AffectedEntities = affectedTables,
+                Timestamp = DateTime.Now
             }),
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.Now
         };
     }
 }

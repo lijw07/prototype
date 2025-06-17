@@ -17,23 +17,14 @@ public class ApplicationLogModel
     public ApplicationModel Application { get; set; }
     
     [Required]
-    public string ConnectionInformation { get; set; }
-    
-    [Required]
     public ApplicationActionTypeEnum applicationActionType { get; set; }
     
     [Required]
-    public StatusEnum Status { get; set; }
-    
-    [Required]
-    public float ResponseTime { get; set; }
+    public required string Metadata { get; set; }
     
     [Required]
     public DateTime CreatedAt { get; set; }
     
     [Required]
     public DateTime UpdatedAt { get; set; }
-    
-    [Required]
-    public DateTime LastChecked { get; set; }
 }

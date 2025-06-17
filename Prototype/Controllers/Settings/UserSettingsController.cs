@@ -14,7 +14,7 @@ namespace Prototype.Controllers.Settings;
 public class UserSettingsController(
     IEntityCreationFactoryService entityCreationFactory,
     IAuthenticatedUserAccessor userAccessor,
-    IUnitOfWorkService uows) : ControllerBase
+    IUnitOfWorkFactoryService uows) : ControllerBase
 {
     
     private UserModel? _user;
@@ -42,7 +42,7 @@ public class UserSettingsController(
         });
     }
 
-    [HttpPut]
+    [HttpPut("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto request)
     {
         var user = await GetCurrentUserAsync();

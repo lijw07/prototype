@@ -12,15 +12,15 @@ namespace Prototype.Controllers.Login;
 [Route("[controller]")]
 public class PasswordResetController(
     IEntityCreationFactoryService entityFactory,
-    IUnitOfWorkService uows,
-    IJwtTokenService jwtTokenService,
-    IEmailNotificationService emailService, 
+    IUnitOfWorkFactoryService uows,
+    IJwtTokenFactoryService jwtTokenFactoryService,
+    IEmailNotificationFactoryService emailFactoryService, 
     IAuthenticatedUserAccessor userAccessor) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> PasswordReset([FromBody] ResetPasswordRequestDto requestDto)
     {
-        if (!jwtTokenService.ValidateToken(requestDto.Token, out ClaimsPrincipal principal))
+        if (!jwtTokenFactoryService.ValidateToken(requestDto.Token, out ClaimsPrincipal principal))
             return BadRequest("Invalid or expired token.");
 
         var email = principal.FindFirst(ClaimTypes.Email)?.Value;
@@ -61,7 +61,7 @@ public class PasswordResetController(
         await uows.AuditLogs.AddAsync(auditLog);
         await uows.SaveChangesAsync();
 
-        await emailService.SendPasswordResetVerificationEmail(user.Email);
+        await emailFactoryService.SendPasswordResetVerificationEmail(user.Email);
         return Ok("Your password has been successfully reset.");
     }
 }
