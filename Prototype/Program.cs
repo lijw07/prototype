@@ -3,6 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Prototype.Data;
 using Prototype.Data.Interface;
+using Prototype.Data.Strategy;
+using Prototype.Data.Strategy.Microsoft;
+using Prototype.Data.Strategy.Mongodb;
+using Prototype.Data.Strategy.MySql;
 using Prototype.Data.Validator;
 using Prototype.POCO;
 using Prototype.Services;
@@ -57,6 +61,17 @@ builder.Services.AddScoped<MicrosoftSqlValidator>();
 builder.Services.AddScoped<MySqlValidator>();
 builder.Services.AddScoped<MongoDbValidator>();
 builder.Services.AddScoped<MicrosoftSqlValidator>();
+builder.Services.AddScoped<MongodbAuthStrategySelector>();
+builder.Services.AddScoped<MongodbAwsIamAuthStrategy>();
+builder.Services.AddScoped<MongodbKerberosAuthStrategy>();
+builder.Services.AddScoped<MongodbNoAuthStrategy>();
+builder.Services.AddScoped<MongodbUserPasswordStrategy>();
+builder.Services.AddScoped<MongodbX509AuthStrategy>();
+builder.Services.AddScoped<MySqlNoAuthenticationStrategy>();
+builder.Services.AddScoped<MySqlUserPasswordStrategy>();
+builder.Services.AddScoped<MicrosoftSqlServerKerberosStrategy>();
+builder.Services.AddScoped<MicrosoftSqlServerNoAuthenticationStrategy>();
+builder.Services.AddScoped<MicrosoftSqlServerUserPasswordStrategy>();
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 
