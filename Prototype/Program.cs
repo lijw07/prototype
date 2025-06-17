@@ -2,6 +2,8 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Prototype.Data;
+using Prototype.Data.Interface;
+using Prototype.Data.Validator;
 using Prototype.POCO;
 using Prototype.Services;
 using Prototype.Services.Factory;
@@ -50,6 +52,11 @@ builder.Services.AddScoped<IAuthenticatedUserAccessor, AuthenticatedUserAccessor
 builder.Services.AddScoped<IApplicationFactoryService, ApplicationFactoryService>();
 builder.Services.AddScoped<IApplicationLogFactoryService, ApplicationLogFactoryService>();
 builder.Services.AddScoped<IUserApplicationFactoryService, UserApplicationFactoryService>();
+builder.Services.AddScoped<IDatabaseConnectionValidator, DatabaseConnectionValidator>();
+builder.Services.AddScoped<MicrosoftSqlValidator>();
+builder.Services.AddScoped<MySqlValidator>();
+builder.Services.AddScoped<MongoDbValidator>();
+builder.Services.AddScoped<MicrosoftSqlValidator>();
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 

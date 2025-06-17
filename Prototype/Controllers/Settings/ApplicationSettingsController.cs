@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Prototype.Data.Interface;
 using Prototype.DTOs;
 using Prototype.Enum;
 using Prototype.Models;
@@ -151,5 +152,17 @@ public class ApplicationSettingsController(
         await uows.SaveChangesAsync();
 
         return Ok(new { message = "Application deleted." });
+    }
+    
+    [HttpPost("test-connection")]
+    public async Task<IActionResult> TestConnection(
+        [FromBody] ApplicationRequestDto dto,
+        [FromServices] IDatabaseConnectionValidator validator)
+    {
+        if (dto.ConnectionSource == null)
+            return BadRequest("Missing connection details.");
+
+        var (success, message) = await validator.TestConnectionAsync(dto);
+        return success ? Ok(new { message }) : BadRequest(new { message });
     }
 }

@@ -42,7 +42,7 @@ public class UserSettingsController(
         });
     }
 
-    [HttpPut]
+    [HttpPut("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto request)
     {
         var user = await GetCurrentUserAsync();
