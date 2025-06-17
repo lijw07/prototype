@@ -6,6 +6,10 @@
       target: dev
     ports:
       - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - app-network
 
   backend:
     build:
@@ -14,6 +18,9 @@
       target: dev
     ports:
       - "8080:8080"
+    networks:
+      - app-network
+      - db-network
 
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -31,10 +38,13 @@
       timeout: 10s
       retries: 5
     networks:
-      - prototype_default
+      - db-network
+
+networks:
+  app-network:
+    driver: bridge
+  db-network:
+    driver: bridge
 
 volumes:
   sql_data:
-
-networks:
-  prototype_default:
