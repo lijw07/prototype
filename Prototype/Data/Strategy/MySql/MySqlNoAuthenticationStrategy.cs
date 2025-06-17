@@ -2,7 +2,7 @@ using MySql.Data.MySqlClient;
 using Prototype.Data.Interface;
 using Prototype.DTOs;
 
-namespace Prototype.Data.Strategy;
+namespace Prototype.Data.Strategy.MySql;
 
 public class MySqlNoAuthenticationStrategy : IDatabaseTypeSpecificValidator
 {
