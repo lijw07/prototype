@@ -22,6 +22,11 @@ export default function NavMenu() {
             Login
           </NavLink>
         </NavItem>
+                <NavItem>
+          <NavLink tag={RouterLink} to="/settings" className="text-dark">
+            Settings
+          </NavLink>
+        </NavItem>
       </Nav>
     </nav>
   );

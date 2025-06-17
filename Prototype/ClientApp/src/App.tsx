@@ -5,7 +5,7 @@ import Accounts from './components/account/Accounts';
 import Login from './components/login/Login';
 import Signup from './components/login/Signup';
 import Dashboard from './components/dashboard/Dashboard';
-
+import Settings from './components/settings/Settings';
 export default function App() {
   return (
     <Layout>
@@ -14,6 +14,7 @@ export default function App() {
         <Route path="/accounts" element={<Accounts />} />
         <Route path="/login" element={<Login />} />
         <Route path="/sign-up" element={<Signup />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
     </Layout>
   );

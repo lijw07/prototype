@@ -84,7 +84,7 @@ class LoginForm extends Component<LoginFormProps, LoginFormState> {
         </div>
 
         {error && <div className="alert alert-danger">{error}</div>}
-
+      
         <div className="d-grid">
           <button type="submit" className="btn btn-primary">
             Submit

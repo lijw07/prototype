@@ -1,16 +1,25 @@
-import React from "react";
+// Button.tsx
+import React from 'react';
 
 interface ButtonProps {
-  color: string;
-  label: React.ReactNode;
-  onClick?: () => void;
+  label: string;
+  onClick: () => void;
+  color?: string;
+  size?: 'sm' | 'md' | 'lg';
 }
 
-const Button: React.FC<ButtonProps> = ({ color, label, onClick }) => {
+const Button: React.FC<ButtonProps> = ({ label, onClick, color = 'blue', size = 'md' }) => {
   return (
     <button
-      className={`padding-2 shadow-none hover:shadow background-light-${color} hover:background-dark-${color}`}
       onClick={onClick}
+      style={{
+        backgroundColor: color,
+        padding: size === 'lg' ? '1rem 2rem' : '0.5rem 1rem',
+        border: 'none',
+        borderRadius: '5px',
+        color: 'white',
+        cursor: 'pointer'
+      }}
     >
       {label}
     </button>
