@@ -114,14 +114,14 @@ else
     app.UseHsts();
     app.UseHttpsRedirection(); // Only redirect in production!
 }
-
+app.UseRouting();
 // JWT middleware
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseStaticFiles();
 
-app.UseRouting();
+
 
 app.MapControllers();
 

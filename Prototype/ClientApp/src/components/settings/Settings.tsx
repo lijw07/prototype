@@ -25,14 +25,12 @@ export interface AuditLog {
 export default function Settings(props: SettingsProps) {
     const [logs, setLogs] = useState<AuditLog[] | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [token, setToken] = useState("")
 
-    const handleCreateApplication = async () => {
-
-        setError(null)
-        setLogs(null)
+    const handleGetCurrentUser = async () => {
 
         try {
-            const response = await fetch('/ApplicationSettings', {
+            const response = await fetch('/ApplicationSettings/getCurrentUser', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -42,17 +40,65 @@ export default function Settings(props: SettingsProps) {
 
             if (response.ok) {
             console.log('Success');
-            const data = await response.json();
-            setLogs(data);
+
             } else {
-            setError(`Failed to fetch logs: ${response.status} ${response.statusText}`);
+            console.log('Fail');
             }
         } catch (err: any) {
-            setError(`Exception: ${err.message || err.toString()}`);
+            console.log('Fail');
+        }
+    };
+     const handleCreateApplicaiton = async () => {
+        const dto = {
+                applicationName: "My App",
+                applicationDescription: "This is my test app",
+                dataSourceType: 1,  // assuming DataSourceTypeEnum is an int/enum
+                connectionSource: {
+                  host: "localhost",
+                  port: "5432",
+                  instance: "myInstance",
+                  authenticationType: 2,  // Replace with correct enum value
+                  databaseName: "TestDb",
+                  url: "jdbc:postgresql://localhost:5432/TestDb",
+                  username: "myuser",
+                  password: "mypassword",
+                  authenticationDatabase: "",
+                  awsAccessKeyId: "",
+                  awsSecretAccessKey: "",
+                  awsSessionToken: "",
+                  principal: "",
+                  serviceName: "",
+                  serviceRealm: "",
+                  canonicalizeHostName: false
+        }
+            };
+        try {
+            const response = await fetch('/ApplicationSettings/new-application-connection', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dto) 
+            });
+
+            if (response.ok) {
+            console.log('Success created app');
+
+            } else {
+            console.log('Failed to make app');
+            }
+        } catch (err: any) {
+            console.log('Failed to make app');
+            console.log(err)
         }
     };
 
+
     const handleFetchAuditLogs = async () => {
+      
+        setError(null)
+        setLogs(null)
+
         try {
             const response = await fetch('/AuditLogSettings', {
             method: 'GET',
@@ -63,10 +109,10 @@ export default function Settings(props: SettingsProps) {
 
             if (response.ok) {
             const data = await response.json();
+            setLogs(logs)
             console.log('Audit logs:', data);
-            // You can update state here if inside a React component
             } else {
-            console.error('Failed to fetch audit logs:', response.status, response.statusText);
+                setError(`Failed to fetch logs: ${response.status} ${response.statusText}`);
             }
         } catch (error) {
             console.error('Exception:', error);
@@ -76,19 +122,33 @@ export default function Settings(props: SettingsProps) {
   return (
     <div>
       <h1>Settings</h1>
-
-        <Button 
-            label="Create Application"
-            onClick={handleCreateApplication}
+        <div>
+          <Button 
+            label="Get Current User"
+            onClick={handleGetCurrentUser}
             color="blue"
             size="lg"
         />
-        <Button 
+        </div>
+ 
+        <div>
+          <Button 
+            label="Create Application"
+            onClick={handleCreateApplicaiton}
+            color="blue"
+            size="lg"
+          />
+        </div>
+          
+        <div>
+          <Button 
             label="Get Audit Log"
             onClick={handleFetchAuditLogs}
             color="blue"
             size="lg"
-        />
+          />
+        </div>
+        
         {error && (
             <div style={{ color: 'red', marginTop: '1rem' }}>
             Error: {error}
