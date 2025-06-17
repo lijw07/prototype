@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data.Interface;
@@ -9,28 +10,22 @@ using Prototype.Utility;
 
 namespace Prototype.Controllers.Settings;
 
+[Authorize]
 [ApiController]
 [Route("[controller]")]
 public class ApplicationSettingsController(
-    IAuthenticatedUserAccessor userAccessor,
     IUnitOfWorkFactoryService uows,
-    IEntityCreationFactoryService entityCreationFactory): ControllerBase
+    IAuthenticatedUserAccessor userAccessor,
+    IEntityCreationFactoryService entityCreationFactory) : ControllerBase
 {
-    
-    private UserModel? _user;
-
-    private async Task<UserModel?> GetCurrentUserAsync()
-    {
-        if (_user == null)
-            _user = await userAccessor.GetUserFromTokenAsync(User);
-        return _user;
-    }
 
     [HttpPost("new-application-connection")]
     public async Task<IActionResult> CreateApplication([FromBody] ApplicationRequestDto dto)
     {
+        var user = await userAccessor.GetCurrentUserAsync(User);
+        if (user == null) return Unauthorized();
+
         var application = entityCreationFactory.CreateApplication(dto);
-        
         var affectedEntities = new List<string>
         {
             nameof(ApplicationModel),
@@ -38,37 +33,26 @@ public class ApplicationSettingsController(
             nameof(UserApplicationModel),
             nameof(ApplicationLogModel)
         };
-        
-        var applicationLog = entityCreationFactory.CreateApplicationLog(application, ApplicationActionTypeEnum.ApplicationAdded, affectedEntities);
-        
-        var user = await GetCurrentUserAsync();
-        
-        if (user == null)
-            return Unauthorized();
 
+        var applicationLog = entityCreationFactory.CreateApplicationLog(application, ApplicationActionTypeEnum.ApplicationAdded, affectedEntities);
         var userApplication = entityCreationFactory.CreateUserApplication(user, application);
-        
-        user.Applications.Add(userApplication);
-        
         var userActivityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.Create, HttpContext);
         var auditLog = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.Create, affectedEntities);
-
+        
         await uows.Applications.AddAsync(application);
         await uows.ApplicationLogs.AddAsync(applicationLog);
         await uows.UserApplications.AddAsync(userApplication);
-        await uows.Users.AddAsync(user);
         await uows.UserActivityLogs.AddAsync(userActivityLog);
         await uows.AuditLogs.AddAsync(auditLog);
         await uows.SaveChangesAsync();
-        
+
         return Ok(new { message = "Successfully created application(s)" });
     }
-    
 
     [HttpGet("get-applications")]
     public async Task<IActionResult> GetApplications()
     {
-        var user = await GetCurrentUserAsync();
+        var user = await userAccessor.GetCurrentUserAsync(User);
         if (user == null) return Unauthorized();
 
         var userAppIds = await uows.UserApplications
@@ -81,30 +65,42 @@ public class ApplicationSettingsController(
             .Query()
             .Where(app => userAppIds.Contains(app.ApplicationId))
             .ToListAsync();
+        
+        var affectedEntities = new List<string>
+        {
+            nameof(ApplicationModel),
+            nameof(UserApplicationModel)
+        };
+
+        var userActivityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.Read, HttpContext);
+        var auditLog = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.Read, affectedEntities);
+
+        await uows.UserActivityLogs.AddAsync(userActivityLog);
+        await uows.AuditLogs.AddAsync(auditLog);
+        await uows.SaveChangesAsync();
 
         return Ok(apps);
     }
-    
+
     [HttpPut("update-application/{applicationId}")]
     public async Task<IActionResult> UpdateApplication(Guid applicationId, [FromBody] ApplicationRequestDto dto)
     {
-        var user = await GetCurrentUserAsync();
+        var user = await userAccessor.GetCurrentUserAsync(User);
         if (user == null) return Unauthorized();
-        
+
         var userApp = await uows.UserApplications
             .Query()
             .Include(ua => ua.Application)
             .ThenInclude(app => app.ApplicationConnections)
             .FirstOrDefaultAsync(ua => ua.UserId == user.UserId && ua.ApplicationId == applicationId);
 
-        if (userApp == null || userApp.Application == null)
+        if (userApp?.Application == null)
             return NotFound("Application not associated with the user.");
-        
-        var application = entityCreationFactory.UpdateApplication(userApp.Application, dto);
 
+        var updatedApp = entityCreationFactory.UpdateApplication(userApp.Application, dto);
         var affectedEntities = new List<string> { nameof(ApplicationModel) };
 
-        var log = entityCreationFactory.CreateApplicationLog(application, ApplicationActionTypeEnum.ApplicationUpdated, affectedEntities);
+        var log = entityCreationFactory.CreateApplicationLog(updatedApp, ApplicationActionTypeEnum.ApplicationUpdated, affectedEntities);
         var activity = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.Update, HttpContext);
         var audit = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.Update, affectedEntities);
 
@@ -115,11 +111,11 @@ public class ApplicationSettingsController(
 
         return Ok(new { message = "Application updated." });
     }
-    
+
     [HttpDelete("delete-application/{applicationId}")]
     public async Task<IActionResult> DeleteApplication(Guid applicationId)
     {
-        var user = await GetCurrentUserAsync();
+        var user = await userAccessor.GetCurrentUserAsync(User);
         if (user == null) return Unauthorized();
 
         var userApp = await uows.UserApplications
@@ -128,10 +124,8 @@ public class ApplicationSettingsController(
             .ThenInclude(app => app.ApplicationConnections)
             .FirstOrDefaultAsync(ua => ua.UserId == user.UserId && ua.ApplicationId == applicationId);
 
-        if (userApp == null || userApp.Application == null)
+        if (userApp?.Application == null)
             return NotFound("Application not found or not associated with the user.");
-
-        var application = userApp.Application;
 
         var affectedEntities = new List<string>
         {
@@ -140,12 +134,11 @@ public class ApplicationSettingsController(
             nameof(ApplicationConnectionModel)
         };
 
-        var log = entityCreationFactory.CreateApplicationLog(application, ApplicationActionTypeEnum.ApplicationRemoved, affectedEntities);
+        var log = entityCreationFactory.CreateApplicationLog(userApp.Application, ApplicationActionTypeEnum.ApplicationRemoved, affectedEntities);
         var activity = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.Delete, HttpContext);
         var audit = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.Delete, affectedEntities);
-        
-        uows.Applications.Delete(application);
 
+        uows.Applications.Delete(userApp.Application);
         await uows.ApplicationLogs.AddAsync(log);
         await uows.UserActivityLogs.AddAsync(activity);
         await uows.AuditLogs.AddAsync(audit);
@@ -153,7 +146,8 @@ public class ApplicationSettingsController(
 
         return Ok(new { message = "Application deleted." });
     }
-    
+
+    [AllowAnonymous]
     [HttpPost("test-connection")]
     public async Task<IActionResult> TestConnection(
         [FromBody] ApplicationRequestDto dto,

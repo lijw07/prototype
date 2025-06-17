@@ -22,8 +22,7 @@ public class TemporaryUserModel
     [Required]
     public required string PasswordHash { get; set; }
     
-    [Required]
-    public required string PhoneNumber { get; set; }
+    public string PhoneNumber { get; set; }
     
     [Required]
     public required string token { get; set; }

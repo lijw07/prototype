@@ -56,12 +56,6 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         #region AuditLogModel
 
         modelBuilder.Entity<AuditLogModel>()
-            .HasOne(a => a.User)
-            .WithMany(u => u.AuditLogs)
-            .HasForeignKey(a => a.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        modelBuilder.Entity<AuditLogModel>()
             .Property(al => al.ActionType)
             .HasConversion(at => at.ToString(), at => (ActionTypeEnum)System.Enum.Parse(typeof(ActionTypeEnum), at));
 
@@ -105,12 +99,6 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         #region UserActivityLogModel
 
         modelBuilder.Entity<UserActivityLogModel>()
-            .HasOne(ual => ual.User)
-            .WithMany(u => u.UserActivityLogs)
-            .HasForeignKey(ual => ual.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        modelBuilder.Entity<UserActivityLogModel>()
             .Property(ual => ual.ActionType)
             .HasConversion(at => at.ToString(), at => (ActionTypeEnum)System.Enum.Parse(typeof(ActionTypeEnum), at));
 
@@ -127,23 +115,12 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
             .HasForeignKey(ua => ua.ApplicationId)
             .OnDelete(DeleteBehavior.Cascade);
         
-        modelBuilder.Entity<UserApplicationModel>()
-            .HasOne(ua => ua.User)
-            .WithMany(u => u.Applications)
-            .HasForeignKey(ua => ua.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
-        
         #endregion
 
         #region UserRecoveryRequestModel
 
         modelBuilder.Entity<UserRecoveryRequestModel>()
-            .HasOne(urr => urr.User)
-            .WithMany(u => u.UserRecoveryRequests)
-            .HasForeignKey(urr => urr.UserId);
-
-        modelBuilder.Entity<UserRecoveryRequestModel>()
-            .Property(urr => urr.UserRecoveryType)
+            .Property(urr => urr.RecoveryType)
             .HasConversion(
                 ust => ust.ToString(),
                 ust => (UserRecoveryTypeEnum)System.Enum.Parse(typeof(UserRecoveryTypeEnum), ust)

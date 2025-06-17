@@ -23,10 +23,7 @@ public class UserRecoveryRequestModel
     public bool IsUsed { get; set; } = false;
     
     [Required]
-    public string RecoveryType { get; set; }
-    
-    [Required]
-    public UserRecoveryTypeEnum UserRecoveryType { get; set; }
+    public UserRecoveryTypeEnum RecoveryType { get; set; }
 
     [Required]
     public DateTime RequestedAt { get; set; }

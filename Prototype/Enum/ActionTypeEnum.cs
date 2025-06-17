@@ -6,6 +6,7 @@ public enum ActionTypeEnum
     CreateUser,
     Read,
     Update,
+    Get,
     Delete,
     Login,
     Logout,

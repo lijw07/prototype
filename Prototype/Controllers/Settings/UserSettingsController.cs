@@ -8,8 +8,8 @@ using Prototype.Utility;
 
 namespace Prototype.Controllers.Settings;
 
-[ApiController]
 [Authorize]
+[ApiController]
 [Route("settings/user")]
 public class UserSettingsController(
     IEntityCreationFactoryService entityCreationFactory,
@@ -17,35 +17,30 @@ public class UserSettingsController(
     IUnitOfWorkFactoryService uows) : ControllerBase
 {
     
-    private UserModel? _user;
-
-    private async Task<UserModel?> GetCurrentUserAsync()
-    {
-        if (_user == null)
-            _user = await userAccessor.GetUserFromTokenAsync(User);
-        return _user;
-    }
-    
     [HttpGet]
     public async Task<IActionResult> GetUserSettings()
     {
-        var user = await GetCurrentUserAsync();
+        var user = await userAccessor.GetCurrentUserAsync(User);
         
         if (user is null)
             return NotFound("User not found.");
         
-        return Ok(new UserSettingsRequestDto
+        return Ok(new UserDto
         {
+            UserId = user.UserId,
             FirstName = user.FirstName,
             LastName = user.LastName,
-            Email = user.Email
+            Username = user.Username,
+            Email = user.Email,
+            PhoneNumber = user.PhoneNumber,
+
         });
     }
 
     [HttpPut("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto request)
     {
-        var user = await GetCurrentUserAsync();
+        var user = await userAccessor.GetCurrentUserAsync(User);
         
         if (user is null)
             return NotFound("User not found.");
@@ -69,7 +64,7 @@ public class UserSettingsController(
         
         var auditLog = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.ChangePassword, affectedEntities);
 
-        await uows.Users.AddAsync(user);
+        uows.Users.Update(user);
         await uows.UserActivityLogs.AddAsync(userActivityLog);
         await uows.AuditLogs.AddAsync(auditLog);
         await uows.SaveChangesAsync();

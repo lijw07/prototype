@@ -14,6 +14,15 @@ public class AuditLogSettingsController(SentinelContext context) : ControllerBas
         var logs = await context.AuditLogs
             .Include(log => log.User)
             .OrderByDescending(log => log.CreatedAt)
+            .Select(log => new AuditLogDto
+            {
+                AuditLogId = log.AuditLogId,
+                UserId = log.UserId,
+                Username = log.User.Username,
+                ActionType = (int)log.ActionType,
+                Metadata = log.Metadata,
+                CreatedAt = log.CreatedAt
+            })
             .ToListAsync();
 
         return Ok(logs);

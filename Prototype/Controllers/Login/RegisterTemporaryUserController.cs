@@ -7,7 +7,7 @@ using Prototype.Utility;
 namespace Prototype.Controllers.Login;
 
 [ApiController]
-[Route("[controller]")]
+[Route("Register")]
 public class RegisterTemporaryUserController(
     IUnitOfWorkFactoryService uows,
     IJwtTokenFactoryService jwtTokenFactoryService,
@@ -23,6 +23,9 @@ public class RegisterTemporaryUserController(
         
         if (await userAccessor.UsernameExistsAsync(requestDto.Username) || await userAccessor.TemporaryUsernameExistsAsync(requestDto.Username))
             return Conflict(new { message = "Username already in use!" });
+        
+        if (!requestDto.Password.Equals(requestDto.ReEnterPassword))
+            return Conflict(new { message = "Password does not match!" });
         
         var token = jwtTokenFactoryService.BuildUserClaims(requestDto, ActionTypeEnum.CreateUser);
         var tempUser = tempUserFactory.CreateTemporaryUser(requestDto, token);

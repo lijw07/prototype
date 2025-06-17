@@ -14,7 +14,7 @@ public class UserRecoveryFactoryService : IUserRecoveryRequestFactoryService
             UserId = user.UserId,
             User = user,
             VerificationCode = verificationCode,
-            UserRecoveryType = dto.UserRecoveryType,
+            RecoveryType = dto.UserRecoveryType,
             RequestedAt = DateTime.Now,
             ExpiresAt = DateTime.Now.AddMinutes(30)
         };

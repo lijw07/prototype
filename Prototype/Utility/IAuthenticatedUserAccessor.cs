@@ -5,7 +5,7 @@ namespace Prototype.Utility;
 
 public interface IAuthenticatedUserAccessor
 {
-    Task<UserModel?> GetUserFromTokenAsync(ClaimsPrincipal user);
+    Task<UserModel?> GetCurrentUserAsync(ClaimsPrincipal? user);
     Task<bool> ValidateUser(string username, string password);
     Task<UserModel?> GetUser(string username, string password);
     Task<bool> UsernameExistsAsync(string username);

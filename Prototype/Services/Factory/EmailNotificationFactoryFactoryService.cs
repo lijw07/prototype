@@ -11,6 +11,7 @@ public class EmailNotificationFactoryFactoryService : IEmailNotificationFactoryS
     private readonly SmtpClient _smtpClient;
     private readonly string _fromEmail;
     private readonly string _jwtKey;
+    private readonly string _frontendBaseUrl;
     private readonly IJwtTokenFactoryService _jwtTokenFactoryService;
 
     public EmailNotificationFactoryFactoryService(
@@ -32,11 +33,12 @@ public class EmailNotificationFactoryFactoryService : IEmailNotificationFactoryS
         };
 
         _jwtKey = config["JwtSettings:Key"] ?? throw new InvalidOperationException("JwtSettings:Key is missing in configuration.");
+        _frontendBaseUrl = config["Frontend:BaseUrl"] ?? "http://localhost:3000";
     }
 
     public async Task SendVerificationEmail(string recipientEmail, string token)
     {
-        var verificationLink = $"http://localhost:8080/verify?token={token}";
+        var verificationLink = $"{_frontendBaseUrl}/verify?token={token}";
         var subject = "Verify your account";
         var body = GenerateEmailHtml("Verify Email", verificationLink);
         await SendEmailAsync(recipientEmail, subject, body);
@@ -44,7 +46,7 @@ public class EmailNotificationFactoryFactoryService : IEmailNotificationFactoryS
 
     public async Task SendPasswordResetEmail(string recipientEmail, string token)
     {
-        var resetLink = $"http://localhost:8080/reset-password?token={token}";
+        var resetLink = $"{_frontendBaseUrl}/reset-password?token={token}";
         var subject = "Reset Your Password";
         var body = GenerateEmailHtml("Reset Password", resetLink);
         await SendEmailAsync(recipientEmail, subject, body);

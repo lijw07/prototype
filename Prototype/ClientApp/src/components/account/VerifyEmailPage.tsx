@@ -11,8 +11,6 @@ const VerifyEmailPage: React.FC = () => {
     useEffect(() => {
         const token = searchParams.get('token');
 
-        console.log('Verification token from URL:', token); // ✅ Log the token
-
         if (!token) {
             setStatus('error');
             setMessage('Invalid or missing token.');
@@ -33,7 +31,6 @@ const VerifyEmailPage: React.FC = () => {
                     }, 5000); // auto-redirect in 5 seconds
                 } else {
                     const errText = await response.text();
-                    console.error('Verification failed response:', errText); // ✅ Log error response
                     setStatus('error');
                     setMessage(errText || 'Verification failed.');
                 }

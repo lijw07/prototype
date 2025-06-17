@@ -25,15 +25,7 @@ public class UserModel
     [Required]
     public required string PhoneNumber { get; set; }
     
-    public ICollection<UserApplicationModel> Applications { get; set; }
-    
-    public ICollection<UserActivityLogModel> UserActivityLogs { get; set; }
-    
-    public ICollection<AuditLogModel> AuditLogs { get; set; }
-    
-    public ICollection<UserRecoveryRequestModel> UserRecoveryRequests { get; set; }
-    
-    public UserPermissionModel UserPermissions { get; set; }
+    public Guid UserPermissionsId { get; set; }
     
     public required DateTime CreatedAt { get; set; }
     

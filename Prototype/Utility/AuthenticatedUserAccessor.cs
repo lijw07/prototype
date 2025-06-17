@@ -7,8 +7,11 @@ namespace Prototype.Utility;
 
 public class AuthenticatedUserAccessor(SentinelContext context) : IAuthenticatedUserAccessor
 {
-    public async Task<UserModel?> GetUserFromTokenAsync(ClaimsPrincipal user)
+    public async Task<UserModel?> GetCurrentUserAsync(ClaimsPrincipal? user)
     {
+        if (user == null || !(user.Identity?.IsAuthenticated ?? false))
+            return null;
+
         var userIdStr = user.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!Guid.TryParse(userIdStr, out var userId))
             return null;
@@ -50,7 +53,9 @@ public class AuthenticatedUserAccessor(SentinelContext context) : IAuthenticated
 
     public async Task<TemporaryUserModel?> FindTemporaryUserByEmail(string email)
     {
-        return await context.TemporaryUsers.FirstOrDefaultAsync(u => u.Email == email);
+        return await context.TemporaryUsers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
     }
 
     public async Task<UserModel?> FindUserByEmail(string email)
