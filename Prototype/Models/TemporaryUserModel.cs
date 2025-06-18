@@ -22,10 +22,11 @@ public class TemporaryUserModel
     [Required]
     public required string PasswordHash { get; set; }
     
-    public string PhoneNumber { get; set; }
+    [Required]
+    public required string PhoneNumber { get; set; }
     
     [Required]
-    public required string token { get; set; }
+    public required string Token { get; set; }
     
     [Required]
     public required DateTime CreatedAt { get; set; }

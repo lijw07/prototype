@@ -10,14 +10,14 @@ public class AuthenticationModel
     public required Guid AuthenticationId { get; set; }
     
     [Required]
-    public AuthenticationTypeEnum Authentication { get; set; }
+    public required AuthenticationTypeEnum Authentication { get; set; }
     
     [Required]
     public required Guid DataSourceId { get; set; }
     
     [Required]
     [ForeignKey(nameof(DataSourceId))]
-    public DataSourceModel DataSource { get; set; }
+    public required DataSourceModel DataSource { get; set; }
     
     public string? Username { get; set; }
     
@@ -25,11 +25,11 @@ public class AuthenticationModel
     
     public string? AuthenticationDatabase { get; set; }
     
-    public string? AWSAccessKeyId { get; set; }
+    public string? AwsAccessKeyId { get; set; }
     
-    public string? AWSSecretKey { get; set; }
+    public string? AwsSecretKey { get; set; }
     
-    public string? AWSSessionToken { get; set; }
+    public string? AwsSessionToken { get; set; }
     
     public string? Principal { get; set; }
     

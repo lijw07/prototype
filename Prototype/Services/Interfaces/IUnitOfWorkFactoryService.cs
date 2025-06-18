@@ -1,10 +1,11 @@
 using Prototype.Models;
+using Prototype.Services.Factory;
 
 namespace Prototype.Services.Interfaces;
 
 public interface IUnitOfWorkFactoryService
 {
-    IRepositoryFactoryService<UserModel> Users { get; }
+    RepositoryFactoryService<UserModel> Users { get; }
     IRepositoryFactoryService<ApplicationModel> Applications { get; }
     IRepositoryFactoryService<ApplicationLogModel> ApplicationLogs { get; }
     IRepositoryFactoryService<UserActivityLogModel> UserActivityLogs { get; }

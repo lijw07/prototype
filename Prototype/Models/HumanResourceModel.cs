@@ -9,10 +9,12 @@ public class HumanResourceModel
     [Key]
     public required Guid HumanResourceId { get; set; }
     
+    [Required]
     public required Guid UserId { get; set; }
     
+    [Required]
     [ForeignKey(nameof(UserId))]
-    public UserModel User { get; set; }
+    public required UserModel User { get; set; }
     
     [Required]
     public required Guid EmployeeNumber { get; set; }

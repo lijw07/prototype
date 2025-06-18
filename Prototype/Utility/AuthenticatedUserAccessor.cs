@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.Models;
+using static BCrypt.Net.BCrypt;
 
 namespace Prototype.Utility;
 
@@ -27,7 +28,7 @@ public class AuthenticatedUserAccessor(SentinelContext context) : IAuthenticated
         if (user == null)
             return null;
 
-        var isPasswordValid = BCrypt.Net.BCrypt.Verify(password, user.PasswordHash);
+        var isPasswordValid = Verify(password, user.PasswordHash);
 
         return isPasswordValid ? user : null;
     }
@@ -38,7 +39,7 @@ public class AuthenticatedUserAccessor(SentinelContext context) : IAuthenticated
         if (user == null)
             return false;
 
-        return BCrypt.Net.BCrypt.Verify(password, user.PasswordHash);
+        return Verify(password, user.PasswordHash);
     }
     
     public async Task<bool> UsernameExistsAsync(string username)
@@ -51,7 +52,7 @@ public class AuthenticatedUserAccessor(SentinelContext context) : IAuthenticated
         return await context.Users.AnyAsync(u => u.Email == email);
     }
 
-    public async Task<TemporaryUserModel> FindTemporaryUserByEmail(string email)
+    public async Task<TemporaryUserModel?> FindTemporaryUserByEmail(string email)
     {
         return await context.TemporaryUsers.FirstOrDefaultAsync(u => u.Email == email);
     }

@@ -5,5 +5,5 @@ namespace Prototype.Services.Interfaces;
 
 public interface IUserActivityLogFactoryService
 {
-    UserActivityLogModel CreateUserActivityLog(UserModel user, ActionTypeEnum action, HttpContext context);
+    UserActivityLogModel CreateUserActivityLog(UserModel? user, ActionTypeEnum action, HttpContext context);
 }

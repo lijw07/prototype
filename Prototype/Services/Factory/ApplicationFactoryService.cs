@@ -32,7 +32,7 @@ public class ApplicationFactoryService : IApplicationFactoryService
             ServiceRealm = requestDto.ConnectionSource.ServiceRealm,
             CanonicalizeHostName = requestDto.ConnectionSource.CanonicalizeHostName,
             CreatedAt = DateTime.Now,
-            UpdatedAt = DateTime.Now
+            UpdatedAt = DateTime.Now,
         };
         
         return new ApplicationModel

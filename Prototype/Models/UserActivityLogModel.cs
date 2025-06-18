@@ -14,10 +14,10 @@ public class UserActivityLogModel
     
     [Required]
     [ForeignKey(nameof(UserId))]
-    public UserModel User { get; set; }
+    public required UserModel? User { get; set; }
     
     [Required]
-    public required string IPAddress { get; set; }
+    public required string? IpAddress { get; set; }
     
     [Required]
     public required string DeviceInformation { get; set; }

@@ -5,5 +5,5 @@ namespace Prototype.Services.Interfaces;
 
 public interface IAuditLogFactoryService
 {
-    AuditLogModel CreateAuditLog(UserModel user, ActionTypeEnum action, List<string> affectedTables);
+    AuditLogModel CreateAuditLog(UserModel? user, ActionTypeEnum action, List<string> affectedTables);
 }

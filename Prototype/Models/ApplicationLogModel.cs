@@ -7,24 +7,24 @@ namespace Prototype.Models;
 public class ApplicationLogModel
 {
     [Key]
-    public Guid ApplicationLogId { get; set; }
+    public required Guid ApplicationLogId { get; set; }
     
     [Required]
-    public Guid ApplicationId { get; set; }
+    public required Guid ApplicationId { get; set; }
     
     [Required]
     [ForeignKey(nameof(ApplicationId))]
-    public ApplicationModel Application { get; set; }
+    public required ApplicationModel Application { get; set; }
     
     [Required]
-    public ApplicationActionTypeEnum applicationActionType { get; set; }
+    public required ApplicationActionTypeEnum ApplicationActionType { get; set; }
     
     [Required]
     public required string Metadata { get; set; }
     
     [Required]
-    public DateTime CreatedAt { get; set; }
+    public required DateTime CreatedAt { get; set; }
     
     [Required]
-    public DateTime UpdatedAt { get; set; }
+    public required DateTime UpdatedAt { get; set; }
 }

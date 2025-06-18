@@ -6,7 +6,7 @@ using Prototype.Services.Interfaces;
 
 namespace Prototype.Services.Factory;
 
-public class EmailNotificationFactoryFactoryService : IEmailNotificationFactoryService
+public class EmailNotificationFactoryService : IEmailNotificationFactoryService
 {
     private readonly SmtpClient _smtpClient;
     private readonly string _fromEmail;
@@ -14,7 +14,7 @@ public class EmailNotificationFactoryFactoryService : IEmailNotificationFactoryS
     private readonly string _frontendBaseUrl;
     private readonly IJwtTokenFactoryService _jwtTokenFactoryService;
 
-    public EmailNotificationFactoryFactoryService(
+    public EmailNotificationFactoryService(
         IOptions<SmtpSettingsPoco> smtpOptions,
         IConfiguration config,
         IJwtTokenFactoryService jwtTokenFactoryService)

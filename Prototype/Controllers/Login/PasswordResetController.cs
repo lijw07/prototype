@@ -5,6 +5,7 @@ using System.Security.Claims;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Utility;
+using static BCrypt.Net.BCrypt;
 
 namespace Prototype.Controllers.Login;
 
@@ -28,8 +29,9 @@ public class PasswordResetController(
             return BadRequest("Token does not contain a valid user ID.");
 
         var user = await userAccessor.FindUserById(userId);
+        
         if (user is null)
-            return BadRequest("Registered account does not exist.");
+            return BadRequest("User does not exist.");
 
         var userRecovery = await userAccessor.FindUserRecoveryRequest(user.UserId);
         if (userRecovery is null || userRecovery.IsUsed || userRecovery.ExpiresAt < DateTime.UtcNow)
@@ -39,7 +41,7 @@ public class PasswordResetController(
             return BadRequest("Passwords do not match.");
         
         userRecovery.IsUsed = true;
-        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(requestDto.Password);
+        user.PasswordHash = HashPassword(requestDto.Password);
         user.UpdatedAt = DateTime.UtcNow;
 
         var userActivityLog = entityFactory.CreateUserActivityLog(user, ActionTypeEnum.ChangePassword, HttpContext);

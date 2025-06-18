@@ -6,19 +6,19 @@ namespace Prototype.Models;
 public class UserApplicationModel
 {
     [Key]
-    public Guid UserApplicationId { get; set; }
+    public required Guid UserApplicationId { get; set; }
     
     [Required]
-    public Guid UserId { get; set; }
+    public required Guid UserId { get; set; }
     
     [Required]
     [ForeignKey(nameof(UserId))]
-    public UserModel User { get; set; }
+    public required UserModel User { get; set; }
     
     [Required]
-    public Guid ApplicationId { get; set; }
+    public required Guid ApplicationId { get; set; }
     
     [Required]
     [ForeignKey(nameof(ApplicationId))]
-    public ApplicationModel Application { get; set; }
+    public required ApplicationModel Application { get; set; }
 }

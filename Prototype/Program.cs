@@ -3,12 +3,6 @@ using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Prototype.Data;
-using Prototype.Data.Interface;
-using Prototype.Data.Strategy;
-using Prototype.Data.Strategy.Microsoft;
-using Prototype.Data.Strategy.Mongodb;
-using Prototype.Data.Strategy.MySql;
-using Prototype.Data.Validator;
 using Prototype.POCO;
 using Prototype.Services.Factory;
 using Prototype.Services.Interfaces;
@@ -46,35 +40,19 @@ builder.Services.Configure<SmtpSettingsPoco>(
     builder.Configuration.GetSection("Smtp"));
 
 // Register Application Services
-builder.Services.AddScoped<IEmailNotificationFactoryService, EmailNotificationFactoryFactoryService>();
+builder.Services.AddScoped<IEmailNotificationFactoryService, EmailNotificationFactoryService>();
 builder.Services.AddScoped<IEntityCreationFactoryService, EntityCreationFactoryService>();
 builder.Services.AddScoped<IUserFactoryService, UserFactoryService>();
 builder.Services.AddScoped<IUserActivityLogFactoryService, UserActivityLogFactoryService>();
 builder.Services.AddScoped<IAuditLogFactoryService, AuditLogFactoryService>();
 builder.Services.AddScoped<IUserRecoveryRequestFactoryService, UserRecoveryFactoryService>();
-builder.Services.AddScoped(typeof(IRepositoryFactoryService<>), typeof(RepositoryFactoryFactoryService<>));
-builder.Services.AddScoped<IUnitOfWorkFactoryService, UnitOfWorkFactoryFactoryService>();
+builder.Services.AddScoped(typeof(IRepositoryFactoryService<>), typeof(RepositoryFactoryService<>));
+builder.Services.AddScoped<IUnitOfWorkFactoryService, UnitOfWorkFactoryService>();
 builder.Services.AddScoped<IJwtTokenFactoryService, JwtTokenFactoryFactoryService>();
 builder.Services.AddScoped<IAuthenticatedUserAccessor, AuthenticatedUserAccessor>();
 builder.Services.AddScoped<IApplicationFactoryService, ApplicationFactoryService>();
 builder.Services.AddScoped<IApplicationLogFactoryService, ApplicationLogFactoryService>();
 builder.Services.AddScoped<IUserApplicationFactoryService, UserApplicationFactoryService>();
-builder.Services.AddScoped<IDatabaseConnectionValidator, DatabaseConnectionValidator>();
-builder.Services.AddScoped<MicrosoftSqlValidator>();
-builder.Services.AddScoped<MySqlValidator>();
-builder.Services.AddScoped<MongoDbValidator>();
-builder.Services.AddScoped<MicrosoftSqlValidator>();
-builder.Services.AddScoped<MongodbAuthStrategySelector>();
-builder.Services.AddScoped<MongodbAwsIamAuthStrategy>();
-builder.Services.AddScoped<MongodbKerberosAuthStrategy>();
-builder.Services.AddScoped<MongodbNoAuthStrategy>();
-builder.Services.AddScoped<MongodbUserPasswordStrategy>();
-builder.Services.AddScoped<MongodbX509AuthStrategy>();
-builder.Services.AddScoped<MySqlNoAuthenticationStrategy>();
-builder.Services.AddScoped<MySqlUserPasswordStrategy>();
-builder.Services.AddScoped<MicrosoftSqlServerKerberosStrategy>();
-builder.Services.AddScoped<MicrosoftSqlServerNoAuthenticationStrategy>();
-builder.Services.AddScoped<MicrosoftSqlServerUserPasswordStrategy>();
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 
@@ -107,23 +85,23 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
-        // Relative path works in Docker, no hardcoded host/port
-        c.SwaggerEndpoint("v1/swagger.json", "Prototype API V1");
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Prototype API V1");
+        c.RoutePrefix = "swagger";
     });
 }
 else
 {
     app.UseExceptionHandler("/Error");
     app.UseHsts();
-    app.UseHttpsRedirection(); // Only redirect in production!
+    app.UseHttpsRedirection();
 }
+
 app.UseRouting();
+
 // JWT middleware
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.UseStaticFiles();
-
 app.MapControllers();
 
 // Optional: If you want conventional MVC support (not needed for pure APIs)
@@ -134,9 +112,22 @@ app.MapControllerRoute(
 // 4. Run Migrations at Startup (run *before* requests are handled)
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<SentinelContext>();
-    db.Database.Migrate();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<SentinelContext>();
+        db.Database.Migrate();
+        logger.LogInformation("Database migration completed successfully.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "An error occurred while migrating or initializing the database.");
+        throw;
+    }
 }
+
+// ENSURE THE BE DOESNT CONNECT TO THE DB BEFORE IT STARTS
+app.MapGet("/health", () => Results.Ok("Healthy!"));
 
 // 5. Run the Application
 app.Run();

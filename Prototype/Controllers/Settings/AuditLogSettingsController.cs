@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
+using Prototype.DTOs;
 
 namespace Prototype.Controllers.Settings;
 
@@ -18,8 +19,8 @@ public class AuditLogSettingsController(SentinelContext context) : ControllerBas
             {
                 AuditLogId = log.AuditLogId,
                 UserId = log.UserId,
-                Username = log.User.Username,
-                ActionType = (int)log.ActionType,
+                Username = log.User!.Username,
+                ActionType = log.ActionType,
                 Metadata = log.Metadata,
                 CreatedAt = log.CreatedAt
             })

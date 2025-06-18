@@ -25,6 +25,7 @@ public class UserModel
     [Required]
     public required string PhoneNumber { get; set; }
     
+    // TODO(lijw07): Add support for permissions once roles are defined
     public Guid UserPermissionsId { get; set; }
     
     public required DateTime CreatedAt { get; set; }

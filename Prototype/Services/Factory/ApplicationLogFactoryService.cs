@@ -13,7 +13,7 @@ public class ApplicationLogFactoryService : IApplicationLogFactoryService
             ApplicationLogId = Guid.NewGuid(),
             ApplicationId = application.ApplicationId,
             Application = application,
-            applicationActionType = actionType,
+            ApplicationActionType = actionType,
             Metadata = System.Text.Json.JsonSerializer.Serialize(new
             {
                 AffectedEntities = affectedEntities,

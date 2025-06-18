@@ -6,8 +6,21 @@
       target: dev
     ports:
       - "3000:3000"
+    environment:
+      - CHOKIDAR_USE_POLLING=true
+      - BROWSER=none
+      - REACT_APP_API_URL=http://backend:8080
+    volumes:
+      - ./Prototype/ClientApp:/app
+      - /app/node_modules
     depends_on:
       - backend
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - app-network
 
@@ -16,15 +29,35 @@
       context: ./Prototype
       dockerfile: Dockerfile
       target: dev
+    container_name: CAMS-backend
     ports:
       - "8080:8080"
+      - "57404:57404"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Server=db,1433;Database=PrototypeDb;User=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True
+    volumes:
+      - ./Prototype:/src:consistent
+      - ~/.nuget/packages:/root/.nuget/packages:ro
+      - ./Prototype/obj:/src/obj
+      - ./Prototype/bin:/src/bin
+      - ./Prototype/out:/src/out
+    depends_on:
+      - db
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
     networks:
       - app-network
       - db-network
 
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: sqlserver
+    container_name: CAMS-SQL-DB
     environment:
       - ACCEPT_EULA=Y
       - SA_PASSWORD=YourStrong!Passw0rd
@@ -33,10 +66,10 @@
     volumes:
       - sql_data:/var/opt/mssql
     healthcheck:
-      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "YourStrong!Passw0rd", "-Q", "SELECT 1"]
-      interval: 30s
-      timeout: 10s
+      test: [ "CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost,1433", "-U", "sa", "-P", "YourStrong!Passw0rd", "-Q", "SELECT 1" ]
+      timeout: 5s
       retries: 5
+      start_period: 60s
     networks:
       - db-network
 

@@ -18,11 +18,11 @@ public class UserFactoryService : IUserFactoryService
             Email = requestDto.Email,
             PhoneNumber = requestDto.PhoneNumber,
             CreatedAt = DateTime.Now,
-            token = verificationCode,
+            Token = verificationCode,
         };
     }
 
-    public UserModel CreateUserFromTemporary(TemporaryUserModel tempUser)
+    public UserModel? CreateUserFromTemporary(TemporaryUserModel tempUser)
     {
         return new UserModel
         {

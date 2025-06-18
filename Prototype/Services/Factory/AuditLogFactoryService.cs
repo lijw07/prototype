@@ -7,8 +7,12 @@ namespace Prototype.Services.Factory;
 
 public class AuditLogFactoryService : IAuditLogFactoryService
 {
-    public AuditLogModel CreateAuditLog(UserModel user, ActionTypeEnum action, List<string> affectedTables)
+    public AuditLogModel CreateAuditLog(UserModel? user, ActionTypeEnum action, List<string> affectedTables)
     {
+        
+        if (user == null)
+            throw new ArgumentNullException(nameof(user), "User cannot be null when creating a UserActivityLog.");
+        
         var metadataObject = new
         {
             Action = action.ToString(),

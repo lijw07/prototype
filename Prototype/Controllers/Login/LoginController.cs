@@ -33,6 +33,10 @@ public class LoginController(
             return Unauthorized(new { message = "Invalid username or password" });
         
         var user = await userAccessor.GetUser(requestDto.Username, requestDto.Password);
+        
+        if (user is null)
+            return BadRequest(new { message = "User does not exist" });
+        
         var userActivityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.Login, HttpContext);
         await uows.UserActivityLogs.AddAsync(userActivityLog);
         await uows.SaveChangesAsync();

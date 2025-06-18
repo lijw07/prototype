@@ -7,10 +7,10 @@ namespace Prototype.Models;
 public class UserRecoveryRequestModel
 {
     [Key]
-    public Guid UserRecoveryRequestId { get; set; }
+    public required Guid UserRecoveryRequestId { get; set; }
 
     [Required]
-    public Guid UserId { get; set; }
+    public required Guid UserId { get; set; }
 
     [ForeignKey("UserId")]
     public required UserModel User { get; set; }
@@ -19,14 +19,14 @@ public class UserRecoveryRequestModel
     public required string VerificationCode { get; set; }
     
     [Required]
-    public bool IsUsed { get; set; } = false;
+    public required bool IsUsed { get; set; } = false;
     
     [Required]
-    public UserRecoveryTypeEnum RecoveryType { get; set; }
+    public required UserRecoveryTypeEnum RecoveryType { get; set; }
 
     [Required]
-    public DateTime RequestedAt { get; set; }
+    public required DateTime RequestedAt { get; set; }
 
     [Required]
-    public DateTime ExpiresAt { get; set; }
+    public required DateTime ExpiresAt { get; set; }
 }

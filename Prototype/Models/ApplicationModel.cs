@@ -11,11 +11,13 @@ public class ApplicationModel
     [Required]
     public required string ApplicationName { get; set; }
     
-    public string ApplicationDescription { get; set; }
+    public string? ApplicationDescription { get; set; }
     
+    [Required]
     public required DataSourceTypeEnum ApplicationDataSourceType { get; set; }
     
-    public ApplicationConnectionModel ApplicationConnections { get; set; }
+    [Required]
+    public required ApplicationConnectionModel ApplicationConnections { get; set; }
     
     [Required]
     public required DateTime CreatedAt { get; set; }

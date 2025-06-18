@@ -55,6 +55,23 @@
       <_ContentIncludedByDefault Remove="Views\Shared\_ValidationScriptsPartial.cshtml" />
       <_ContentIncludedByDefault Remove="Views\_ViewImports.cshtml" />
       <_ContentIncludedByDefault Remove="Views\_ViewStart.cshtml" />
+      <_ContentIncludedByDefault Remove="publish\alpine\x64\Cov_x64.config" />
+      <_ContentIncludedByDefault Remove="publish\CodeCoverage\amd64\Cov_x64.config" />
+      <_ContentIncludedByDefault Remove="publish\CodeCoverage\arm64\Cov_arm64.config" />
+      <_ContentIncludedByDefault Remove="publish\CodeCoverage\CodeCoverage.config" />
+      <_ContentIncludedByDefault Remove="publish\CodeCoverage\Cov_x86.config" />
+      <_ContentIncludedByDefault Remove="publish\macos\x64\Cov_x64.config" />
+      <_ContentIncludedByDefault Remove="publish\ubuntu\x64\Cov_x64.config" />
+      <_ContentIncludedByDefault Remove="publish\web.config" />
+      <_ContentIncludedByDefault Remove="publish\appsettings.Development.json" />
+      <_ContentIncludedByDefault Remove="publish\appsettings.json" />
+      <_ContentIncludedByDefault Remove="publish\ClientApp\package-lock.json" />
+      <_ContentIncludedByDefault Remove="publish\ClientApp\package.json" />
+      <_ContentIncludedByDefault Remove="publish\ClientApp\public\manifest.json" />
+      <_ContentIncludedByDefault Remove="publish\ClientApp\tsconfig.json" />
+      <_ContentIncludedByDefault Remove="publish\Prototype.deps.json" />
+      <_ContentIncludedByDefault Remove="publish\Prototype.runtimeconfig.json" />
+      <_ContentIncludedByDefault Remove="publish\Prototype.staticwebassets.endpoints.json" />
     </ItemGroup>
 
 </Project>

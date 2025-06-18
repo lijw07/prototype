@@ -19,16 +19,16 @@ public class EntityCreationFactoryService(
     public TemporaryUserModel CreateTemporaryUser(RegisterRequestDto dto, string token) =>
         userFactory.CreateTemporaryUser(dto, token);
 
-    public UserModel CreateUserFromTemporary(TemporaryUserModel tempUser) =>
+    public UserModel? CreateUserFromTemporary(TemporaryUserModel tempUser) =>
         userFactory.CreateUserFromTemporary(tempUser);
 
     // IUserActivityLogFactoryService
-    public UserActivityLogModel CreateUserActivityLog(UserModel user, ActionTypeEnum action, HttpContext context) =>
+    public UserActivityLogModel CreateUserActivityLog(UserModel? user, ActionTypeEnum action, HttpContext context) =>
         activityLogFactory.CreateUserActivityLog(user, action, context);
 
     // IAuditLogFactoryService
     
-    public AuditLogModel CreateAuditLog(UserModel user, ActionTypeEnum action, List<string> affectedTables) =>
+    public AuditLogModel CreateAuditLog(UserModel? user, ActionTypeEnum action, List<string> affectedTables) =>
         auditLogFactory.CreateAuditLog(user, action, affectedTables);
     
     // IUserRecoveryRequestFactoryService

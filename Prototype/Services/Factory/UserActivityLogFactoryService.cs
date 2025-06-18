@@ -7,8 +7,11 @@ namespace Prototype.Services.Factory;
 
 public class UserActivityLogFactoryService : IUserActivityLogFactoryService
 {
-    public UserActivityLogModel CreateUserActivityLog(UserModel user, ActionTypeEnum action, HttpContext httpContext)
+    public UserActivityLogModel CreateUserActivityLog(UserModel? user, ActionTypeEnum action, HttpContext httpContext)
     {
+        if (user is null)
+            throw new ArgumentNullException(nameof(user), "User cannot be null when creating a UserActivityLog.");
+        
         var userAgent = httpContext.Request.Headers.UserAgent.ToString();
         var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString();
         var uaParser = Parser.GetDefault();
@@ -21,7 +24,7 @@ public class UserActivityLogFactoryService : IUserActivityLogFactoryService
             UserActivityLogId = Guid.NewGuid(),
             UserId = user.UserId,
             User = user,
-            IPAddress = ipAddress,
+            IpAddress = ipAddress,
             DeviceInformation = $"{browser} on {os}",
             ActionType = action,
             Description = $"User {user.Username} performed {action} from IP {ipAddress} using {browser} on {os}.",

@@ -14,10 +14,10 @@ public class AuditLogModel
     
     [Required]
     [ForeignKey(nameof(UserId))]
-    public required UserModel User { get; set; }
+    public required UserModel? User { get; set; }
     
     [Required]
-    public required  ActionTypeEnum ActionType { get; set; }
+    public required ActionTypeEnum ActionType { get; set; }
     
     [Required]
     public required string Metadata { get; set; }

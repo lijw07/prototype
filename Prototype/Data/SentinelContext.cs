@@ -27,29 +27,11 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         #region ApplicationLogModel
 
         modelBuilder.Entity<ApplicationLogModel>()
-            .Property(al => al.applicationActionType)
+            .Property(al => al.ApplicationActionType)
             .HasConversion(
                 aat => aat.ToString(),
                 aat => (ApplicationActionTypeEnum)System.Enum.Parse(typeof(ApplicationActionTypeEnum), aat)
             );
-
-        #endregion
-
-        #region ApplicationModel
-
-        modelBuilder.Entity<ApplicationModel>()
-            .HasOne(a => a.ApplicationConnections)
-            .WithOne(c => c.Application)
-            .HasForeignKey<ApplicationConnectionModel>(c => c.ApplicationId)
-            .IsRequired();
-        
-        modelBuilder.Entity<ApplicationModel>()
-            .HasOne(app => app.ApplicationConnections)
-            .WithOne(conn => conn.Application)
-            .HasForeignKey<ApplicationConnectionModel>(conn => conn.ApplicationId)
-            .OnDelete(DeleteBehavior.Cascade);
-        
-        
 
         #endregion
 
@@ -66,19 +48,6 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         modelBuilder.Entity<AuthenticationModel>()
             .Property(a => a.Authentication)
             .HasConversion(a => a.ToString(), a => (AuthenticationTypeEnum)System.Enum.Parse(typeof(AuthenticationTypeEnum), a));
-
-        modelBuilder.Entity<AuthenticationModel>()
-            .HasOne(a => a.DataSource)
-            .WithOne(ds => ds.Authentication)
-            .HasForeignKey<AuthenticationModel>(a => a.DataSourceId);
-
-        #endregion
-
-        #region DataSourceModel
-
-        modelBuilder.Entity<DataSourceModel>()
-            .HasOne(ds => ds.Authentication)
-            .WithOne(a => a.DataSource);
 
         #endregion
 
@@ -125,10 +94,6 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
                 ust => ust.ToString(),
                 ust => (UserRecoveryTypeEnum)System.Enum.Parse(typeof(UserRecoveryTypeEnum), ust)
             );
-
-        modelBuilder.Entity<UserRecoveryRequestModel>()
-            .Property(urr => urr.VerificationCode)
-            .HasMaxLength(128);
 
         modelBuilder.Entity<UserRecoveryRequestModel>()
             .Property(urr => urr.IsUsed)

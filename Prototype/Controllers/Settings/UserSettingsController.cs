@@ -5,6 +5,7 @@ using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
 using Prototype.Utility;
+using static BCrypt.Net.BCrypt;
 
 namespace Prototype.Controllers.Settings;
 
@@ -48,10 +49,10 @@ public class UserSettingsController(
         if (!request.NewPassword.Equals(request.ReTypeNewPassword))
             return BadRequest(new { message = "New password does not match." });
         
-        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+        if (!Verify(request.CurrentPassword, user.PasswordHash))
             return BadRequest(new { message = "Current password is incorrect." });
 
-        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.PasswordHash = HashPassword(request.NewPassword);
         user.UpdatedAt = DateTime.Now;
 
         var userActivityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.ChangePassword, HttpContext);
