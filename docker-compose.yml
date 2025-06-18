@@ -4,6 +4,7 @@
       context: ./Prototype/ClientApp
       dockerfile: Dockerfile
       target: dev
+    container_name: cams-frontend
     ports:
       - "3000:3000"
     environment:
@@ -29,7 +30,7 @@
       context: ./Prototype
       dockerfile: Dockerfile
       target: dev
-    container_name: CAMS-backend
+    container_name: cams-backend
     ports:
       - "8080:8080"
       - "57404:57404"
@@ -57,7 +58,7 @@
 
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: CAMS-SQL-DB
+    container_name: cams-sql-db
     environment:
       - ACCEPT_EULA=Y
       - SA_PASSWORD=YourStrong!Passw0rd
@@ -70,6 +71,17 @@
       timeout: 5s
       retries: 5
       start_period: 60s
+    networks:
+      - db-network
+
+  dbgate:
+    image: dbgate/dbgate
+    container_name: cams-dbgate-gui
+    restart: always
+    ports:
+      - "8081:3000"
+    depends_on:
+      - db
     networks:
       - db-network
 

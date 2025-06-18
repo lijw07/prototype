@@ -108,14 +108,29 @@ public class EmailNotificationFactoryService : IEmailNotificationFactoryService
 
     private async Task SendEmailAsync(string recipientEmail, string subject, string body)
     {
-        var mailMessage = new MailMessage(_fromEmail, recipientEmail)
+        try
         {
-            Subject = subject,
-            Body = body,
-            IsBodyHtml = true
-        };
+            var mailMessage = new MailMessage(_fromEmail, recipientEmail)
+            {
+                Subject = subject,
+                Body = body,
+                IsBodyHtml = true
+            };
 
-        await _smtpClient.SendMailAsync(mailMessage);
+            await _smtpClient.SendMailAsync(mailMessage);
+        }
+        catch (SmtpFailedRecipientException ex)
+        {
+            Console.WriteLine($"[Email Error] Failed recipient: {ex.FailedRecipient} | {ex.Message}");
+        }
+        catch (SmtpException ex)
+        {
+            Console.WriteLine($"[Email Error] SMTP error: {ex.StatusCode} | {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Email Error] General failure: {ex.Message}");
+        }
     }
 
     private void ValidateSmtpSettings(SmtpSettingsPoco smtp)
