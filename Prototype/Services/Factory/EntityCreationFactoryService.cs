@@ -43,7 +43,7 @@ public class EntityCreationFactoryService(
         applicationFactory.UpdateApplication(application, requestDto);
 
     // IApplicationLogFactoryService
-    public ApplicationLogModel CreateApplicationLog(ApplicationModel application, ApplicationActionTypeEnum actionType, List<string> affectedEntities) =>
+    public ApplicationLogModel CreateApplicationLog(ApplicationModel application, ActionTypeEnum actionType, List<string> affectedEntities) =>
         applicationLogFactory.CreateApplicationLog(application, actionType, affectedEntities);
     
     // IUserApplicationFactoryService

@@ -4,7 +4,7 @@
       context: ./Prototype/ClientApp
       dockerfile: Dockerfile
       target: dev
-    container_name: cams-frontend
+    container_name: "${COMPOSE_PROJECT_NAME:-prototype}-frontend"
     ports:
       - "3000:3000"
     environment:
@@ -30,7 +30,7 @@
       context: ./Prototype
       dockerfile: Dockerfile
       target: dev
-    container_name: cams-backend
+    container_name: "${COMPOSE_PROJECT_NAME:-prototype}-backend"
     ports:
       - "8080:8080"
       - "57404:57404"
@@ -58,7 +58,7 @@
 
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: cams-sql-db
+    container_name: "${COMPOSE_PROJECT_NAME:-prototype}-database"
     environment:
       - ACCEPT_EULA=Y
       - SA_PASSWORD=YourStrong!Passw0rd
@@ -76,7 +76,7 @@
 
   dbgate:
     image: dbgate/dbgate
-    container_name: cams-dbgate-gui
+    container_name: "${COMPOSE_PROJECT_NAME:-prototype}-dbgate-gui"
     restart: always
     ports:
       - "8081:3000"

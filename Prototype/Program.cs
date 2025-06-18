@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Prototype.Data;
+using Prototype.Database.Interface;
+using Prototype.Database.MicrosoftSQLServer;
 using Prototype.POCO;
 using Prototype.Services.Factory;
 using Prototype.Services.Interfaces;
@@ -53,6 +55,12 @@ builder.Services.AddScoped<IAuthenticatedUserAccessor, AuthenticatedUserAccessor
 builder.Services.AddScoped<IApplicationFactoryService, ApplicationFactoryService>();
 builder.Services.AddScoped<IApplicationLogFactoryService, ApplicationLogFactoryService>();
 builder.Services.AddScoped<IUserApplicationFactoryService, UserApplicationFactoryService>();
+builder.Services.AddSingleton<IConnectionStrategy, UserPasswordStrategy>();
+builder.Services.AddSingleton<IConnectionStrategy, NoAuthStrategy>();
+builder.Services.AddSingleton<IConnectionStrategy, AzureAdPasswordStrategy>();
+builder.Services.AddSingleton<IConnectionStrategy, AzureAdIntegratedStrategy>();
+builder.Services.AddSingleton<SqlServerConnectionStrategy>();
+
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 

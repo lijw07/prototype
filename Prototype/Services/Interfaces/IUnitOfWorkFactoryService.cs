@@ -13,6 +13,7 @@ public interface IUnitOfWorkFactoryService
     IRepositoryFactoryService<UserRecoveryRequestModel> UserRecoveryRequests { get; }
     IRepositoryFactoryService<TemporaryUserModel> TemporaryUser { get; }
     IRepositoryFactoryService<UserApplicationModel> UserApplications { get; }
+    IRepositoryFactoryService<ApplicationConnectionModel> ApplicationConnections { get; }
     
     Task<int> SaveChangesAsync();
 }

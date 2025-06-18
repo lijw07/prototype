@@ -22,5 +22,17 @@ public enum ActionTypeEnum
     Enable,
     Disable,
     ForgotUsername,
-    ForgotPassword
+    ForgotPassword,
+    ConnectionAttempt,
+    ConnectionSuccess,
+    ConnectionFailure,
+    ConnectionChanged,
+    ApplicationAdded,
+    ApplicationRemoved,
+    StatusChanged,
+    HealthCheck,
+    ResponseTimeMeasured,
+    ErrorLogged,
+    Other,
+    ApplicationUpdated
 }

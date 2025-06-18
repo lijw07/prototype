@@ -14,5 +14,6 @@ public class UnitOfWorkFactoryService(SentinelContext context) : IUnitOfWorkFact
     public IRepositoryFactoryService<UserRecoveryRequestModel> UserRecoveryRequests { get; } = new RepositoryFactoryService<UserRecoveryRequestModel>(context);
     public IRepositoryFactoryService<TemporaryUserModel> TemporaryUser { get; } = new RepositoryFactoryService<TemporaryUserModel>(context);
     public IRepositoryFactoryService<UserApplicationModel> UserApplications { get; } = new RepositoryFactoryService<UserApplicationModel>(context);
+    public IRepositoryFactoryService<ApplicationConnectionModel> ApplicationConnections { get; } = new RepositoryFactoryService<ApplicationConnectionModel>(context);
     public Task<int> SaveChangesAsync() => context.SaveChangesAsync();
 }

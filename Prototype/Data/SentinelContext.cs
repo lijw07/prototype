@@ -27,10 +27,10 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         #region ApplicationLogModel
 
         modelBuilder.Entity<ApplicationLogModel>()
-            .Property(al => al.ApplicationActionType)
+            .Property(al => al.ActionType)
             .HasConversion(
                 aat => aat.ToString(),
-                aat => (ApplicationActionTypeEnum)System.Enum.Parse(typeof(ApplicationActionTypeEnum), aat)
+                aat => (ActionTypeEnum)System.Enum.Parse(typeof(ActionTypeEnum), aat)
             );
 
         #endregion

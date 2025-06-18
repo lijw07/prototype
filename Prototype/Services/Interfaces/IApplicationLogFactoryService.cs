@@ -5,5 +5,5 @@ namespace Prototype.Services.Interfaces;
 
 public interface IApplicationLogFactoryService
 {
-    ApplicationLogModel CreateApplicationLog(ApplicationModel application, ApplicationActionTypeEnum actionType, List<String> affectedEntities);
+    ApplicationLogModel CreateApplicationLog(ApplicationModel application, ActionTypeEnum actionType, List<string> affectedEntities);
 }

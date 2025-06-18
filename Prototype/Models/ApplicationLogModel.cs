@@ -17,7 +17,7 @@ public class ApplicationLogModel
     public required ApplicationModel Application { get; set; }
     
     [Required]
-    public required ApplicationActionTypeEnum ApplicationActionType { get; set; }
+    public required ActionTypeEnum ActionType { get; set; }
     
     [Required]
     public required string Metadata { get; set; }
