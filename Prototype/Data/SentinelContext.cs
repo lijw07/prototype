@@ -72,20 +72,29 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
             .HasConversion(at => at.ToString(), at => (ActionTypeEnum)System.Enum.Parse(typeof(ActionTypeEnum), at));
 
         #endregion
-
+        
         #region UserApplicationModel
 
         modelBuilder.Entity<UserApplicationModel>()
-            .HasKey(ua => new { ua.UserId, ua.ApplicationId });
-        
+            .HasOne(ua => ua.User)
+            .WithMany()
+            .HasForeignKey(ua => ua.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         modelBuilder.Entity<UserApplicationModel>()
             .HasOne(ua => ua.Application)
             .WithMany()
             .HasForeignKey(ua => ua.ApplicationId)
             .OnDelete(DeleteBehavior.Cascade);
-        
-        #endregion
 
+        modelBuilder.Entity<UserApplicationModel>()
+            .HasOne(ua => ua.ApplicationConnection)
+            .WithMany()
+            .HasForeignKey(ua => ua.ApplicationConnectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        #endregion
+        
         #region UserRecoveryRequestModel
 
         modelBuilder.Entity<UserRecoveryRequestModel>()

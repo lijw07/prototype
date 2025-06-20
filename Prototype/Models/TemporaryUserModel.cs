@@ -26,8 +26,8 @@ public class TemporaryUserModel
     public required string PhoneNumber { get; set; }
     
     [Required]
-    public required string Token { get; set; }
+    public required DateTime CreatedAt { get; set; }
     
     [Required]
-    public required DateTime CreatedAt { get; set; }
+    public required string Token { get; set; }
 }

@@ -1,75 +1,101 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Prototype.DTOs;
-using Prototype.Enum;
-using Prototype.Models;
-using Prototype.Services.Interfaces;
+using Prototype.Services;
 using Prototype.Utility;
-using static BCrypt.Net.BCrypt;
 
 namespace Prototype.Controllers.Settings;
 
-[Authorize]
-[ApiController]
 [Route("settings/user")]
-public class UserSettingsController(
-    IEntityCreationFactoryService entityCreationFactory,
-    IAuthenticatedUserAccessor userAccessor,
-    IUnitOfWorkFactoryService uows) : ControllerBase
+public class UserSettingsController : BaseSettingsController
 {
-    
-    [HttpGet]
-    public async Task<IActionResult> GetUserSettings()
+    public UserSettingsController(
+        IAuthenticatedUserAccessor userAccessor,
+        ValidationService validationService,
+        TransactionService transactionService,
+        ILogger<UserSettingsController> logger)
+        : base(logger, userAccessor, validationService, transactionService)
     {
-        var user = await userAccessor.GetCurrentUserAsync(User);
-        
-        if (user is null)
-            return NotFound("User not found.");
-        
-        return Ok(new UserDto
-        {
-            UserId = user.UserId,
-            FirstName = user.FirstName,
-            LastName = user.LastName,
-            Username = user.Username,
-            Email = user.Email,
-            PhoneNumber = user.PhoneNumber,
-
-        });
     }
 
-    [HttpPut("change-password")]
-    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto request)
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto dto)
     {
-        var user = await userAccessor.GetCurrentUserAsync(User);
-        
-        if (user is null)
-            return NotFound("User not found.");
-
-        if (!request.NewPassword.Equals(request.ReTypeNewPassword))
-            return BadRequest(new { message = "New password does not match." });
-        
-        if (!Verify(request.CurrentPassword, user.PasswordHash))
-            return BadRequest(new { message = "Current password is incorrect." });
-
-        user.PasswordHash = HashPassword(request.NewPassword);
-        user.UpdatedAt = DateTime.Now;
-
-        var userActivityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.ChangePassword, HttpContext);
-
-        var affectedEntities = new List<string>
+        return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            nameof(UserModel),
-            nameof(UserActivityLogModel)
-        };
-        
-        var auditLog = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.ChangePassword, affectedEntities);
+            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            if (currentUser == null)
+                return new { success = false, message = "User not authenticated" };
 
-        uows.Users.Update(user);
-        await uows.UserActivityLogs.AddAsync(userActivityLog);
-        await uows.AuditLogs.AddAsync(auditLog);
-        await uows.SaveChangesAsync();
+            // Verify current password
+            if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, currentUser.PasswordHash))
+            {
+                return new { success = false, message = "Current password is incorrect" };
+            }
 
-        return Ok(new { message = "Password updated successfully." });
+            return await _transactionService!.ExecuteInTransactionAsync(() =>
+            {
+                // Update password
+                currentUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+                currentUser.UpdatedAt = DateTime.UtcNow;
+
+                // Note: TransactionService handles the context, so we return the result
+                return Task.FromResult(new { success = true, message = "Password changed successfully" });
+            });
+        }, "changing password");
+    }
+
+    [HttpPut("update-profile")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UserSettingsRequestDto dto)
+    {
+        return await ExecuteWithErrorHandlingAsync<object>(async () =>
+        {
+            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            if (currentUser == null)
+                return new { success = false, message = "User not authenticated" };
+
+            return await _transactionService!.ExecuteInTransactionAsync(() =>
+            {
+                // Update user profile
+                currentUser.FirstName = dto.FirstName;
+                currentUser.LastName = dto.LastName;
+                currentUser.Email = dto.Email;
+                currentUser.UpdatedAt = DateTime.UtcNow;
+
+                var userDto = new UserDto
+                {
+                    UserId = currentUser.UserId,
+                    FirstName = currentUser.FirstName,
+                    LastName = currentUser.LastName,
+                    Username = currentUser.Username,
+                    Email = currentUser.Email,
+                    PhoneNumber = currentUser.PhoneNumber
+                };
+
+                return Task.FromResult(new { success = true, message = "Profile updated successfully", user = userDto });
+            });
+        }, "updating profile");
+    }
+
+    [HttpGet("profile")]
+    public async Task<IActionResult> GetProfile()
+    {
+        return await ExecuteWithErrorHandlingAsync<object>(async () =>
+        {
+            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            if (currentUser == null)
+                return new { success = false, message = "User not authenticated" };
+
+            var userDto = new UserDto
+            {
+                UserId = currentUser.UserId,
+                FirstName = currentUser.FirstName,
+                LastName = currentUser.LastName,
+                Username = currentUser.Username,
+                Email = currentUser.Email,
+                PhoneNumber = currentUser.PhoneNumber
+            };
+
+            return new { success = true, user = userDto };
+        }, "retrieving profile");
     }
 }

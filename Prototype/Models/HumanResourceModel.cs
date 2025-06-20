@@ -20,6 +20,7 @@ public class HumanResourceModel
     public required Guid EmployeeNumber { get; set; }
     
     [Required]
+    [StringLength(100)]
     public required string Location { get; set; }
     
     [Required]
@@ -29,5 +30,5 @@ public class HumanResourceModel
     public required DateTime CreatedAt { get; set; }
     
     [Required]
-    public required DateTime UpdateAt { get; set; }
+    public required DateTime UpdatedAt { get; set; }
 }

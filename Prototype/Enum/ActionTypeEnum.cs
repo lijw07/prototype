@@ -34,5 +34,8 @@ public enum ActionTypeEnum
     ResponseTimeMeasured,
     ErrorLogged,
     Other,
-    ApplicationUpdated
+    ApplicationUpdated,
+    VerifyUser,
+    ResetPassword,
+    Register
 }

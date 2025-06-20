@@ -1,4 +1,4 @@
-﻿services:
+services:
   frontend:
     build:
       context: ./Prototype/ClientApp
@@ -11,19 +11,29 @@
       - CHOKIDAR_USE_POLLING=true
       - BROWSER=none
       - REACT_APP_API_URL=http://backend:8080
+      - NODE_ENV=development
+      - GENERATE_SOURCEMAP=true
     volumes:
       - ./Prototype/ClientApp:/app
       - /app/node_modules
+      - frontend_cache:/app/.cache
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:3000" ]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 60s
     networks:
       - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
 
   backend:
     build:
@@ -33,63 +43,172 @@
     container_name: "${COMPOSE_PROJECT_NAME:-prototype}-backend"
     ports:
       - "8080:8080"
-      - "57404:57404"
+      - "57404:57404"  # Debug port
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__DefaultConnection=Server=db,1433;Database=PrototypeDb;User=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True
+      # Database Configuration
+      - DB_HOST=db
+      - DB_PORT=1433
+      - DB_NAME=PrototypeDb
+      - DB_USER=sa
+      - DB_PASSWORD=${DB_PASSWORD:-YourStrong!Passw0rd}
+      # JWT Configuration
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-super-secret-jwt-key-that-is-at-least-32-characters-long!}
+      - JWT_ISSUER=PrototypeApp
+      - JWT_AUDIENCE=PrototypeUsers
+      - JWT_EXPIRES_IN_MINUTES=60
+      - JWT_REFRESH_EXPIRES_IN_DAYS=7
+      # SMTP Configuration
+      - SMTP_HOST=${SMTP_HOST:-sandbox.smtp.mailtrap.io}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-noreply@prototype.local}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      # Security Configuration
+      - Encryption__Key=JO8DvlqUnbEA33qJKl7S42bupqpG0BhoQXTjbSg2hX4=
+      # Frontend Configuration
+      - FRONTEND_BASE_URL=http://localhost:3000
+      # Logging
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft.AspNetCore=Warning
     volumes:
       - ./Prototype:/src:consistent
       - ~/.nuget/packages:/root/.nuget/packages:ro
-      - ./Prototype/obj:/src/obj
-      - ./Prototype/bin:/src/bin
-      - ./Prototype/out:/src/out
+      - backend_cache:/src/obj
+      - backend_bin:/src/bin
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
-      interval: 10s
-      timeout: 3s
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
       retries: 5
-      start_period: 15s
+      start_period: 40s
     networks:
       - app-network
       - db-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
 
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: "${COMPOSE_PROJECT_NAME:-prototype}-database"
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=YourStrong!Passw0rd
+      - SA_PASSWORD=${DB_PASSWORD:-YourStrong!Passw0rd}
+      - MSSQL_PID=Developer
     ports:
       - "1433:1433"
     volumes:
       - sql_data:/var/opt/mssql
     healthcheck:
-      test: [ "CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost,1433", "-U", "sa", "-P", "YourStrong!Passw0rd", "-Q", "SELECT 1" ]
-      timeout: 5s
+      test: [ "CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/1433' || exit 1" ]
+      interval: 30s
+      timeout: 10s
       retries: 5
       start_period: 60s
     networks:
       - db-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
 
-  dbgate:
-    image: dbgate/dbgate
-    container_name: "${COMPOSE_PROJECT_NAME:-prototype}-dbgate-gui"
-    restart: always
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    container_name: "${COMPOSE_PROJECT_NAME:-prototype}-cloudbeaver"
+    restart: unless-stopped
     ports:
-      - "8081:3000"
+      - "8978:8978"
+    volumes:
+      - cloudbeaver_workspace:/opt/cloudbeaver/workspace
+      - cloudbeaver_conf:/opt/cloudbeaver/conf
+    environment:
+      - CB_SERVER_NAME=CloudBeaver Prototype
+      - CB_SERVER_URL=http://localhost:8978
+      - CB_ADMIN_NAME=${CLOUDBEAVER_ADMIN_NAME:-admin}
+      - CB_ADMIN_PASSWORD=${CLOUDBEAVER_ADMIN_PASSWORD:-admin123}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - db-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+
+  redis:
+    image: redis:7-alpine
+    container_name: "${COMPOSE_PROJECT_NAME:-prototype}-redis"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+
+  nginx:
+    image: nginx:alpine
+    container_name: "${COMPOSE_PROJECT_NAME:-prototype}-nginx"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - app-network
+    restart: unless-stopped
+    profiles:
+      - production
 
 networks:
   app-network:
     driver: bridge
+    name: "${COMPOSE_PROJECT_NAME:-prototype}-app-network"
   db-network:
     driver: bridge
+    name: "${COMPOSE_PROJECT_NAME:-prototype}-db-network"
 
 volumes:
   sql_data:
+    name: "${COMPOSE_PROJECT_NAME:-prototype}-sql-data"
+  redis_data:
+    name: "${COMPOSE_PROJECT_NAME:-prototype}-redis-data"
+  frontend_cache:
+    name: "${COMPOSE_PROJECT_NAME:-prototype}-frontend-cache"
+  backend_cache:
+    name: "${COMPOSE_PROJECT_NAME:-prototype}-backend-cache"
+  backend_bin:
+    name: "${COMPOSE_PROJECT_NAME:-prototype}-backend-bin"
+  cloudbeaver_workspace:
+    name: "${COMPOSE_PROJECT_NAME:-prototype}-cloudbeaver-workspace"
+  cloudbeaver_conf:
+    name: "${COMPOSE_PROJECT_NAME:-prototype}-cloudbeaver-conf"

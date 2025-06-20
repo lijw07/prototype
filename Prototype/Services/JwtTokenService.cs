@@ -7,14 +7,22 @@ using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
 
-namespace Prototype.Services.Factory;
+namespace Prototype.Services;
 
-public class JwtTokenFactoryFactoryService(IConfiguration config) : IJwtTokenFactoryService
+public class JwtTokenService : IJwtTokenService
 {
-    private readonly string _key = config["JwtSettings:Key"]!;
-    private readonly string _issuer = config["JwtSettings:Issuer"]!;
-    private readonly string _audience = config["JwtSettings:Audience"]!;
-    private readonly double _defaultExpiry = double.Parse(config["JwtSettings:ExpiresInMinutes"]!);
+    private readonly string _key;
+    private readonly string _issuer;
+    private readonly string _audience;
+    private readonly double _defaultExpiry;
+
+    public JwtTokenService(IConfiguration config)
+    {
+        _key = config["JwtSettings:Key"] ?? throw new InvalidOperationException("JwtSettings:Key is missing");
+        _issuer = config["JwtSettings:Issuer"] ?? throw new InvalidOperationException("JwtSettings:Issuer is missing");
+        _audience = config["JwtSettings:Audience"] ?? throw new InvalidOperationException("JwtSettings:Audience is missing");
+        _defaultExpiry = double.Parse(config["JwtSettings:ExpiresInMinutes"] ?? "60");
+    }
 
     public string GenerateToken(IEnumerable<Claim> claims, double? expiresInMinutes = null)
     {
@@ -32,18 +40,18 @@ public class JwtTokenFactoryFactoryService(IConfiguration config) : IJwtTokenFac
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    //TODO: Add permission claims
     public string BuildUserClaims(UserModel user, ActionTypeEnum action)
     {
-        //var permission = user.UserPermissions.Permission.PermissionId.ToString();
-
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-            new Claim("ActionType", action.ToString())
+            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.Email, user.Email),
+            new Claim("ActionType", action.ToString()),
+            new Claim("iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
         };
 
-        return GenerateToken(claims, 15);
+        return GenerateToken(claims, _defaultExpiry);
     }
 
     public string BuildUserClaims(RegisterRequestDto requestDto, ActionTypeEnum action)
@@ -51,7 +59,9 @@ public class JwtTokenFactoryFactoryService(IConfiguration config) : IJwtTokenFac
         var claims = new[]
         {
             new Claim(ClaimTypes.Email, requestDto.Email),
-            new Claim("ActionType", action.ToString())
+            new Claim(ClaimTypes.Name, requestDto.Username),
+            new Claim("ActionType", action.ToString()),
+            new Claim("iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
         };
         
         return GenerateToken(claims, 15);
@@ -60,6 +70,10 @@ public class JwtTokenFactoryFactoryService(IConfiguration config) : IJwtTokenFac
     public bool ValidateToken(string token, out ClaimsPrincipal principal)
     {
         principal = null!;
+        
+        if (string.IsNullOrWhiteSpace(token))
+            return false;
+
         var tokenHandler = new JwtSecurityTokenHandler();
         var key = Encoding.UTF8.GetBytes(_key);
 
@@ -67,10 +81,13 @@ public class JwtTokenFactoryFactoryService(IConfiguration config) : IJwtTokenFac
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(key),
-            ValidateIssuer = false,
-            ValidateAudience = false,
+            ValidateIssuer = true,
+            ValidIssuer = _issuer,
+            ValidateAudience = true,
+            ValidAudience = _audience,
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromMinutes(1)
+            ClockSkew = TimeSpan.FromMinutes(1),
+            RequireExpirationTime = true
         };
 
         try
@@ -78,7 +95,11 @@ public class JwtTokenFactoryFactoryService(IConfiguration config) : IJwtTokenFac
             principal = tokenHandler.ValidateToken(token, validationParams, out _);
             return true;
         }
-        catch
+        catch (SecurityTokenException)
+        {
+            return false;
+        }
+        catch (ArgumentException)
         {
             return false;
         }

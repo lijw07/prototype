@@ -5,7 +5,7 @@ using Prototype.Models;
 
 namespace Prototype.Services.Interfaces;
 
-public interface IJwtTokenFactoryService
+public interface IJwtTokenService
 {
     string BuildUserClaims(UserModel user, ActionTypeEnum action);
     string BuildUserClaims(RegisterRequestDto requestDto, ActionTypeEnum action);

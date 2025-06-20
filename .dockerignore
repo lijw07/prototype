@@ -1,26 +1,68 @@
-﻿**/.dockerignore
-**/.env
-**/.git
-**/.gitignore
-**/.project
-**/.settings
-**/.toolstarget
-**/.vs
-**/.vscode
-**/.idea
-**/*.*proj.user
-**/*.dbmdl
-**/*.jfm
-**/azds.yaml
-**/bin
-**/charts
-**/docker-compose*
-**/Dockerfile*
-**/node_modules
-**/npm-debug.log
-**/obj
-**/out
-**/secrets.dev.yaml
-**/values.dev.yaml
-LICENSE
+﻿# Git
+.git
+.gitignore
 README.md
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# .NET
+bin/
+obj/
+out/
+.vs/
+.vscode/
+*.user
+*.suo
+*.cache
+*.tmp
+*.log
+.dotnet/
+.nuget/
+
+# Node.js (for ClientApp)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+build/
+dist/
+.cache/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Test results
+TestResults/
+test-results.xml

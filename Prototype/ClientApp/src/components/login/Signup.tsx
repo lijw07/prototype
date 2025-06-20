@@ -1,4 +1,5 @@
 import React, { useState, FormEvent, ChangeEvent } from 'react';
+import { authApi } from '../../services/api';
 
 const RegisterForm: React.FC = () => {
     const [formData, setFormData] = useState({
@@ -52,27 +53,13 @@ const RegisterForm: React.FC = () => {
 
             console.log("Sending register payload:", payload);
 
-            const response = await fetch('/Register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
+            const data = await authApi.register(payload);
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                setError(data.message || 'Registration failed.');
-                return;
-            }
-
-            setSuccess(data.message);
-
-            setTimeout(() => {
-                window.location.href = '/login';
-            }, 3000);
-        } catch (err) {
+            setSuccess(data.message || 'Registration successful!');
+            
+        } catch (err: any) {
             console.error('Registration error:', err);
-            setError('Something went wrong.');
+            setError(err.message || 'Registration failed.');
         }
     };
 
