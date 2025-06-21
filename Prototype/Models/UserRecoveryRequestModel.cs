@@ -16,7 +16,7 @@ public class UserRecoveryRequestModel
     public required UserModel User { get; set; }
 
     [Required]
-    public required string VerificationCode { get; set; }
+    public required string Token { get; set; }
     
     [Required]
     public required bool IsUsed { get; set; } = false;

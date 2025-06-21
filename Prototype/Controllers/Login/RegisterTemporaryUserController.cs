@@ -1,40 +1,40 @@
 using Microsoft.AspNetCore.Mvc;
 using Prototype.DTOs;
-using Prototype.Enum;
 using Prototype.Services.Interfaces;
-using Prototype.Utility;
 
 namespace Prototype.Controllers.Login;
 
 [ApiController]
 [Route("Register")]
-public class RegisterTemporaryUserController(
-    IUnitOfWorkFactoryService uows,
-    IJwtTokenFactoryService jwtTokenFactoryService,
-    IEntityCreationFactoryService tempUserFactory,
-    IEmailNotificationFactoryService emailNotificationFactoryService,
-    IAuthenticatedUserAccessor userAccessor) : ControllerBase
+public class RegisterTemporaryUserController : ControllerBase
 {
+    private readonly IUserAccountService _userAccountService;
+    private readonly ILogger<RegisterTemporaryUserController> _logger;
+
+    public RegisterTemporaryUserController(
+        IUserAccountService userAccountService,
+        ILogger<RegisterTemporaryUserController> logger)
+    {
+        _userAccountService = userAccountService;
+        _logger = logger;
+    }
+
     [HttpPost]
     public async Task<IActionResult> Register([FromBody] RegisterRequestDto requestDto)
     {
-        if (await userAccessor.EmailExistsAsync(requestDto.Email) || await userAccessor.TemporaryEmailExistsAsync(requestDto.Email))
-            return Conflict(new { message = "Email already exists!" });
-        
-        if (await userAccessor.UsernameExistsAsync(requestDto.Username) || await userAccessor.TemporaryUsernameExistsAsync(requestDto.Username))
-            return Conflict(new { message = "Username already in use!" });
-        
-        if (!requestDto.Password.Equals(requestDto.ReEnterPassword))
-            return Conflict(new { message = "Password does not match!" });
-        
-        var token = jwtTokenFactoryService.BuildUserClaims(requestDto, ActionTypeEnum.CreateUser);
-        var tempUser = tempUserFactory.CreateTemporaryUser(requestDto, token);
-        
-        await uows.TemporaryUser.AddAsync(tempUser);
-        await uows.SaveChangesAsync();
-        
-        await emailNotificationFactoryService.SendVerificationEmail(tempUser.Email, token);
-        
-        return Ok(new { id = tempUser.TemporaryUserId, message = "Registration successful. Please check your email to verify your account." });
+        try
+        {
+            var result = await _userAccountService.RegisterTemporaryUserAsync(requestDto);
+            
+            if (!result.Success)
+                return BadRequest(result);
+                
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during registration for email: {Email}", requestDto.Email);
+            return StatusCode(500, new { message = "An internal error occurred" });
+        }
     }
 }

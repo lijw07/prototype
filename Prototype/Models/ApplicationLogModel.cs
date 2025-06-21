@@ -12,9 +12,8 @@ public class ApplicationLogModel
     [Required]
     public required Guid ApplicationId { get; set; }
     
-    [Required]
     [ForeignKey(nameof(ApplicationId))]
-    public required ApplicationModel Application { get; set; }
+    public ApplicationModel? Application { get; set; }
     
     [Required]
     public required ActionTypeEnum ActionType { get; set; }

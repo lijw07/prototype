@@ -1,47 +1,38 @@
 using Microsoft.AspNetCore.Mvc;
 using Prototype.DTOs;
 using Prototype.Services.Interfaces;
-using Prototype.Enum;
-using Prototype.Utility;
 
 namespace Prototype.Controllers.Login;
 
 [ApiController]
-[Route("[controller]")]
-public class LoginController(
-    IEntityCreationFactoryService entityCreationFactory,
-    IUnitOfWorkFactoryService uows,
-    IAuthenticatedUserAccessor userAccessor,
-    IJwtTokenFactoryService jwtTokenFactoryService) : ControllerBase
+[Route("login")]
+public class LoginController : ControllerBase
 {
+    private readonly IAuthenticationService _authService;
+    private readonly ILogger<LoginController> _logger;
+
+    public LoginController(IAuthenticationService authService, ILogger<LoginController> logger)
+    {
+        _authService = authService;
+        _logger = logger;
+    }
+
     [HttpPost]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto requestDto)
     {
-        var usernameMissing = string.IsNullOrWhiteSpace(requestDto.Username);
-        var passwordMissing = string.IsNullOrWhiteSpace(requestDto.Password);
-
-        if (usernameMissing && passwordMissing)
-            return BadRequest(new { message = "Username and password cannot be empty" });
-
-        if (usernameMissing)
-            return BadRequest(new { message = "Username cannot be empty" });
-
-        if (passwordMissing)
-            return BadRequest(new { message = "Password cannot be empty" });
-        
-        if (!await userAccessor.ValidateUser(requestDto.Username, requestDto.Password))
-            return Unauthorized(new { message = "Invalid username or password" });
-        
-        var user = await userAccessor.GetUser(requestDto.Username, requestDto.Password);
-        
-        if (user is null)
-            return BadRequest(new { message = "User does not exist" });
-        
-        var userActivityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.Login, HttpContext);
-        await uows.UserActivityLogs.AddAsync(userActivityLog);
-        await uows.SaveChangesAsync();
-        
-        var token = jwtTokenFactoryService.BuildUserClaims(user, ActionTypeEnum.Login);
-        return Ok(new { token });
+        try
+        {
+            var result = await _authService.AuthenticateAsync(requestDto);
+            
+            if (!result.Success)
+                return BadRequest(result);
+                
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during login for username: {Username}", requestDto.Username);
+            return StatusCode(500, new { message = "An internal error occurred" });
+        }
     }
 }

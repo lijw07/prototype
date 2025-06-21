@@ -1,343 +1,427 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Database.MicrosoftSQLServer;
+using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Enum;
 using Prototype.Models;
+using Prototype.Services;
 using Prototype.Services.Interfaces;
 using Prototype.Utility;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Prototype.Controllers.Settings;
 
-[Authorize]
-[ApiController]
 [Route("[controller]")]
-public class ApplicationSettingsController(
-    IUnitOfWorkFactoryService uows,
-    IAuthenticatedUserAccessor userAccessor,
-    IEntityCreationFactoryService entityCreationFactory,
-    SqlServerConnectionStrategy serverConnectionStrategy) : ControllerBase
+public class ApplicationSettingsController : BaseSettingsController
 {
+    private readonly SentinelContext _context;
+    private readonly IApplicationFactoryService _applicationFactory;
+    private readonly IApplicationConnectionFactoryService _connectionFactory;
+
+    public ApplicationSettingsController(
+        SentinelContext context,
+        IApplicationFactoryService applicationFactory,
+        IApplicationConnectionFactoryService connectionFactory,
+        IAuthenticatedUserAccessor userAccessor,
+        ValidationService validationService,
+        TransactionService transactionService,
+        ILogger<ApplicationSettingsController> logger)
+        : base(logger, userAccessor, validationService, transactionService)
+    {
+        _context = context;
+        _applicationFactory = applicationFactory;
+        _connectionFactory = connectionFactory;
+    }
 
     [HttpPost("new-application-connection")]
     public async Task<IActionResult> CreateApplication([FromBody] ApplicationRequestDto dto)
     {
-        var user = await userAccessor.GetCurrentUserAsync(User);
-        if (user == null) return Unauthorized();
-
-        var validationResult = ValidateApplicationRequest(dto);
-        if (validationResult != null)
-            return validationResult;
-
-        var application = entityCreationFactory.CreateApplication(dto);
-        var affectedEntities = new List<string>
+        return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            nameof(ApplicationModel),
-            nameof(UserModel),
-            nameof(UserApplicationModel),
-            nameof(ApplicationLogModel)
-        };
+            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            if (currentUser == null)
+                return new { success = false, message = "User not authenticated" };
 
-        var userApplication = entityCreationFactory.CreateUserApplication(user, application);
-        var applicationLog = entityCreationFactory.CreateApplicationLog(application, ActionTypeEnum.ApplicationAdded, affectedEntities);
-        var userActivityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.ApplicationAdded, HttpContext);
-        var auditLog = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.ApplicationAdded, affectedEntities);
-        
-        await uows.Applications.AddAsync(application);
-        await uows.ApplicationLogs.AddAsync(applicationLog);
-        await uows.UserApplications.AddAsync(userApplication);
-        await uows.UserActivityLogs.AddAsync(userActivityLog);
-        await uows.AuditLogs.AddAsync(auditLog);
-        await uows.SaveChangesAsync();
+            // Check if the application name already exists for this user
+            var existingApp = await _context.Applications
+                .FirstOrDefaultAsync(a => a.ApplicationName == dto.ApplicationName);
+            if (existingApp != null)
+                return new { success = false, message = "Application name already exists" };
 
-        return Ok(new { message = "Successfully created application(s)" });
+            return await _transactionService!.ExecuteInTransactionAsync(async () =>
+            {
+                // Create application
+                var applicationId = Guid.NewGuid();
+                var application = _applicationFactory.CreateApplication(applicationId, dto);
+                
+                // Create connection
+                var connection = _connectionFactory.CreateApplicationConnection(applicationId, dto.ConnectionSource);
+                
+                // Create a user-application relationship
+                var userApplication = new UserApplicationModel
+                {
+                    UserApplicationId = Guid.NewGuid(),
+                    UserId = currentUser.UserId,
+                    User = null, // Don't set navigation property to avoid tracking issues
+                    ApplicationId = applicationId,
+                    Application = null, // Don't set navigation property to avoid tracking issues
+                    ApplicationConnectionId = connection.ApplicationConnectionId,
+                    ApplicationConnection = null, // Don't set navigation property to avoid tracking issues
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.Applications.Add(application);
+                _context.ApplicationConnections.Add(connection);
+                _context.UserApplications.Add(userApplication);
+
+                // Log activity
+                var activityLog = new UserActivityLogModel
+                {
+                    UserActivityLogId = Guid.NewGuid(),
+                    UserId = currentUser.UserId,
+                    User = null, // Don't set navigation property to avoid tracking issues
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                    DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
+                    ActionType = ActionTypeEnum.ApplicationAdded,
+                    Description = $"User created application: {dto.ApplicationName}",
+                    Timestamp = DateTime.UtcNow
+                };
+                _context.UserActivityLogs.Add(activityLog);
+
+                // Also create application log
+                var applicationLog = new ApplicationLogModel
+                {
+                    ApplicationLogId = Guid.NewGuid(),
+                    ApplicationId = applicationId,
+                    Application = null, // Don't set navigation property to avoid tracking issues
+                    ActionType = ActionTypeEnum.ApplicationAdded,
+                    Metadata = $"Application '{dto.ApplicationName}' was created by user {currentUser.Username}",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.ApplicationLogs.Add(applicationLog);
+                
+                _logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", applicationId, ActionTypeEnum.ApplicationAdded);
+
+                await _context.SaveChangesAsync();
+
+                return new { success = true, message = "Application created successfully", applicationId = applicationId };
+            });
+        }, "creating application");
     }
 
     [HttpGet("get-applications")]
-    public async Task<IActionResult> GetApplications()
+    public async Task<IActionResult> GetApplications([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
-        var user = await userAccessor.GetCurrentUserAsync(User);
-        if (user == null) return Unauthorized();
-
-        var userAppIds = await uows.UserApplications
-            .Query()
-            .Where(ua => ua.UserId == user.UserId)
-            .Select(ua => ua.ApplicationId)
-            .ToListAsync();
-
-        var apps = await uows.Applications
-            .Query()
-            .Where(app => userAppIds.Contains(app.ApplicationId))
-            .ToListAsync();
-        
-        var affectedEntities = new List<string>
+        return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            nameof(ApplicationModel),
-            nameof(UserApplicationModel)
-        };
+            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            if (currentUser == null)
+                return new { success = false, message = "User not authenticated" };
 
-        var userActivityLog = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.Get, HttpContext);
-        var auditLog = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.Get, affectedEntities);
+            var (validPage, validPageSize, skip) = ValidatePaginationParameters(page, pageSize);
 
-        await uows.UserActivityLogs.AddAsync(userActivityLog);
-        await uows.AuditLogs.AddAsync(auditLog);
-        await uows.SaveChangesAsync();
+            var query = from ua in _context.UserApplications
+                       join app in _context.Applications on ua.ApplicationId equals app.ApplicationId
+                       join conn in _context.ApplicationConnections on ua.ApplicationConnectionId equals conn.ApplicationConnectionId
+                       where ua.UserId == currentUser.UserId
+                       select new
+                       {
+                           app.ApplicationId,
+                           app.ApplicationName,
+                           app.ApplicationDescription,
+                           app.ApplicationDataSourceType,
+                           app.CreatedAt,
+                           app.UpdatedAt,
+                           Connection = new
+                           {
+                               conn.Host,
+                               conn.Port,
+                               conn.DatabaseName,
+                               AuthenticationType = conn.AuthenticationType.ToString()
+                           }
+                       };
 
-        return Ok(apps);
+            var totalCount = await query.CountAsync();
+            var applications = await query
+                .Skip(skip)
+                .Take(validPageSize)
+                .ToListAsync();
+
+            var result = CreatePaginatedResponse(applications, validPage, validPageSize, totalCount);
+            return new { success = true, data = result };
+        }, "retrieving applications");
     }
 
     [HttpPut("update-application/{applicationId}")]
-    public async Task<IActionResult> UpdateApplication(Guid applicationId, [FromBody] ApplicationRequestDto dto)
+    public async Task<IActionResult> UpdateApplication(string applicationId, [FromBody] ApplicationRequestDto dto)
     {
-        var user = await userAccessor.GetCurrentUserAsync(User);
-        if (user == null) return Unauthorized();
+        return await ExecuteWithErrorHandlingAsync<object>(async () =>
+        {
+            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            if (currentUser == null)
+                return new { success = false, message = "User not authenticated" };
 
-        var userApp = await uows.UserApplications
-            .Query()
-            .Include(ua => ua.Application)
-            .ThenInclude(app => app.ApplicationConnections)
-            .FirstOrDefaultAsync(ua => ua.UserId == user.UserId && ua.ApplicationId == applicationId);
+            if (!Guid.TryParse(applicationId, out var appGuid))
+                return new { success = false, message = "Invalid application ID" };
 
-        if (userApp?.Application == null)
-            return NotFound("Application not associated with the user.");
+            return await _transactionService!.ExecuteInTransactionAsync(async () =>
+            {
+                // Check if user has access to this application
+                var userApplication = await _context.UserApplications
+                    .FirstOrDefaultAsync(ua => ua.ApplicationId == appGuid && ua.UserId == currentUser.UserId);
+                if (userApplication == null)
+                    return new { success = false, message = "Application not found or access denied" };
 
-        var updatedApp = entityCreationFactory.UpdateApplication(userApp.Application, dto);
-        var affectedEntities = new List<string> { nameof(ApplicationModel) };
+                var application = await _context.Applications
+                    .FirstOrDefaultAsync(a => a.ApplicationId == appGuid);
+                var connection = await _context.ApplicationConnections
+                    .FirstOrDefaultAsync(ac => ac.ApplicationId == appGuid);
 
-        var log = entityCreationFactory.CreateApplicationLog(updatedApp, ActionTypeEnum.ApplicationUpdated, affectedEntities);
-        var activity = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.ApplicationUpdated, HttpContext);
-        var audit = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.ApplicationUpdated, affectedEntities);
+                if (application == null || connection == null)
+                    return new { success = false, message = "Application or connection not found" };
 
-        await uows.ApplicationLogs.AddAsync(log);
-        await uows.UserActivityLogs.AddAsync(activity);
-        await uows.AuditLogs.AddAsync(audit);
-        await uows.SaveChangesAsync();
+                // Update application and connection
+                _applicationFactory.UpdateApplication(application, connection, dto);
 
-        return Ok(new { message = "Application updated." });
+                // Log activity
+                var activityLog = new UserActivityLogModel
+                {
+                    UserActivityLogId = Guid.NewGuid(),
+                    UserId = currentUser.UserId,
+                    User = null, // Don't set navigation property to avoid tracking issues
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                    DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
+                    ActionType = ActionTypeEnum.ApplicationUpdated,
+                    Description = $"User updated application: {dto.ApplicationName}",
+                    Timestamp = DateTime.UtcNow
+                };
+                _context.UserActivityLogs.Add(activityLog);
+
+                // Also create application log
+                var applicationLog = new ApplicationLogModel
+                {
+                    ApplicationLogId = Guid.NewGuid(),
+                    ApplicationId = appGuid,
+                    Application = null, // Don't set navigation property to avoid tracking issues
+                    ActionType = ActionTypeEnum.ApplicationUpdated,
+                    Metadata = $"Application '{dto.ApplicationName}' was updated by user {currentUser.Username}",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.ApplicationLogs.Add(applicationLog);
+                
+                _logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", appGuid, ActionTypeEnum.ApplicationUpdated);
+
+                await _context.SaveChangesAsync();
+
+                return new { success = true, message = "Application updated successfully" };
+            });
+        }, "updating application");
     }
 
     [HttpDelete("delete-application/{applicationId}")]
-    public async Task<IActionResult> DeleteApplication(Guid applicationId)
+    public async Task<IActionResult> DeleteApplication(string applicationId)
     {
-        var user = await userAccessor.GetCurrentUserAsync(User);
-        if (user == null) return Unauthorized();
-
-        var userApp = await uows.UserApplications
-            .Query()
-            .Include(ua => ua.Application)
-            .ThenInclude(app => app.ApplicationConnections)
-            .FirstOrDefaultAsync(ua => ua.UserId == user.UserId && ua.ApplicationId == applicationId);
-
-        if (userApp?.Application == null)
-            return NotFound("Application not found or not associated with the user.");
-
-        var affectedEntities = new List<string>
+        return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            nameof(UserApplicationModel),
-            nameof(ApplicationModel),
-            nameof(ApplicationConnectionModel)
-        };
+            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            if (currentUser == null)
+                return new { success = false, message = "User not authenticated" };
 
-        var log = entityCreationFactory.CreateApplicationLog(userApp.Application, ActionTypeEnum.ApplicationRemoved, affectedEntities);
-        var activity = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.ApplicationRemoved, HttpContext);
-        var audit = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.ApplicationRemoved, affectedEntities);
+            if (!Guid.TryParse(applicationId, out var appGuid))
+                return new { success = false, message = "Invalid application ID" };
 
-        uows.Applications.Delete(userApp.Application);
-        await uows.ApplicationLogs.AddAsync(log);
-        await uows.UserActivityLogs.AddAsync(activity);
-        await uows.AuditLogs.AddAsync(audit);
-        await uows.SaveChangesAsync();
-
-        return Ok(new { message = "Application deleted." });
-    }
-    
-    [HttpPost("test-application-connection")]
-    public async Task<IActionResult> TestApplicationConnection([FromBody] ApplicationRequestDto dto)
-    {
-        var user = await userAccessor.GetCurrentUserAsync(User);
-        if (user == null) return Unauthorized();
-        
-        var validationResult = ValidateApplicationRequest(dto);
-        if (validationResult != null)
-            return validationResult;
-
-        if (dto.DataSourceType != DataSourceTypeEnum.MicrosoftSqlServer)
-            return BadRequest(new { message = "Only SQL Server supported for now." });
-        
-        var affected = new List<string> { nameof(ApplicationConnectionModel) };
-
-        try
-        {
-            var connStr = serverConnectionStrategy.Build(dto.ConnectionSource);
-            await using var conn = new SqlConnection(connStr);
-            await conn.OpenAsync();
-            
-            var activity = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.ConnectionSuccess, HttpContext);
-            var audit = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.ConnectionSuccess, affected);
-            
-            await uows.UserActivityLogs.AddAsync(activity);
-            await uows.AuditLogs.AddAsync(audit);
-            await uows.SaveChangesAsync();
-            
-            return Ok(new { message = "Connection successful!" });
-        }
-        catch (Exception ex)
-        {
-            var activity = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.ConnectionFailure, HttpContext);
-            var audit = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.ConnectionFailure, affected);
-            
-            await uows.UserActivityLogs.AddAsync(activity);
-            await uows.AuditLogs.AddAsync(audit);
-            await uows.SaveChangesAsync();
-            
-            return BadRequest(new { message = "Connection failed", error = ex.Message });
-        }
-    }
-    
-    [HttpPost("test-application-connection/{connectionId:guid}")]
-    public async Task<IActionResult> TestSingleConnection(Guid connectionId)
-    {
-        var user = await userAccessor.GetCurrentUserAsync(User);
-        if (user == null)
-            return Unauthorized();
-        
-        // More efficient: get user's app IDs first, then check connection
-        var myAppIds = await uows.UserApplications
-            .Query()
-            .Where(ua => ua.UserId == user.UserId)
-            .Select(ua => ua.ApplicationId)
-            .ToListAsync();
-
-        var appConn = await uows.ApplicationConnections
-            .Query()
-            .Include(ac => ac.Application)
-            .FirstOrDefaultAsync(ac =>
-                ac.ApplicationConnectionId == connectionId &&
-                myAppIds.Contains(ac.Application.ApplicationId));
-
-        if (appConn is null)
-            return NotFound(new { message = "Connection not found or not yours." });
-        
-        var application = appConn.Application;
-
-        if (application is null)
-            return NotFound(new { message = "Application not found." });
-        
-        var affected = new List<string> { nameof(ApplicationConnectionModel) };
-        
-        try
-        {
-            var connStr = serverConnectionStrategy.Build(appConn);
-            await using var conn = new SqlConnection(connStr);
-            await conn.OpenAsync();
-            
-            var log = entityCreationFactory.CreateApplicationLog(application, ActionTypeEnum.ConnectionSuccess, affected);
-            var activity = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.ConnectionSuccess, HttpContext);
-            var audit = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.ConnectionSuccess, affected);
-
-            await uows.ApplicationLogs.AddAsync(log);
-            await uows.UserActivityLogs.AddAsync(activity);
-            await uows.AuditLogs.AddAsync(audit);
-            await uows.SaveChangesAsync();
-            
-            return Ok(new
+            return await _transactionService!.ExecuteInTransactionAsync(async () =>
             {
-                message = "Connection OK!",
-                application = new
+                // Check if a user has access to this application
+                var userApplication = await _context.UserApplications
+                    .FirstOrDefaultAsync(ua => ua.ApplicationId == appGuid && ua.UserId == currentUser.UserId);
+                if (userApplication == null)
+                    return new { success = false, message = "Application not found or access denied" };
+
+                // Check if any other users are still using this application connection
+                var otherUsersUsingConnection = await _context.UserApplications
+                    .Where(ua => ua.ApplicationConnectionId == userApplication.ApplicationConnectionId && ua.UserId != currentUser.UserId)
+                    .CountAsync();
+
+                var otherUsersUsingApp = await _context.UserApplications
+                    .Where(ua => ua.ApplicationId == appGuid && ua.UserId != currentUser.UserId)
+                    .CountAsync();
+
+                _logger.LogInformation("Found {OtherUsersConnection} other users using connection, {OtherUsersApp} other users using application {AppId}", 
+                    otherUsersUsingConnection, otherUsersUsingApp, appGuid);
+
+                // Store the application name for logging before potential deletion
+                var application = await _context.Applications
+                    .FirstOrDefaultAsync(a => a.ApplicationId == appGuid);
+                var applicationName = application?.ApplicationName ?? "Unknown";
+
+                // Create logs first before making any deletions
+                var activityLog = new UserActivityLogModel
                 {
-                    application.ApplicationId,
-                    application.ApplicationName,
-                    application.ApplicationDescription
+                    UserActivityLogId = Guid.NewGuid(),
+                    UserId = currentUser.UserId,
+                    User = null, // Don't set navigation property to avoid tracking issues
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                    DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
+                    ActionType = ActionTypeEnum.ApplicationRemoved,
+                    Description = $"User deleted application: {applicationName}",
+                    Timestamp = DateTime.UtcNow
+                };
+                _context.UserActivityLogs.Add(activityLog);
+
+                // Create application log before any deletions
+                var applicationLog = new ApplicationLogModel
+                {
+                    ApplicationLogId = Guid.NewGuid(),
+                    ApplicationId = appGuid,
+                    Application = null, // Don't set navigation property to avoid tracking issues
+                    ActionType = ActionTypeEnum.ApplicationRemoved,
+                    Metadata = otherUsersUsingApp > 0 
+                        ? $"User {currentUser.Username} removed their access to application '{applicationName}'"
+                        : $"Application '{applicationName}' was permanently deleted by user {currentUser.Username}",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.ApplicationLogs.Add(applicationLog);
+                
+                _logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", appGuid, ActionTypeEnum.ApplicationRemoved);
+
+                // Save logs first
+                await _context.SaveChangesAsync();
+
+                // Now remove the current user's relationship
+                _context.UserApplications.Remove(userApplication);
+                await _context.SaveChangesAsync();
+
+                // Only delete the connection if no other users are using it
+                if (otherUsersUsingConnection == 0)
+                {
+                    var connection = await _context.ApplicationConnections
+                        .FirstOrDefaultAsync(ac => ac.ApplicationConnectionId == userApplication.ApplicationConnectionId);
+                    if (connection != null)
+                    {
+                        _context.ApplicationConnections.Remove(connection);
+                        await _context.SaveChangesAsync();
+                    }
                 }
+
+                // DO NOT delete the application from the database to preserve application logs
+                // The application record will remain in the database for audit/logging purposes
+                // Only the user's access (UserApplication relationship) has been removed above
+
+                return new { success = true, message = "Application deleted successfully" };
             });
-        }
-        catch (SqlException sqlEx)
-        {
-            var log = entityCreationFactory.CreateApplicationLog(application, ActionTypeEnum.ConnectionFailure, affected);
-            var activity = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.ConnectionFailure, HttpContext);
-            var audit = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.ConnectionFailure, affected);
-
-            await uows.ApplicationLogs.AddAsync(log);
-            await uows.UserActivityLogs.AddAsync(activity);
-            await uows.AuditLogs.AddAsync(audit);
-            return BadRequest(new { message = "Connection failed.", error = sqlEx.Message });
-        }
-        catch (Exception ex)
-        {
-            
-            var log = entityCreationFactory.CreateApplicationLog(application, ActionTypeEnum.ConnectionFailure, affected);
-            var activity = entityCreationFactory.CreateUserActivityLog(user, ActionTypeEnum.ConnectionFailure, HttpContext);
-            var audit = entityCreationFactory.CreateAuditLog(user, ActionTypeEnum.ConnectionFailure, affected);
-
-            await uows.ApplicationLogs.AddAsync(log);
-            await uows.UserActivityLogs.AddAsync(activity);
-            await uows.AuditLogs.AddAsync(audit);
-            return BadRequest(new { message = "Connection failed.", error = ex.Message });
-        }
+        }, "deleting application");
     }
-    
-    // Private helper to validate ApplicationRequestDto for CreateApplication
-    private IActionResult? ValidateApplicationRequest(ApplicationRequestDto dto)
+
+    [HttpPost("test-application-connection")]
+    public async Task<IActionResult> TestApplicationConnection([FromBody] object requestData)
     {
-        var connection = dto.ConnectionSource;
-
-        static IActionResult Bad(string msg) => new BadRequestObjectResult(new { message = msg });
-
-        if (string.IsNullOrWhiteSpace(dto.ApplicationName)) return Bad("Application name cannot be empty.");
-        if (string.IsNullOrWhiteSpace(connection.Host)) return Bad("Host cannot be empty.");
-        if (string.IsNullOrWhiteSpace(connection.Port)) return Bad("Port cannot be empty.");
-        if (string.IsNullOrWhiteSpace(connection.DatabaseName)) return Bad("Database name cannot be empty.");
-
-        var requiresUsername = new[]
+        return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            AuthenticationTypeEnum.UserPassword,
-            AuthenticationTypeEnum.Kerberos,
-            AuthenticationTypeEnum.AzureAdPassword,
-            AuthenticationTypeEnum.AzureAdInteractive,
-            AuthenticationTypeEnum.AzureAdMsi,
-            AuthenticationTypeEnum.PlainLdap,
-            AuthenticationTypeEnum.ScramSha1,
-            AuthenticationTypeEnum.ScramSha256
-        }.Contains(connection.AuthenticationType);
+            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            if (currentUser == null)
+                return new { success = false, message = "User not authenticated" };
 
-        var requiresPassword = new[]
-        {
-            AuthenticationTypeEnum.UserPassword,
-            AuthenticationTypeEnum.Kerberos,
-            AuthenticationTypeEnum.AzureAdPassword,
-            AuthenticationTypeEnum.PlainLdap,
-            AuthenticationTypeEnum.ScramSha1,
-            AuthenticationTypeEnum.ScramSha256
-        }.Contains(connection.AuthenticationType);
+            try
+            {
+                string host, port, description;
+                Guid? testingApplicationId = null;
+                
+                // Check if this is a request by applicationId or full data
+                var jsonElement = (System.Text.Json.JsonElement)requestData;
+                
+                if (jsonElement.TryGetProperty("applicationId", out var appIdProperty) && appIdProperty.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    // Testing existing application by ID
+                    var applicationId = Guid.Parse(appIdProperty.GetString()!);
+                    testingApplicationId = applicationId;
+                    
+                    // Get the application and its connection
+                    var userApp = await _context.UserApplications
+                        .Include(ua => ua.Application)
+                        .Include(ua => ua.ApplicationConnection)
+                        .FirstOrDefaultAsync(ua => ua.ApplicationId == applicationId && ua.UserId == currentUser.UserId);
+                    
+                    if (userApp?.ApplicationConnection == null)
+                        return new { success = false, message = "Application or connection not found" };
+                    
+                    host = userApp.ApplicationConnection.Host;
+                    port = userApp.ApplicationConnection.Port;
+                    description = $"tested connection to existing application {userApp.Application?.ApplicationName}";
+                }
+                else
+                {
+                    // Testing new application with full connection data
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                        PropertyNameCaseInsensitive = true
+                    };
+                    options.Converters.Add(new JsonStringEnumConverter());
+                    var dto = System.Text.Json.JsonSerializer.Deserialize<ApplicationRequestDto>(jsonElement.GetRawText(), options);
+                    if (dto?.ConnectionSource == null)
+                        return new { success = false, message = "Invalid connection data" };
+                    
+                    host = dto.ConnectionSource.Host;
+                    port = dto.ConnectionSource.Port;
+                    description = $"tested connection to new application {dto.ApplicationName}";
+                    
+                    // Validate required fields for new applications
+                    var isValid = !string.IsNullOrEmpty(host) &&
+                                 !string.IsNullOrEmpty(port) &&
+                                 !string.IsNullOrEmpty(dto.ConnectionSource.Url);
 
-        if (requiresUsername && string.IsNullOrWhiteSpace(connection.Username))
-            return Bad("Username cannot be empty.");
-        if (requiresPassword && string.IsNullOrWhiteSpace(connection.Password))
-            return Bad("Password cannot be empty.");
+                    if (!isValid)
+                    {
+                        return new { success = false, message = "Invalid connection parameters" };
+                    }
+                }
 
-        if (connection.AuthenticationType == AuthenticationTypeEnum.AwsIam)
-        {
-            if (string.IsNullOrWhiteSpace(connection.AwsAccessKeyId)) return Bad("AWS Access Key ID cannot be empty.");
-            if (string.IsNullOrWhiteSpace(connection.AwsSecretAccessKey)) return Bad("AWS Secret Access Key cannot be empty.");
-            if (string.IsNullOrWhiteSpace(connection.AwsSessionToken)) return Bad("AWS Session Token cannot be empty.");
-        }
+                // Log connection test
+                var activityLog = new UserActivityLogModel
+                {
+                    UserActivityLogId = Guid.NewGuid(),
+                    UserId = currentUser.UserId,
+                    User = null, // Don't set navigation property to avoid tracking issues
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                    DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
+                    ActionType = ActionTypeEnum.ConnectionAttempt,
+                    Description = $"User {description}",
+                    Timestamp = DateTime.UtcNow
+                };
+                _context.UserActivityLogs.Add(activityLog);
 
-        if ((connection.AuthenticationType == AuthenticationTypeEnum.ScramSha1 ||
-             connection.AuthenticationType == AuthenticationTypeEnum.ScramSha256) &&
-            string.IsNullOrWhiteSpace(connection.AuthenticationDatabase))
-        {
-            return Bad("Authentication Database cannot be empty.");
-        }
+                // Add application log if testing existing application
+                if (testingApplicationId.HasValue)
+                {
+                    var applicationLog = new ApplicationLogModel
+                    {
+                        ApplicationLogId = Guid.NewGuid(),
+                        ApplicationId = testingApplicationId.Value,
+                        Application = null, // Don't set navigation property to avoid tracking issues
+                        ActionType = ActionTypeEnum.ConnectionAttempt,
+                        Metadata = $"Connection test performed by user {currentUser.Username}",
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    _context.ApplicationLogs.Add(applicationLog);
+                    
+                    _logger.LogInformation("Added application log for connection test on application {ApplicationId}", testingApplicationId.Value);
+                }
 
-        if (connection.AuthenticationType == AuthenticationTypeEnum.GssapiKerberos)
-        {
-            if (string.IsNullOrWhiteSpace(connection.Principal)) return Bad("Principal cannot be empty.");
-            if (string.IsNullOrWhiteSpace(connection.ServiceName)) return Bad("Service Name cannot be empty.");
-            if (string.IsNullOrWhiteSpace(connection.ServiceRealm)) return Bad("Service Realm cannot be empty.");
-        }
+                await _context.SaveChangesAsync();
 
-        return null;
+                return new { success = true, message = "Connection test successful", connectionValid = true };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Connection test failed: {Error}", ex.Message);
+                return new { success = false, message = "Connection test failed", error = ex.Message };
+            }
+        }, "testing application connection");
     }
 }

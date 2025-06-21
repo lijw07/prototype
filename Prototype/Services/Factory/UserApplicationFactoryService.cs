@@ -5,7 +5,7 @@ namespace Prototype.Services.Factory;
 
 public class UserApplicationFactoryService : IUserApplicationFactoryService
 {
-    public UserApplicationModel CreateUserApplication(UserModel user, ApplicationModel application)
+    public UserApplicationModel CreateUserApplication(UserModel user, ApplicationModel application, ApplicationConnectionModel connectionSource)
     {
         return new UserApplicationModel
         {
@@ -13,7 +13,10 @@ public class UserApplicationFactoryService : IUserApplicationFactoryService
             UserId = user.UserId,
             User = user,
             ApplicationId = application.ApplicationId,
-            Application = application
+            Application = application,
+            ApplicationConnectionId = connectionSource.ApplicationConnectionId,
+            ApplicationConnection = connectionSource,
+            CreatedAt = DateTime.UtcNow
         };
     }
 }

@@ -12,6 +12,7 @@ yarn-error.log*
 /.env.development.local
 /.env.test.local
 /.env.production.local
+.env
 
 # ------------------------------------------
 # ASP.NET Core / .NET
@@ -101,3 +102,4 @@ lcov-report/
 /Prototype/ClientApp/.env.test.local
 /Prototype/ClientApp/.env.production.local
 /Prototype/obj
+/CLAUDE.md

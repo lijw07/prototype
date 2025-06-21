@@ -17,7 +17,7 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
     public DbSet<UserActivityLogModel> UserActivityLogs { get; set; }
     public DbSet<UserApplicationModel> UserApplications { get; set; }
     public DbSet<UserModel> Users { get; set; }
-    public DbSet<UserPermissionModel> UserPermissions { get; set; }
+    public DbSet<UserRoleModel> UserRoles { get; set; }
     public DbSet<UserRecoveryRequestModel> UserRecoveryRequests { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -32,6 +32,13 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
                 aat => aat.ToString(),
                 aat => (ActionTypeEnum)System.Enum.Parse(typeof(ActionTypeEnum), aat)
             );
+
+        // Configure the relationship to not cascade delete (preserve logs even when application is deleted)
+        modelBuilder.Entity<ApplicationLogModel>()
+            .HasOne(al => al.Application)
+            .WithMany()
+            .HasForeignKey(al => al.ApplicationId)
+            .OnDelete(DeleteBehavior.NoAction);
 
         #endregion
 
@@ -72,20 +79,29 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
             .HasConversion(at => at.ToString(), at => (ActionTypeEnum)System.Enum.Parse(typeof(ActionTypeEnum), at));
 
         #endregion
-
+        
         #region UserApplicationModel
 
         modelBuilder.Entity<UserApplicationModel>()
-            .HasKey(ua => new { ua.UserId, ua.ApplicationId });
-        
+            .HasOne(ua => ua.User)
+            .WithMany()
+            .HasForeignKey(ua => ua.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         modelBuilder.Entity<UserApplicationModel>()
             .HasOne(ua => ua.Application)
             .WithMany()
             .HasForeignKey(ua => ua.ApplicationId)
             .OnDelete(DeleteBehavior.Cascade);
-        
-        #endregion
 
+        modelBuilder.Entity<UserApplicationModel>()
+            .HasOne(ua => ua.ApplicationConnection)
+            .WithMany()
+            .HasForeignKey(ua => ua.ApplicationConnectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        #endregion
+        
         #region UserRecoveryRequestModel
 
         modelBuilder.Entity<UserRecoveryRequestModel>()

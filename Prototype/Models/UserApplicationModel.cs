@@ -7,18 +7,25 @@ public class UserApplicationModel
 {
     [Key]
     public required Guid UserApplicationId { get; set; }
-    
+
     [Required]
     public required Guid UserId { get; set; }
     
-    [Required]
     [ForeignKey(nameof(UserId))]
     public required UserModel User { get; set; }
-    
+
     [Required]
     public required Guid ApplicationId { get; set; }
     
-    [Required]
     [ForeignKey(nameof(ApplicationId))]
     public required ApplicationModel Application { get; set; }
+
+    [Required]
+    public required Guid ApplicationConnectionId { get; set; }
+    
+    [ForeignKey(nameof(ApplicationConnectionId))]
+    public required ApplicationConnectionModel ApplicationConnection { get; set; }
+
+    [Required]
+    public required DateTime CreatedAt { get; set; }
 }
