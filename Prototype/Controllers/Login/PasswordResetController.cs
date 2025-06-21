@@ -5,7 +5,7 @@ using Prototype.Services.Interfaces;
 namespace Prototype.Controllers.Login;
 
 [ApiController]
-[Route("[controller]")]
+[Route("PasswordReset")]
 public class PasswordResetController : ControllerBase
 {
     private readonly IUserAccountService _userAccountService;

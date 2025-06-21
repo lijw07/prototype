@@ -1,8 +1,10 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Data.SqlClient;
 using Prototype.Data;
 using Prototype.Database.Interface;
 using Prototype.Database.MicrosoftSQLServer;
@@ -18,6 +20,7 @@ var builder = WebApplication.CreateBuilder(args);
 // 1. Configure Services (Dependency Injection)
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
+    options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 builder.Services.AddEndpointsApiExplorer();
@@ -71,6 +74,7 @@ builder.Services.AddScoped<PasswordEncryptionService>();
 builder.Services.AddScoped<ValidationService>();
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<IUserAccountService, UserAccountService>();
+builder.Services.AddScoped<IUserRoleService, UserRoleService>();
 builder.Services.AddScoped<DatabaseSeeder>();
 
 // Add HTTP Context Accessor
@@ -145,40 +149,88 @@ using (var scope = app.Services.CreateScope())
     var context = scope.ServiceProvider.GetRequiredService<SentinelContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     
-    try
+    // Add retry logic for database initialization
+    var maxRetries = 10;
+    var retryDelay = TimeSpan.FromSeconds(5);
+    
+    for (int i = 0; i < maxRetries; i++)
     {
-        logger.LogInformation("Initializing database...");
-        
-        // Use EnsureCreated for simple database setup (alternative to migrations)
-        var created = context.Database.EnsureCreated();
-        if (created)
+        try
         {
-            logger.LogInformation("Database 'PrototypeDb' created successfully with all tables.");
-        }
-        else
-        {
-            logger.LogInformation("Database 'PrototypeDb' already exists.");
-        }
-        
-        // Test database connection
-        var canConnect = context.Database.CanConnect();
-        if (canConnect)
-        {
-            logger.LogInformation("Database connection verified successfully.");
+            logger.LogInformation("Database initialization attempt {Attempt} of {MaxAttempts}...", i + 1, maxRetries);
             
-            // Seed database with initial data
-            var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
-            await seeder.SeedAsync();
+            // First ensure the database exists by creating it if necessary
+            try
+            {
+                // Create database using a master connection
+                var masterConnectionString = connectionString.Replace($"Database={dbName}", "Database=master");
+                using (var connection = new SqlConnection(masterConnectionString))
+                {
+                    await connection.OpenAsync();
+                    using (var command = connection.CreateCommand())
+                    {
+                        command.CommandText = $"IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '{dbName}') CREATE DATABASE [{dbName}]";
+                        await command.ExecuteNonQueryAsync();
+                        logger.LogInformation("Database existence check completed.");
+                    }
+                }
+            }
+            catch (Exception dbCreateEx)
+            {
+                logger.LogWarning(dbCreateEx, "Could not create database using master connection. Will try EnsureCreated.");
+            }
+            
+            // Apply migrations (this will create the database schema)
+            // Note: Don't use EnsureCreated with migrations - they conflict!
+            try
+            {
+                await context.Database.MigrateAsync();
+                logger.LogInformation("Database migrations applied successfully.");
+            }
+            catch (Exception migrationEx)
+            {
+                logger.LogWarning(migrationEx, "Migration failed, possibly due to existing schema. Checking if database is accessible...");
+                
+                // If migration fails, just check if we can connect
+                var isConnected = await context.Database.CanConnectAsync();
+                if (!isConnected)
+                {
+                    throw new Exception("Cannot connect to database after migration failure", migrationEx);
+                }
+            }
+            
+            // Test database connection
+            var canConnect = await context.Database.CanConnectAsync();
+            if (canConnect)
+            {
+                logger.LogInformation("Database connection verified successfully.");
+                
+                // Seed database with initial data
+                var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
+                await seeder.SeedAsync();
+                
+                // Success - exit the retry loop
+                break;
+            }
+            else
+            {
+                logger.LogError("Unable to connect to database.");
+                throw new Exception("Database connection failed");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            logger.LogError("Unable to connect to database.");
+            logger.LogError(ex, "Database initialization attempt {Attempt} failed", i + 1);
+            
+            if (i == maxRetries - 1)
+            {
+                logger.LogError("All database initialization attempts failed. Application cannot start.");
+                throw;
+            }
+            
+            logger.LogInformation("Waiting {Delay} seconds before retry...", retryDelay.TotalSeconds);
+            await Task.Delay(retryDelay);
         }
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "An error occurred while applying database migrations.");
-        throw; // Re-throw to prevent application startup with database issues
     }
 }
 
@@ -191,8 +243,11 @@ if (app.Environment.IsDevelopment())
     app.UseCors("AllowAll");
 }
 
-// Rate limiting (before authentication)
-app.UseMiddleware<RateLimitingMiddleware>();
+// Rate limiting (before authentication) - disabled in development
+if (!app.Environment.IsDevelopment())
+{
+    app.UseMiddleware<RateLimitingMiddleware>();
+}
 
 // Standard middleware
 app.UseAuthentication();

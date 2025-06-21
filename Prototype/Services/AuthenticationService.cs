@@ -57,6 +57,10 @@ public class AuthenticationService : IAuthenticationService
                 };
             }
 
+            // Update last login timestamp
+            user.LastLogin = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.UtcNow;
+
             // Create activity log
             var userActivityLog = new UserActivityLogModel
             {

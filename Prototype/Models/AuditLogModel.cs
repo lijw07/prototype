@@ -12,9 +12,8 @@ public class AuditLogModel
     [Required]
     public required Guid UserId { get; set; }
     
-    [Required]
     [ForeignKey(nameof(UserId))]
-    public required UserModel? User { get; set; }
+    public UserModel? User { get; set; }
     
     [Required]
     public required ActionTypeEnum ActionType { get; set; }

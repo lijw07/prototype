@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, User, Shield, Eye, EyeOff } from 'lucide-react';
+import { Settings, User, Shield, Eye, EyeOff, Edit, Save, X, Trash2, AlertTriangle } from 'lucide-react';
 import { userApi } from '../../services/api';
 
 // Types based on your controllers
@@ -15,7 +15,15 @@ interface UserSettings {
 const SettingsDashboard: React.FC = () => {
     const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
     const [loading, setLoading] = useState(false);
-    const [showPasswordForm, setShowPasswordForm] = useState(false);
+    const [isEditingProfile, setIsEditingProfile] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    
+    // Edit profile form state
+    const [editForm, setEditForm] = useState({
+        firstName: '',
+        lastName: '',
+        email: ''
+    });
 
     // Password change form state
     const [passwordForm, setPasswordForm] = useState({
@@ -34,8 +42,15 @@ const SettingsDashboard: React.FC = () => {
         setLoading(true);
         try {
             const response = await userApi.getProfile();
-            if (response.success && response.data?.user) {
-                setUserSettings(response.data.user);
+            console.log('User profile response:', response);
+            // Backend returns { success: true, user: userDto } directly
+            if (response.success && response.user) {
+                setUserSettings(response.user);
+                setEditForm({
+                    firstName: response.user.firstName,
+                    lastName: response.user.lastName,
+                    email: response.user.email
+                });
             }
         } catch (error) {
             console.error('Failed to fetch user settings:', error);
@@ -54,7 +69,6 @@ const SettingsDashboard: React.FC = () => {
             if (response.success) {
                 alert('Password changed successfully!');
                 setPasswordForm({ currentPassword: '', newPassword: '', reTypeNewPassword: '' });
-                setShowPasswordForm(false);
             } else {
                 alert(response.message || 'Failed to change password');
             }
@@ -64,6 +78,39 @@ const SettingsDashboard: React.FC = () => {
         }
     };
 
+
+    const handleProfileUpdate = async () => {
+        try {
+            const response = await userApi.updateProfile(editForm);
+            if (response.success) {
+                alert('Profile updated successfully!');
+                // Update local state with the fresh user data from response
+                if (response.user) {
+                    setUserSettings(response.user);
+                    setEditForm({
+                        firstName: response.user.firstName,
+                        lastName: response.user.lastName,
+                        email: response.user.email
+                    });
+                }
+                setIsEditingProfile(false);
+                // Also fetch fresh data to ensure consistency
+                fetchUserSettings();
+            } else {
+                alert(response.message || 'Failed to update profile');
+            }
+        } catch (error: any) {
+            console.error('Failed to update profile:', error);
+            alert(error.message || 'Failed to update profile');
+        }
+    };
+
+    const handleDeleteRequest = () => {
+        // For now, just show an alert. In a real implementation, 
+        // you would create a delete request record in the database
+        alert('Account deletion request submitted. An administrator will review your request.');
+        setShowDeleteModal(false);
+    };
 
     const togglePasswordVisibility = (field: keyof typeof showPasswords) => {
         setShowPasswords(prev => ({ ...prev, [field]: !prev[field] }));
@@ -85,33 +132,196 @@ const SettingsDashboard: React.FC = () => {
                 <div>
                         <div className="card shadow-sm border-0 rounded-4 mb-4">
                             <div className="card-body p-4">
-                                <h2 className="card-title fw-bold text-dark mb-4 d-flex align-items-center">
-                                    <User className="text-primary me-2" size={24} />
-                                    User Information
-                                </h2>
+                                <div className="d-flex justify-content-between align-items-center mb-4">
+                                    <h2 className="card-title fw-bold text-dark mb-0 d-flex align-items-center">
+                                        <User className="text-primary me-2" size={24} />
+                                        User Information
+                                    </h2>
+                                    {userSettings && !isEditingProfile && (
+                                        <button
+                                            onClick={() => setIsEditingProfile(true)}
+                                            className="btn btn-outline-primary rounded-3 fw-semibold d-flex align-items-center"
+                                        >
+                                            <Edit size={16} className="me-2" />
+                                            Edit Profile
+                                        </button>
+                                    )}
+                                </div>
+                                
                                 {userSettings ? (
-                                    <div className="row g-4">
-                                        <div className="col-md-6">
-                                            <label className="form-label fw-semibold text-muted small">FIRST NAME</label>
-                                            <p className="fw-semibold text-dark mb-0">{userSettings.firstName}</p>
+                                    isEditingProfile ? (
+                                        <div className="row g-4">
+                                            <div className="col-md-6">
+                                                <label className="form-label fw-semibold">First Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={editForm.firstName}
+                                                    onChange={(e) => setEditForm({...editForm, firstName: e.target.value})}
+                                                    className="form-control rounded-3"
+                                                    placeholder="Enter first name"
+                                                />
+                                            </div>
+                                            <div className="col-md-6">
+                                                <label className="form-label fw-semibold">Last Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={editForm.lastName}
+                                                    onChange={(e) => setEditForm({...editForm, lastName: e.target.value})}
+                                                    className="form-control rounded-3"
+                                                    placeholder="Enter last name"
+                                                />
+                                            </div>
+                                            <div className="col-md-6">
+                                                <label className="form-label fw-semibold text-muted small">USERNAME (READ-ONLY)</label>
+                                                <p className="fw-semibold text-muted mb-0">{userSettings.username}</p>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <label className="form-label fw-semibold">Email</label>
+                                                <input
+                                                    type="email"
+                                                    value={editForm.email}
+                                                    onChange={(e) => setEditForm({...editForm, email: e.target.value})}
+                                                    className="form-control rounded-3"
+                                                    placeholder="Enter email address"
+                                                />
+                                            </div>
+                                            <div className="col-md-6">
+                                                <label className="form-label fw-semibold text-muted small">PHONE NUMBER (READ-ONLY)</label>
+                                                <p className="fw-semibold text-muted mb-0">{userSettings.phoneNumber || 'Not provided'}</p>
+                                            </div>
+                                            
+                                            {/* Profile Save Button */}
+                                            <div className="col-12 d-flex gap-2 pt-2">
+                                                <button
+                                                    onClick={handleProfileUpdate}
+                                                    className="btn btn-success rounded-3 fw-semibold d-flex align-items-center"
+                                                >
+                                                    <Save size={16} className="me-2" />
+                                                    Save Profile Changes
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setIsEditingProfile(false);
+                                                        setEditForm({
+                                                            firstName: userSettings.firstName,
+                                                            lastName: userSettings.lastName,
+                                                            email: userSettings.email
+                                                        });
+                                                    }}
+                                                    className="btn btn-secondary rounded-3 fw-semibold d-flex align-items-center"
+                                                >
+                                                    <X size={16} className="me-2" />
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                            
+                                            {/* Password Change Section in Edit Mode */}
+                                            <div className="col-12">
+                                                <hr className="my-4" />
+                                                <h5 className="fw-bold text-dark mb-3 d-flex align-items-center">
+                                                    <Shield className="text-primary me-2" size={20} />
+                                                    Change Password
+                                                </h5>
+                                                <div className="row g-3">
+                                                    <div className="col-md-4">
+                                                        <label className="form-label fw-semibold">Current Password</label>
+                                                        <div className="position-relative">
+                                                            <input
+                                                                type={showPasswords.current ? "text" : "password"}
+                                                                value={passwordForm.currentPassword}
+                                                                onChange={(e) => setPasswordForm({...passwordForm, currentPassword: e.target.value})}
+                                                                className="form-control rounded-3 pe-5"
+                                                                placeholder="Enter current password"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => togglePasswordVisibility('current')}
+                                                                className="btn btn-outline-secondary position-absolute top-50 end-0 translate-middle-y me-2 border-0 p-1"
+                                                            >
+                                                                {showPasswords.current ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-md-4">
+                                                        <label className="form-label fw-semibold">New Password</label>
+                                                        <div className="position-relative">
+                                                            <input
+                                                                type={showPasswords.new ? "text" : "password"}
+                                                                value={passwordForm.newPassword}
+                                                                onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
+                                                                className="form-control rounded-3 pe-5"
+                                                                placeholder="Enter new password"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => togglePasswordVisibility('new')}
+                                                                className="btn btn-outline-secondary position-absolute top-50 end-0 translate-middle-y me-2 border-0 p-1"
+                                                            >
+                                                                {showPasswords.new ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-md-4">
+                                                        <label className="form-label fw-semibold">Confirm New Password</label>
+                                                        <div className="position-relative">
+                                                            <input
+                                                                type={showPasswords.reType ? "text" : "password"}
+                                                                value={passwordForm.reTypeNewPassword}
+                                                                onChange={(e) => setPasswordForm({...passwordForm, reTypeNewPassword: e.target.value})}
+                                                                className="form-control rounded-3 pe-5"
+                                                                placeholder="Confirm new password"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => togglePasswordVisibility('reType')}
+                                                                className="btn btn-outline-secondary position-absolute top-50 end-0 translate-middle-y me-2 border-0 p-1"
+                                                            >
+                                                                {showPasswords.reType ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-12 d-flex gap-2 pt-2">
+                                                        <button
+                                                            onClick={handlePasswordChange}
+                                                            className="btn btn-primary rounded-3 fw-semibold d-flex align-items-center"
+                                                        >
+                                                            <Shield size={16} className="me-2" />
+                                                            Update Password
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setPasswordForm({ currentPassword: '', newPassword: '', reTypeNewPassword: '' })}
+                                                            className="btn btn-outline-secondary rounded-3 fw-semibold"
+                                                        >
+                                                            Clear Password Fields
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="col-md-6">
-                                            <label className="form-label fw-semibold text-muted small">LAST NAME</label>
-                                            <p className="fw-semibold text-dark mb-0">{userSettings.lastName}</p>
+                                    ) : (
+                                        <div className="row g-4">
+                                            <div className="col-md-6">
+                                                <label className="form-label fw-semibold text-muted small">FIRST NAME</label>
+                                                <p className="fw-semibold text-dark mb-0">{userSettings.firstName}</p>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <label className="form-label fw-semibold text-muted small">LAST NAME</label>
+                                                <p className="fw-semibold text-dark mb-0">{userSettings.lastName}</p>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <label className="form-label fw-semibold text-muted small">USERNAME</label>
+                                                <p className="fw-semibold text-dark mb-0">{userSettings.username}</p>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <label className="form-label fw-semibold text-muted small">EMAIL</label>
+                                                <p className="fw-semibold text-dark mb-0">{userSettings.email}</p>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <label className="form-label fw-semibold text-muted small">PHONE NUMBER</label>
+                                                <p className="fw-semibold text-dark mb-0">{userSettings.phoneNumber || 'Not provided'}</p>
+                                            </div>
                                         </div>
-                                        <div className="col-md-6">
-                                            <label className="form-label fw-semibold text-muted small">USERNAME</label>
-                                            <p className="fw-semibold text-dark mb-0">{userSettings.username}</p>
-                                        </div>
-                                        <div className="col-md-6">
-                                            <label className="form-label fw-semibold text-muted small">EMAIL</label>
-                                            <p className="fw-semibold text-dark mb-0">{userSettings.email}</p>
-                                        </div>
-                                        <div className="col-md-6">
-                                            <label className="form-label fw-semibold text-muted small">PHONE NUMBER</label>
-                                            <p className="fw-semibold text-dark mb-0">{userSettings.phoneNumber || 'Not provided'}</p>
-                                        </div>
-                                    </div>
+                                    )
                                 ) : (
                                     <div className="d-flex align-items-center text-muted">
                                         <div className="spinner-border spinner-border-sm me-2" role="status">
@@ -123,100 +333,95 @@ const SettingsDashboard: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="card shadow-sm border-0 rounded-4">
-                            <div className="card-body p-4">
-                                <div className="d-flex justify-content-between align-items-center mb-4">
-                                    <h2 className="card-title fw-bold text-dark mb-0 d-flex align-items-center">
-                                        <Shield className="text-primary me-2" size={24} />
-                                        Password Security
-                                    </h2>
-                                    <button
-                                        onClick={() => setShowPasswordForm(!showPasswordForm)}
-                                        className="btn btn-primary rounded-3 fw-semibold"
-                                    >
-                                        {showPasswordForm ? 'Cancel' : 'Change Password'}
-                                    </button>
-                                </div>
 
-                                {showPasswordForm && (
-                                    <div className="bg-light p-4 rounded-3">
-                                        <div className="row g-3">
-                                            <div className="col-12">
-                                                <label className="form-label fw-semibold">Current Password</label>
-                                                <div className="position-relative">
-                                                    <input
-                                                        type={showPasswords.current ? "text" : "password"}
-                                                        value={passwordForm.currentPassword}
-                                                        onChange={(e) => setPasswordForm({...passwordForm, currentPassword: e.target.value})}
-                                                        className="form-control rounded-3 pe-5"
-                                                        placeholder="Enter current password"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => togglePasswordVisibility('current')}
-                                                        className="btn btn-outline-secondary position-absolute top-50 end-0 translate-middle-y me-2 border-0 p-1"
-                                                    >
-                                                        {showPasswords.current ? <EyeOff size={16} /> : <Eye size={16} />}
-                                                    </button>
-                                                </div>
+                        {/* Account Deletion Card */}
+                        <div className="card shadow-sm border-0 rounded-4 mt-4 border-danger">
+                            <div className="card-body p-4">
+                                <h2 className="card-title fw-bold text-danger mb-3 d-flex align-items-center">
+                                    <Trash2 className="text-danger me-2" size={24} />
+                                    Delete Account
+                                </h2>
+                                <div className="bg-danger bg-opacity-10 p-4 rounded-3 mb-4">
+                                    <div className="d-flex align-items-start">
+                                        <AlertTriangle className="text-danger me-3 mt-1 flex-shrink-0" size={20} />
+                                        <div>
+                                            <h6 className="fw-bold text-danger mb-2">Permanent Account Deletion</h6>
+                                            <p className="text-danger mb-2 small">
+                                                This action cannot be undone. Requesting account deletion will:
+                                            </p>
+                                            <ul className="text-danger small mb-0">
+                                                <li>Submit a request to administrators for review</li>
+                                                <li>Permanently delete all your personal data</li>
+                                                <li>Remove access to all applications and services</li>
+                                                <li>Cannot be reversed once approved</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowDeleteModal(true)}
+                                    className="btn btn-danger rounded-3 fw-semibold d-flex align-items-center"
+                                >
+                                    <Trash2 size={16} className="me-2" />
+                                    Request Account Deletion
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Delete Confirmation Modal */}
+                        {showDeleteModal && (
+                            <div className="modal d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)', position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1050}}>
+                                <div className="modal-dialog modal-dialog-centered">
+                                    <div className="modal-content border-0 rounded-4">
+                                        <div className="modal-header border-0 pb-0">
+                                            <h3 className="modal-title fw-bold text-danger d-flex align-items-center">
+                                                <AlertTriangle className="me-2" size={24} />
+                                                Confirm Account Deletion
+                                            </h3>
+                                            <button
+                                                type="button"
+                                                className="btn-close"
+                                                onClick={() => setShowDeleteModal(false)}
+                                            ></button>
+                                        </div>
+                                        <div className="modal-body">
+                                            <div className="bg-danger bg-opacity-10 p-4 rounded-3 mb-4">
+                                                <p className="text-danger fw-semibold mb-3">
+                                                    Are you absolutely sure you want to request account deletion?
+                                                </p>
+                                                <p className="text-danger small mb-0">
+                                                    This will submit a permanent deletion request to the administrators. 
+                                                    Once approved, all your data will be permanently removed and cannot be recovered.
+                                                </p>
                                             </div>
-                                            <div className="col-12">
-                                                <label className="form-label fw-semibold">New Password</label>
-                                                <div className="position-relative">
-                                                    <input
-                                                        type={showPasswords.new ? "text" : "password"}
-                                                        value={passwordForm.newPassword}
-                                                        onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
-                                                        className="form-control rounded-3 pe-5"
-                                                        placeholder="Enter new password"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => togglePasswordVisibility('new')}
-                                                        className="btn btn-outline-secondary position-absolute top-50 end-0 translate-middle-y me-2 border-0 p-1"
-                                                    >
-                                                        {showPasswords.new ? <EyeOff size={16} /> : <Eye size={16} />}
-                                                    </button>
-                                                </div>
+                                            <div className="form-check mb-3">
+                                                <input className="form-check-input" type="checkbox" id="confirmDelete" />
+                                                <label className="form-check-label text-danger fw-semibold" htmlFor="confirmDelete">
+                                                    I understand this action cannot be undone
+                                                </label>
                                             </div>
-                                            <div className="col-12">
-                                                <label className="form-label fw-semibold">Confirm New Password</label>
-                                                <div className="position-relative">
-                                                    <input
-                                                        type={showPasswords.reType ? "text" : "password"}
-                                                        value={passwordForm.reTypeNewPassword}
-                                                        onChange={(e) => setPasswordForm({...passwordForm, reTypeNewPassword: e.target.value})}
-                                                        className="form-control rounded-3 pe-5"
-                                                        placeholder="Confirm new password"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => togglePasswordVisibility('reType')}
-                                                        className="btn btn-outline-secondary position-absolute top-50 end-0 translate-middle-y me-2 border-0 p-1"
-                                                    >
-                                                        {showPasswords.reType ? <EyeOff size={16} /> : <Eye size={16} />}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div className="col-12 d-flex gap-2 pt-2">
+                                        </div>
+                                        <div className="modal-footer border-0">
+                                            <div className="d-flex gap-2 w-100">
                                                 <button
-                                                    onClick={handlePasswordChange}
-                                                    className="btn btn-success rounded-3 fw-semibold"
-                                                >
-                                                    Update Password
-                                                </button>
-                                                <button
-                                                    onClick={() => setShowPasswordForm(false)}
-                                                    className="btn btn-secondary rounded-3 fw-semibold"
+                                                    onClick={() => setShowDeleteModal(false)}
+                                                    className="btn btn-secondary rounded-3 fw-semibold flex-fill"
                                                 >
                                                     Cancel
+                                                </button>
+                                                <button
+                                                    onClick={handleDeleteRequest}
+                                                    className="btn btn-danger rounded-3 fw-semibold flex-fill d-flex align-items-center justify-content-center"
+                                                >
+                                                    <Trash2 size={16} className="me-2" />
+                                                    Submit Deletion Request
                                                 </button>
                                             </div>
                                         </div>
                                     </div>
-                                )}
+                                </div>
                             </div>
-                        </div>
+                        )}
                 </div>
             </div>
         </div>

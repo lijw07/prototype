@@ -9,7 +9,7 @@ public class ResetPasswordRequestDto
 
     [Required(ErrorMessage = "Password is required")]
     [StringLength(128, MinimumLength = 8, ErrorMessage = "Password must be between 8 and 128 characters")]
-    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]", 
+    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$", 
         ErrorMessage = "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character")]
     public required string NewPassword { get; set; }
 

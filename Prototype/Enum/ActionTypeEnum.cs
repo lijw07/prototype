@@ -37,5 +37,8 @@ public enum ActionTypeEnum
     ApplicationUpdated,
     VerifyUser,
     ResetPassword,
-    Register
+    Register,
+    RoleCreated,
+    RoleUpdated,
+    RoleDeleted
 }

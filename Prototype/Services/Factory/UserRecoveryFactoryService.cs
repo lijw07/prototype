@@ -13,7 +13,7 @@ public class UserRecoveryFactoryService : IUserRecoveryRequestFactoryService
             UserRecoveryRequestId = Guid.NewGuid(),
             UserId = user.UserId,
             User = user,
-            VerificationCode = verificationCode,
+            Token = verificationCode,
             RecoveryType = dto.UserRecoveryType,
             RequestedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddMinutes(30),

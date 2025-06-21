@@ -50,7 +50,7 @@ public class RateLimitingMiddleware
     {
         var sensitiveEndpoints = new[]
         {
-            "/login",
+            //"/login", // Disabled for development - allow unlimited login attempts
             //"/register",
             "/forgotuser",
             "/passwordreset"

@@ -7,6 +7,8 @@ using Prototype.Models;
 using Prototype.Services;
 using Prototype.Services.Interfaces;
 using Prototype.Utility;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Prototype.Controllers.Settings;
 
@@ -61,11 +63,11 @@ public class ApplicationSettingsController : BaseSettingsController
                 {
                     UserApplicationId = Guid.NewGuid(),
                     UserId = currentUser.UserId,
-                    User = currentUser,
+                    User = null, // Don't set navigation property to avoid tracking issues
                     ApplicationId = applicationId,
-                    Application = application,
+                    Application = null, // Don't set navigation property to avoid tracking issues
                     ApplicationConnectionId = connection.ApplicationConnectionId,
-                    ApplicationConnection = connection,
+                    ApplicationConnection = null, // Don't set navigation property to avoid tracking issues
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -78,7 +80,7 @@ public class ApplicationSettingsController : BaseSettingsController
                 {
                     UserActivityLogId = Guid.NewGuid(),
                     UserId = currentUser.UserId,
-                    User = currentUser,
+                    User = null, // Don't set navigation property to avoid tracking issues
                     IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
                     DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
                     ActionType = ActionTypeEnum.ApplicationAdded,
@@ -86,6 +88,21 @@ public class ApplicationSettingsController : BaseSettingsController
                     Timestamp = DateTime.UtcNow
                 };
                 _context.UserActivityLogs.Add(activityLog);
+
+                // Also create application log
+                var applicationLog = new ApplicationLogModel
+                {
+                    ApplicationLogId = Guid.NewGuid(),
+                    ApplicationId = applicationId,
+                    Application = null, // Don't set navigation property to avoid tracking issues
+                    ActionType = ActionTypeEnum.ApplicationAdded,
+                    Metadata = $"Application '{dto.ApplicationName}' was created by user {currentUser.Username}",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.ApplicationLogs.Add(applicationLog);
+                
+                _logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", applicationId, ActionTypeEnum.ApplicationAdded);
 
                 await _context.SaveChangesAsync();
 
@@ -107,6 +124,7 @@ public class ApplicationSettingsController : BaseSettingsController
 
             var query = from ua in _context.UserApplications
                        join app in _context.Applications on ua.ApplicationId equals app.ApplicationId
+                       join conn in _context.ApplicationConnections on ua.ApplicationConnectionId equals conn.ApplicationConnectionId
                        where ua.UserId == currentUser.UserId
                        select new
                        {
@@ -115,7 +133,14 @@ public class ApplicationSettingsController : BaseSettingsController
                            app.ApplicationDescription,
                            app.ApplicationDataSourceType,
                            app.CreatedAt,
-                           app.UpdatedAt
+                           app.UpdatedAt,
+                           Connection = new
+                           {
+                               conn.Host,
+                               conn.Port,
+                               conn.DatabaseName,
+                               AuthenticationType = conn.AuthenticationType.ToString()
+                           }
                        };
 
             var totalCount = await query.CountAsync();
@@ -165,7 +190,7 @@ public class ApplicationSettingsController : BaseSettingsController
                 {
                     UserActivityLogId = Guid.NewGuid(),
                     UserId = currentUser.UserId,
-                    User = currentUser,
+                    User = null, // Don't set navigation property to avoid tracking issues
                     IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
                     DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
                     ActionType = ActionTypeEnum.ApplicationUpdated,
@@ -173,6 +198,21 @@ public class ApplicationSettingsController : BaseSettingsController
                     Timestamp = DateTime.UtcNow
                 };
                 _context.UserActivityLogs.Add(activityLog);
+
+                // Also create application log
+                var applicationLog = new ApplicationLogModel
+                {
+                    ApplicationLogId = Guid.NewGuid(),
+                    ApplicationId = appGuid,
+                    Application = null, // Don't set navigation property to avoid tracking issues
+                    ActionType = ActionTypeEnum.ApplicationUpdated,
+                    Metadata = $"Application '{dto.ApplicationName}' was updated by user {currentUser.Username}",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.ApplicationLogs.Add(applicationLog);
+                
+                _logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", appGuid, ActionTypeEnum.ApplicationUpdated);
 
                 await _context.SaveChangesAsync();
 
@@ -201,36 +241,76 @@ public class ApplicationSettingsController : BaseSettingsController
                 if (userApplication == null)
                     return new { success = false, message = "Application not found or access denied" };
 
+                // Check if any other users are still using this application connection
+                var otherUsersUsingConnection = await _context.UserApplications
+                    .Where(ua => ua.ApplicationConnectionId == userApplication.ApplicationConnectionId && ua.UserId != currentUser.UserId)
+                    .CountAsync();
+
+                var otherUsersUsingApp = await _context.UserApplications
+                    .Where(ua => ua.ApplicationId == appGuid && ua.UserId != currentUser.UserId)
+                    .CountAsync();
+
+                _logger.LogInformation("Found {OtherUsersConnection} other users using connection, {OtherUsersApp} other users using application {AppId}", 
+                    otherUsersUsingConnection, otherUsersUsingApp, appGuid);
+
+                // Store the application name for logging before potential deletion
                 var application = await _context.Applications
                     .FirstOrDefaultAsync(a => a.ApplicationId == appGuid);
-                var connection = await _context.ApplicationConnections
-                    .FirstOrDefaultAsync(ac => ac.ApplicationId == appGuid);
+                var applicationName = application?.ApplicationName ?? "Unknown";
 
-                if (application != null)
-                {
-                    _context.Applications.Remove(application);
-                }
-                if (connection != null)
-                {
-                    _context.ApplicationConnections.Remove(connection);
-                }
-                _context.UserApplications.Remove(userApplication);
-
-                // Log activity
+                // Create logs first before making any deletions
                 var activityLog = new UserActivityLogModel
                 {
                     UserActivityLogId = Guid.NewGuid(),
                     UserId = currentUser.UserId,
-                    User = currentUser,
+                    User = null, // Don't set navigation property to avoid tracking issues
                     IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
                     DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
                     ActionType = ActionTypeEnum.ApplicationRemoved,
-                    Description = $"User deleted application: {application?.ApplicationName ?? "Unknown"}",
+                    Description = $"User deleted application: {applicationName}",
                     Timestamp = DateTime.UtcNow
                 };
                 _context.UserActivityLogs.Add(activityLog);
 
+                // Create application log before any deletions
+                var applicationLog = new ApplicationLogModel
+                {
+                    ApplicationLogId = Guid.NewGuid(),
+                    ApplicationId = appGuid,
+                    Application = null, // Don't set navigation property to avoid tracking issues
+                    ActionType = ActionTypeEnum.ApplicationRemoved,
+                    Metadata = otherUsersUsingApp > 0 
+                        ? $"User {currentUser.Username} removed their access to application '{applicationName}'"
+                        : $"Application '{applicationName}' was permanently deleted by user {currentUser.Username}",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.ApplicationLogs.Add(applicationLog);
+                
+                _logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", appGuid, ActionTypeEnum.ApplicationRemoved);
+
+                // Save logs first
                 await _context.SaveChangesAsync();
+
+                // Now remove the current user's relationship
+                _context.UserApplications.Remove(userApplication);
+                await _context.SaveChangesAsync();
+
+                // Only delete the connection if no other users are using it
+                if (otherUsersUsingConnection == 0)
+                {
+                    var connection = await _context.ApplicationConnections
+                        .FirstOrDefaultAsync(ac => ac.ApplicationConnectionId == userApplication.ApplicationConnectionId);
+                    if (connection != null)
+                    {
+                        _context.ApplicationConnections.Remove(connection);
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
+                // DO NOT delete the application from the database to preserve application logs
+                // The application record will remain in the database for audit/logging purposes
+                // Only the user's access (UserApplication relationship) has been removed above
 
                 return new { success = true, message = "Application deleted successfully" };
             });
@@ -238,7 +318,7 @@ public class ApplicationSettingsController : BaseSettingsController
     }
 
     [HttpPost("test-application-connection")]
-    public async Task<IActionResult> TestApplicationConnection([FromBody] ApplicationRequestDto dto)
+    public async Task<IActionResult> TestApplicationConnection([FromBody] object requestData)
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
@@ -248,15 +328,57 @@ public class ApplicationSettingsController : BaseSettingsController
 
             try
             {
-                // For now, return a basic validation of connection parameters
-                // In a real implementation; you would test the actual connection
-                var isValid = !string.IsNullOrEmpty(dto.ConnectionSource.Host) &&
-                             !string.IsNullOrEmpty(dto.ConnectionSource.Port) &&
-                             !string.IsNullOrEmpty(dto.ConnectionSource.Url);
-
-                if (!isValid)
+                string host, port, description;
+                Guid? testingApplicationId = null;
+                
+                // Check if this is a request by applicationId or full data
+                var jsonElement = (System.Text.Json.JsonElement)requestData;
+                
+                if (jsonElement.TryGetProperty("applicationId", out var appIdProperty) && appIdProperty.ValueKind == System.Text.Json.JsonValueKind.String)
                 {
-                    return new { success = false, message = "Invalid connection parameters" };
+                    // Testing existing application by ID
+                    var applicationId = Guid.Parse(appIdProperty.GetString()!);
+                    testingApplicationId = applicationId;
+                    
+                    // Get the application and its connection
+                    var userApp = await _context.UserApplications
+                        .Include(ua => ua.Application)
+                        .Include(ua => ua.ApplicationConnection)
+                        .FirstOrDefaultAsync(ua => ua.ApplicationId == applicationId && ua.UserId == currentUser.UserId);
+                    
+                    if (userApp?.ApplicationConnection == null)
+                        return new { success = false, message = "Application or connection not found" };
+                    
+                    host = userApp.ApplicationConnection.Host;
+                    port = userApp.ApplicationConnection.Port;
+                    description = $"tested connection to existing application {userApp.Application?.ApplicationName}";
+                }
+                else
+                {
+                    // Testing new application with full connection data
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                        PropertyNameCaseInsensitive = true
+                    };
+                    options.Converters.Add(new JsonStringEnumConverter());
+                    var dto = System.Text.Json.JsonSerializer.Deserialize<ApplicationRequestDto>(jsonElement.GetRawText(), options);
+                    if (dto?.ConnectionSource == null)
+                        return new { success = false, message = "Invalid connection data" };
+                    
+                    host = dto.ConnectionSource.Host;
+                    port = dto.ConnectionSource.Port;
+                    description = $"tested connection to new application {dto.ApplicationName}";
+                    
+                    // Validate required fields for new applications
+                    var isValid = !string.IsNullOrEmpty(host) &&
+                                 !string.IsNullOrEmpty(port) &&
+                                 !string.IsNullOrEmpty(dto.ConnectionSource.Url);
+
+                    if (!isValid)
+                    {
+                        return new { success = false, message = "Invalid connection parameters" };
+                    }
                 }
 
                 // Log connection test
@@ -264,21 +386,40 @@ public class ApplicationSettingsController : BaseSettingsController
                 {
                     UserActivityLogId = Guid.NewGuid(),
                     UserId = currentUser.UserId,
-                    User = currentUser,
+                    User = null, // Don't set navigation property to avoid tracking issues
                     IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
                     DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
                     ActionType = ActionTypeEnum.ConnectionAttempt,
-                    Description = $"User tested connection to {dto.ConnectionSource.Host}:{dto.ConnectionSource.Port}",
+                    Description = $"User {description}",
                     Timestamp = DateTime.UtcNow
                 };
                 _context.UserActivityLogs.Add(activityLog);
+
+                // Add application log if testing existing application
+                if (testingApplicationId.HasValue)
+                {
+                    var applicationLog = new ApplicationLogModel
+                    {
+                        ApplicationLogId = Guid.NewGuid(),
+                        ApplicationId = testingApplicationId.Value,
+                        Application = null, // Don't set navigation property to avoid tracking issues
+                        ActionType = ActionTypeEnum.ConnectionAttempt,
+                        Metadata = $"Connection test performed by user {currentUser.Username}",
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    _context.ApplicationLogs.Add(applicationLog);
+                    
+                    _logger.LogInformation("Added application log for connection test on application {ApplicationId}", testingApplicationId.Value);
+                }
+
                 await _context.SaveChangesAsync();
 
                 return new { success = true, message = "Connection test successful", connectionValid = true };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Connection test failed for {Host}:{Port}", dto.ConnectionSource.Host, dto.ConnectionSource.Port);
+                _logger.LogError(ex, "Connection test failed: {Error}", ex.Message);
                 return new { success = false, message = "Connection test failed", error = ex.Message };
             }
         }, "testing application connection");

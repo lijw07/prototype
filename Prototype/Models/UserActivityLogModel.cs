@@ -12,9 +12,8 @@ public class UserActivityLogModel
     [Required]
     public required Guid UserId { get; set; }
     
-    [Required]
     [ForeignKey(nameof(UserId))]
-    public required UserModel? User { get; set; }
+    public UserModel? User { get; set; }
     
     [StringLength(45)]
     public string? IpAddress { get; set; }

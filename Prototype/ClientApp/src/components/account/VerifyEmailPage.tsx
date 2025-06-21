@@ -87,6 +87,30 @@ const VerifyEmailPage: React.FC = () => {
         verifyEmail();
     }, [searchParams]);
 
+    // Prevent scrolling when verify email component is mounted
+    useEffect(() => {
+        // Store original body styles
+        const originalStyle = {
+            overflow: document.body.style.overflow,
+            height: document.body.style.height,
+            position: document.body.style.position
+        };
+
+        // Prevent scrolling
+        document.body.style.overflow = 'hidden';
+        document.body.style.height = '100vh';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
+
+        // Cleanup on unmount
+        return () => {
+            document.body.style.overflow = originalStyle.overflow;
+            document.body.style.height = originalStyle.height;
+            document.body.style.position = originalStyle.position;
+            document.body.style.width = '';
+        };
+    }, []);
+
     const validatePassword = (password: string): string => {
         if (password.length < 8) {
             return 'Password must be at least 8 characters long.';
@@ -155,13 +179,21 @@ const VerifyEmailPage: React.FC = () => {
     };
 
     return (
-        <div className="min-vh-100 d-flex align-items-center justify-content-center bg-light" style={{ 
+        <div className="vh-100 d-flex align-items-center justify-content-center bg-light overflow-hidden" style={{
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            right: '0',
+            bottom: '0',
+            height: '100vh',
+            width: '100vw',
+            zIndex: 1,
             padding: '20px'
         }}>
             <div className="container">
                 <div className="row justify-content-center">
                     <div className="col-lg-6 col-md-8">
-                        <div className="card shadow-lg border-0" style={{ borderRadius: '20px' }}>
+                        <div className="card shadow-lg border-0 login-card" style={{ borderRadius: '20px' }}>
                             <div className="card-body p-5">
                                 {/* Logo/Brand - Only show for pending and setPassword states */}
                                 {(status === 'pending' || status === 'setPassword') && (

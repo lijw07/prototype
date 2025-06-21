@@ -5,7 +5,7 @@ using Prototype.Services.Interfaces;
 namespace Prototype.Controllers.Login;
 
 [ApiController]
-[Route("[controller]")]
+[Route("ForgotUser")]
 public class ForgotUserController : ControllerBase
 {
     private readonly IUserAccountService _userAccountService;

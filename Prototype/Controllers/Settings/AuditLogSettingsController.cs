@@ -20,11 +20,16 @@ public class AuditLogSettingsController : BaseSettingsController
     {
         try
         {
+            _logger.LogInformation("Getting audit logs - Page: {Page}, PageSize: {PageSize}", page, pageSize);
+            
             // Validate pagination parameters
             if (page < 1) page = 1;
             if (pageSize < 1 || pageSize > 100) pageSize = 50;
 
             var skip = (page - 1) * pageSize;
+
+            var totalCount = await _context.AuditLogs.CountAsync();
+            _logger.LogInformation("Total audit logs count: {TotalCount}", totalCount);
 
             var logs = await _context.AuditLogs
                 .Include(log => log.User)
@@ -35,14 +40,14 @@ public class AuditLogSettingsController : BaseSettingsController
                 {
                     AuditLogId = log.AuditLogId,
                     UserId = log.UserId,
-                    Username = log.User!.Username,
+                    Username = log.User != null ? log.User.Username : "Unknown User",
                     ActionType = log.ActionType,
                     Metadata = log.Metadata,
                     CreatedAt = log.CreatedAt
                 })
                 .ToListAsync();
 
-            var totalCount = await _context.AuditLogs.CountAsync();
+            _logger.LogInformation("Retrieved {LogCount} audit logs", logs.Count);
 
             var result = CreatePaginatedResponse(logs, page, pageSize, totalCount);
 

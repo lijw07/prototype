@@ -1,97 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Plus, Edit, Trash2, Users, Key, CheckCircle2, AlertCircle } from 'lucide-react';
+import { roleApi } from '../../services/api';
 
 interface Role {
-    roleId: string;
-    roleName: string;
-    description: string;
-    permissions: string[];
-    userCount: number;
-    isActive: boolean;
+    userRoleId: string;
+    role: string;
     createdAt: string;
-    updatedAt: string;
-}
-
-interface Permission {
-    id: string;
-    name: string;
-    category: string;
+    createdBy: string;
 }
 
 const Roles: React.FC = () => {
     const [roles, setRoles] = useState<Role[]>([]);
-    const [permissions, setPermissions] = useState<Permission[]>([]);
     const [loading, setLoading] = useState(false);
     const [showRoleForm, setShowRoleForm] = useState(false);
     const [editingRole, setEditingRole] = useState<Role | null>(null);
 
     const [roleForm, setRoleForm] = useState({
-        roleName: '',
-        description: '',
-        permissions: [] as string[],
-        isActive: true
+        roleName: ''
     });
-
-    // Mock permissions data
-    const mockPermissions: Permission[] = [
-        { id: 'users.view', name: 'View Users', category: 'User Management' },
-        { id: 'users.create', name: 'Create Users', category: 'User Management' },
-        { id: 'users.edit', name: 'Edit Users', category: 'User Management' },
-        { id: 'users.delete', name: 'Delete Users', category: 'User Management' },
-        { id: 'applications.view', name: 'View Applications', category: 'Application Management' },
-        { id: 'applications.create', name: 'Create Applications', category: 'Application Management' },
-        { id: 'applications.edit', name: 'Edit Applications', category: 'Application Management' },
-        { id: 'applications.delete', name: 'Delete Applications', category: 'Application Management' },
-        { id: 'roles.view', name: 'View Roles', category: 'Role Management' },
-        { id: 'roles.create', name: 'Create Roles', category: 'Role Management' },
-        { id: 'roles.edit', name: 'Edit Roles', category: 'Role Management' },
-        { id: 'roles.delete', name: 'Delete Roles', category: 'Role Management' },
-        { id: 'logs.view', name: 'View Logs', category: 'System' },
-        { id: 'settings.view', name: 'View Settings', category: 'System' },
-        { id: 'settings.edit', name: 'Edit Settings', category: 'System' }
-    ];
 
     const fetchRoles = async () => {
         setLoading(true);
         try {
-            const response = await fetch('/api/roles');
-            if (response.ok) {
-                const data = await response.json();
-                setRoles(data);
-            } else {
-                // Mock data for demonstration
-                setRoles([
-                    {
-                        roleId: '1',
-                        roleName: 'Administrator',
-                        description: 'Full system access with all permissions',
-                        permissions: ['users.view', 'users.create', 'applications.view', 'roles.view', 'logs.view'],
-                        userCount: 2,
-                        isActive: true,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString()
-                    },
-                    {
-                        roleId: '2',
-                        roleName: 'User Manager',
-                        description: 'Manage users and view system information',
-                        permissions: ['users.view', 'users.create', 'applications.view'],
-                        userCount: 5,
-                        isActive: true,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString()
-                    },
-                    {
-                        roleId: '3',
-                        roleName: 'Viewer',
-                        description: 'Read-only access to system information',
-                        permissions: ['users.view', 'applications.view'],
-                        userCount: 12,
-                        isActive: true,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString()
-                    }
-                ]);
+            const response = await roleApi.getAllRoles();
+            if (response.success && response.roles) {
+                setRoles(response.roles);
             }
         } catch (error) {
             console.error('Failed to fetch roles:', error);
@@ -102,40 +35,38 @@ const Roles: React.FC = () => {
 
     useEffect(() => {
         fetchRoles();
-        setPermissions(mockPermissions);
     }, []);
 
     const handleRoleSubmit = async () => {
         try {
-            const roleData = {
-                ...roleForm,
-                roleId: editingRole?.roleId || crypto.randomUUID(),
-                userCount: editingRole?.userCount || 0,
-                createdAt: editingRole?.createdAt || new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
-
             if (editingRole) {
                 // Update existing role
-                setRoles(roles.map(role => role.roleId === editingRole.roleId ? roleData : role));
-                alert('Role updated successfully!');
+                const response = await roleApi.updateRole(editingRole.userRoleId, { roleName: roleForm.roleName });
+                if (response.success) {
+                    alert('Role updated successfully!');
+                    fetchRoles();
+                } else {
+                    alert(response.message || 'Failed to update role');
+                }
             } else {
                 // Create new role
-                setRoles([...roles, roleData]);
-                alert('Role created successfully!');
+                const response = await roleApi.createRole({ roleName: roleForm.roleName });
+                if (response.success) {
+                    alert('Role created successfully!');
+                    fetchRoles();
+                } else {
+                    alert(response.message || 'Failed to create role');
+                }
             }
 
             setShowRoleForm(false);
             setEditingRole(null);
             setRoleForm({
-                roleName: '',
-                description: '',
-                permissions: [],
-                isActive: true
+                roleName: ''
             });
         } catch (error: any) {
             console.error('Failed to save role:', error);
-            alert('Failed to save role');
+            alert(error.message || 'Failed to save role');
         }
     };
 
@@ -143,38 +74,24 @@ const Roles: React.FC = () => {
         if (!window.confirm('Are you sure you want to delete this role?')) return;
 
         try {
-            setRoles(roles.filter(role => role.roleId !== roleId));
-            alert('Role deleted successfully!');
+            const response = await roleApi.deleteRole(roleId);
+            if (response.success) {
+                alert('Role deleted successfully!');
+                fetchRoles();
+            } else {
+                alert(response.message || 'Failed to delete role');
+            }
         } catch (error: any) {
             console.error('Failed to delete role:', error);
-            alert('Failed to delete role');
+            alert(error.message || 'Failed to delete role');
         }
     };
 
-    const togglePermission = (permissionId: string) => {
-        setRoleForm(prev => ({
-            ...prev,
-            permissions: prev.permissions.includes(permissionId)
-                ? prev.permissions.filter(p => p !== permissionId)
-                : [...prev.permissions, permissionId]
-        }));
-    };
-
-    const groupedPermissions = permissions.reduce((acc, permission) => {
-        if (!acc[permission.category]) {
-            acc[permission.category] = [];
-        }
-        acc[permission.category].push(permission);
-        return acc;
-    }, {} as Record<string, Permission[]>);
 
     const openEditRole = (role: Role) => {
         setEditingRole(role);
         setRoleForm({
-            roleName: role.roleName,
-            description: role.description,
-            permissions: role.permissions,
-            isActive: role.isActive
+            roleName: role.role
         });
         setShowRoleForm(true);
     };
@@ -218,27 +135,18 @@ const Roles: React.FC = () => {
                         ) : (
                             <div className="row g-3">
                                 {roles.map((role) => (
-                                    <div key={role.roleId} className="col-12">
+                                    <div key={role.userRoleId} className="col-12">
                                         <div className="card border border-light rounded-3 h-100">
                                             <div className="card-body p-4">
                                                 <div className="d-flex justify-content-between align-items-start mb-3">
                                                     <div className="flex-grow-1">
                                                         <h5 className="card-title fw-bold text-dark mb-1 d-flex align-items-center" style={{wordWrap: 'break-word', overflowWrap: 'break-word'}}>
-                                                            {role.roleName}
-                                                            {role.isActive ? (
-                                                                <CheckCircle2 className="text-success ms-2" size={16} />
-                                                            ) : (
-                                                                <AlertCircle className="text-warning ms-2" size={16} />
-                                                            )}
+                                                            {role.role}
+                                                            <CheckCircle2 className="text-success ms-2" size={16} />
                                                         </h5>
-                                                        <p className="card-text text-muted small mb-2" style={{wordWrap: 'break-word', overflowWrap: 'break-word'}}>{role.description}</p>
-                                                        <div className="d-flex align-items-center mb-2">
-                                                            <Users size={14} className="text-muted me-1" />
-                                                            <span className="small text-muted">{role.userCount} users assigned</span>
-                                                        </div>
-                                                        <div className="small text-muted">
-                                                            {role.permissions.length} permissions
-                                                        </div>
+                                                        <p className="card-text text-muted small mb-2">
+                                                            Created by {role.createdBy} on {new Date(role.createdAt).toLocaleDateString()}
+                                                        </p>
                                                     </div>
                                                     <div className="d-flex flex-column gap-1">
                                                         <button
@@ -249,33 +157,12 @@ const Roles: React.FC = () => {
                                                             <Edit size={14} />
                                                         </button>
                                                         <button
-                                                            onClick={() => deleteRole(role.roleId)}
+                                                            onClick={() => deleteRole(role.userRoleId)}
                                                             className="btn btn-outline-danger btn-sm rounded-3"
                                                             title="Delete Role"
-                                                            disabled={role.userCount > 0}
                                                         >
                                                             <Trash2 size={14} />
                                                         </button>
-                                                    </div>
-                                                </div>
-                                                
-                                                {/* Permissions Preview */}
-                                                <div className="border-top pt-3">
-                                                    <h6 className="small fw-semibold text-muted mb-2">Permissions:</h6>
-                                                    <div className="d-flex flex-wrap gap-1">
-                                                        {role.permissions.slice(0, 3).map(permId => {
-                                                            const perm = permissions.find(p => p.id === permId);
-                                                            return perm ? (
-                                                                <span key={permId} className="badge bg-light text-dark border small">
-                                                                    {perm.name}
-                                                                </span>
-                                                            ) : null;
-                                                        })}
-                                                        {role.permissions.length > 3 && (
-                                                            <span className="badge bg-secondary small">
-                                                                +{role.permissions.length - 3} more
-                                                            </span>
-                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -311,10 +198,7 @@ const Roles: React.FC = () => {
                                             setShowRoleForm(false);
                                             setEditingRole(null);
                                             setRoleForm({
-                                                roleName: '',
-                                                description: '',
-                                                permissions: [],
-                                                isActive: true
+                                                roleName: ''
                                             });
                                         }}
                                     ></button>
@@ -333,50 +217,6 @@ const Roles: React.FC = () => {
                                                     placeholder="Enter role name"
                                                 />
                                             </div>
-                                            <div className="mb-3">
-                                                <label className="form-label fw-semibold">Description</label>
-                                                <textarea
-                                                    value={roleForm.description}
-                                                    onChange={(e) => setRoleForm({...roleForm, description: e.target.value})}
-                                                    className="form-control rounded-3"
-                                                    rows={4}
-                                                    placeholder="Enter role description"
-                                                />
-                                            </div>
-                                            <div className="form-check">
-                                                <input
-                                                    className="form-check-input"
-                                                    type="checkbox"
-                                                    checked={roleForm.isActive}
-                                                    onChange={(e) => setRoleForm({...roleForm, isActive: e.target.checked})}
-                                                />
-                                                <label className="form-check-label fw-semibold">
-                                                    Active Role
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div className="col-12">
-                                            <h5 className="fw-bold mb-3">Permissions</h5>
-                                            <div className="border rounded-3 p-3" style={{maxHeight: '250px', overflowY: 'auto', overflowX: 'hidden', width: '100%'}}>
-                                                {Object.entries(groupedPermissions).map(([category, perms]) => (
-                                                    <div key={category} className="mb-3">
-                                                        <h6 className="fw-semibold text-primary mb-2">{category}</h6>
-                                                        {perms.map(permission => (
-                                                            <div key={permission.id} className="form-check mb-1">
-                                                                <input
-                                                                    className="form-check-input"
-                                                                    type="checkbox"
-                                                                    checked={roleForm.permissions.includes(permission.id)}
-                                                                    onChange={() => togglePermission(permission.id)}
-                                                                />
-                                                                <label className="form-check-label small">
-                                                                    {permission.name}
-                                                                </label>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                ))}
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -394,10 +234,7 @@ const Roles: React.FC = () => {
                                                 setShowRoleForm(false);
                                                 setEditingRole(null);
                                                 setRoleForm({
-                                                    roleName: '',
-                                                    description: '',
-                                                    permissions: [],
-                                                    isActive: true
+                                                    roleName: ''
                                                 });
                                             }}
                                             className="btn btn-secondary rounded-3 fw-semibold"

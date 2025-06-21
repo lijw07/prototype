@@ -1,5 +1,13 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 
+// Helper function to get API base URL (same as in api.ts)
+const getApiBaseUrl = () => {
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:8080';
+  }
+  return '';
+};
+
 interface User {
   userId: string;
   firstName: string;
@@ -42,7 +50,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const fetchUserProfile = useCallback(async (authToken: string) => {
     try {
-      const response = await fetch('/settings/user/profile', {
+      const response = await fetch(`${getApiBaseUrl()}/settings/user/profile`, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json',
@@ -84,7 +92,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (credentials: LoginCredentials): Promise<{ success: boolean; message: string }> => {
     try {
       setLoading(true);
-      const response = await fetch('/login', {
+      const response = await fetch(`${getApiBaseUrl()}/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -118,7 +126,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       // Call logout endpoint if token exists
       if (token) {
-        await fetch('/logout', {
+        await fetch(`${getApiBaseUrl()}/logout`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,

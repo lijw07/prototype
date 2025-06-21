@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Users, 
-  Plus, 
   Search, 
-  Filter, 
   Edit3, 
   Trash2, 
   Mail, 
@@ -16,9 +14,23 @@ import {
   UserPlus,
   AlertCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  Lock,
+  Unlock,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
+import { userApi, roleApi } from '../../services/api';
 import { authApi } from '../../services/api';
+
+interface Role {
+  userRoleId: string;
+  role: string;
+  createdAt: string;
+  createdBy: string;
+}
 
 interface User {
   userId: string;
@@ -28,7 +40,7 @@ interface User {
   email: string;
   phoneNumber?: string;
   isActive: boolean;
-  role: 'Admin' | 'User' | 'Manager';
+  role: string;
   lastLogin?: string;
   createdAt: string;
 }
@@ -43,13 +55,43 @@ interface NewUserForm {
   reEnterPassword: string;
 }
 
+interface EditUserForm {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  username: string;
+  email: string;
+  phoneNumber: string;
+  role: string;
+  isActive: boolean;
+}
+
 export default function Accounts() {
   const [users, setUsers] = useState<User[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<string>('all');
   const [showAddUser, setShowAddUser] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [userDetailModal, setUserDetailModal] = useState<User | null>(null);
+  const [showEditUser, setShowEditUser] = useState(false);
+  const [editUserForm, setEditUserForm] = useState<EditUserForm>({
+    userId: '',
+    firstName: '',
+    lastName: '',
+    username: '',
+    email: '',
+    phoneNumber: '',
+    role: '',
+    isActive: true
+  });
+  const [editFormErrors, setEditFormErrors] = useState<Partial<EditUserForm>>({});
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [editSubmitSuccess, setEditSubmitSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [usersPerPage, setUsersPerPage] = useState(20);
   
   // New User Form State
   const [newUserForm, setNewUserForm] = useState<NewUserForm>({
@@ -84,73 +126,58 @@ export default function Accounts() {
     };
   }, [showAddUser]);
 
-  // Mock data - in real app, this would come from API
+  // Load users and roles from database
   useEffect(() => {
-    const mockUsers: User[] = [
-      {
-        userId: '1',
-        firstName: 'John',
-        lastName: 'Doe',
-        username: 'john.doe',
-        email: 'john.doe@company.com',
-        phoneNumber: '+1 (555) 123-4567',
-        isActive: true,
-        role: 'Admin',
-        lastLogin: '2024-01-15T10:30:00Z',
-        createdAt: '2023-06-15T09:00:00Z'
-      },
-      {
-        userId: '2',
-        firstName: 'Jane',
-        lastName: 'Smith',
-        username: 'jane.smith',
-        email: 'jane.smith@company.com',
-        phoneNumber: '+1 (555) 987-6543',
-        isActive: true,
-        role: 'Manager',
-        lastLogin: '2024-01-14T16:45:00Z',
-        createdAt: '2023-08-20T14:15:00Z'
-      },
-      {
-        userId: '3',
-        firstName: 'Mike',
-        lastName: 'Johnson',
-        username: 'mike.johnson',
-        email: 'mike.johnson@company.com',
-        isActive: false,
-        role: 'User',
-        lastLogin: '2024-01-10T11:20:00Z',
-        createdAt: '2023-09-05T08:30:00Z'
-      },
-      {
-        userId: '4',
-        firstName: 'Sarah',
-        lastName: 'Wilson',
-        username: 'sarah.wilson',
-        email: 'sarah.wilson@company.com',
-        phoneNumber: '+1 (555) 456-7890',
-        isActive: true,
-        role: 'User',
-        lastLogin: '2024-01-15T09:15:00Z',
-        createdAt: '2023-10-12T13:45:00Z'
-      },
-      {
-        userId: '5',
-        firstName: 'David',
-        lastName: 'Brown',
-        username: 'david.brown',
-        email: 'david.brown@company.com',
-        isActive: true,
-        role: 'Manager',
-        lastLogin: '2024-01-15T12:00:00Z',
-        createdAt: '2023-11-01T10:20:00Z'
+    const loadData = async () => {
+      setLoading(true);
+      
+      // Load users - this should always work regardless of roles
+      try {
+        const usersResponse = await userApi.getAllUsers();
+        
+        if (usersResponse.success && usersResponse.users) {
+          const transformedUsers: User[] = usersResponse.users.map((user: any) => ({
+            userId: user.userId,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            username: user.username,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            isActive: user.isActive,
+            role: user.role,
+            lastLogin: user.lastLogin,
+            createdAt: user.createdAt
+          }));
+          
+          setUsers(transformedUsers);
+        } else {
+          console.error('Failed to load users:', usersResponse.message);
+          setUsers([]);
+        }
+      } catch (error) {
+        console.error('Error loading users:', error);
+        setUsers([]);
       }
-    ];
-
-    setTimeout(() => {
-      setUsers(mockUsers);
+      
+      // Load roles - independent of users
+      try {
+        const rolesResponse = await roleApi.getAllRoles();
+        
+        if (rolesResponse.success && rolesResponse.roles) {
+          setRoles(rolesResponse.roles);
+        } else {
+          console.error('Failed to load roles:', rolesResponse.message);
+          setRoles([]);
+        }
+      } catch (error) {
+        console.error('Error loading roles:', error);
+        setRoles([]);
+      }
+      
       setLoading(false);
-    }, 1000);
+    };
+
+    loadData();
   }, []);
 
   const filteredUsers = users.filter(user => {
@@ -164,13 +191,22 @@ export default function Accounts() {
     return matchesSearch && matchesRole;
   });
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+  const startIndex = (currentPage - 1) * usersPerPage;
+  const endIndex = startIndex + usersPerPage;
+  const currentUsers = filteredUsers.slice(startIndex, endIndex);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterRole]);
+
   const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case 'Admin': return 'danger';
-      case 'Manager': return 'warning';
-      case 'User': return 'info';
-      default: return 'secondary';
-    }
+    // Create a consistent color mapping based on role name
+    const colors = ['primary', 'danger', 'warning', 'info', 'success', 'secondary'];
+    const hash = role.toLowerCase().split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[hash % colors.length];
   };
 
   const formatDate = (dateString: string) => {
@@ -366,6 +402,187 @@ export default function Accounts() {
     setShowAddUser(false);
   };
 
+  // Edit User Form handling
+  const handleEditInputChange = (field: keyof EditUserForm, value: string | boolean) => {
+    setEditUserForm(prev => ({ ...prev, [field]: value }));
+    if (editFormErrors[field]) {
+      setEditFormErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  const validateEditForm = (): boolean => {
+    const errors: Partial<EditUserForm> = {};
+
+    if (!editUserForm.firstName.trim()) {
+      errors.firstName = 'First name is required';
+    } else if (editUserForm.firstName.length > 50) {
+      errors.firstName = 'First name must be between 1 and 50 characters';
+    }
+
+    if (!editUserForm.lastName.trim()) {
+      errors.lastName = 'Last name is required';
+    } else if (editUserForm.lastName.length > 50) {
+      errors.lastName = 'Last name must be between 1 and 50 characters';
+    }
+
+    if (!editUserForm.username.trim()) {
+      errors.username = 'Username is required';
+    } else if (editUserForm.username.length < 3 || editUserForm.username.length > 100) {
+      errors.username = 'Username must be between 3 and 100 characters';
+    } else if (!/^[a-zA-Z0-9_.-]+$/.test(editUserForm.username)) {
+      errors.username = 'Username can only contain letters, numbers, underscores, dots, and hyphens';
+    }
+
+    if (!editUserForm.email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(editUserForm.email)) {
+      errors.email = 'Invalid email format';
+    } else if (editUserForm.email.length > 255) {
+      errors.email = 'Email cannot exceed 255 characters';
+    }
+
+    if (editUserForm.phoneNumber && editUserForm.phoneNumber.length > 20) {
+      errors.phoneNumber = 'Phone number cannot exceed 20 characters';
+    }
+
+    if (!editUserForm.role.trim()) {
+      errors.role = 'Role is required';
+    }
+
+    setEditFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleEditUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateEditForm()) return;
+
+    setIsEditSubmitting(true);
+    setEditFormErrors({});
+    
+    try {
+      const response = await userApi.updateUser(editUserForm);
+      
+      if (response && response.success) {
+        setEditSubmitSuccess(true);
+        // Update the user in the local state
+        setUsers(prevUsers => 
+          prevUsers.map(user => 
+            user.userId === editUserForm.userId 
+              ? { ...user, ...editUserForm }
+              : user
+          )
+        );
+        
+        setTimeout(() => {
+          setShowEditUser(false);
+          setEditSubmitSuccess(false);
+          resetEditUserModal();
+        }, 2000);
+      } else {
+        setEditFormErrors({ email: response?.message || 'Update failed' });
+      }
+    } catch (error: any) {
+      console.error('Update user error:', error);
+      if (error.status === 400 && error.errors) {
+        const serverErrors: Partial<EditUserForm> = {};
+        const errors = error.errors as unknown as { [key: string]: string | string[] };
+        Object.keys(errors).forEach(key => {
+          const fieldName = key.toLowerCase();
+          const errorValue = errors[key];
+          const errorMessage = Array.isArray(errorValue) ? errorValue[0] : errorValue;
+          if (fieldName.includes('firstname')) serverErrors.firstName = errorMessage;
+          else if (fieldName.includes('lastname')) serverErrors.lastName = errorMessage;
+          else if (fieldName.includes('username')) serverErrors.username = errorMessage;
+          else if (fieldName.includes('email')) serverErrors.email = errorMessage;
+          else if (fieldName.includes('phone')) serverErrors.phoneNumber = errorMessage;
+          else serverErrors.email = errorMessage;
+        });
+        setEditFormErrors(serverErrors);
+      } else {
+        setEditFormErrors({ email: error.message || 'Network error occurred' });
+      }
+    } finally {
+      setIsEditSubmitting(false);
+    }
+  };
+
+  const resetEditUserModal = () => {
+    setEditUserForm({
+      userId: '',
+      firstName: '',
+      lastName: '',
+      username: '',
+      email: '',
+      phoneNumber: '',
+      role: '',
+      isActive: true
+    });
+    setEditFormErrors({});
+    setIsEditSubmitting(false);
+    setEditSubmitSuccess(false);
+    setShowEditUser(false);
+  };
+
+  // Dropdown action handlers
+  const handleFreezeUser = async (user: User) => {
+    try {
+      const updatedUser = {
+        ...user,
+        isActive: !user.isActive
+      };
+      
+      const response = await userApi.updateUser(updatedUser);
+      
+      if (response && response.success) {
+        // Update the user in the local state
+        setUsers(prevUsers => 
+          prevUsers.map(u => 
+            u.userId === user.userId 
+              ? { ...u, isActive: !u.isActive }
+              : u
+          )
+        );
+        
+        // Show success message (you could add a toast notification here)
+        console.log(`User ${user.isActive ? 'frozen' : 'unfrozen'} successfully`);
+      }
+    } catch (error) {
+      console.error('Error updating user status:', error);
+    }
+  };
+
+  const handleEmailUser = (user: User) => {
+    // Open email client with pre-filled recipient
+    window.location.href = `mailto:${user.email}`;
+  };
+
+  const handleDeleteUser = async (user: User) => {
+    if (window.confirm(`Are you sure you want to delete user ${user.firstName} ${user.lastName}? This action cannot be undone.`)) {
+      try {
+        console.log('Attempting to delete user:', user.userId);
+        const response = await userApi.deleteUser(user.userId);
+        console.log('Delete user response:', response);
+        
+        if (response && response.success) {
+          // Remove from local state only after successful deletion from database
+          setUsers(prevUsers => prevUsers.filter(u => u.userId !== user.userId));
+          console.log(`User ${user.firstName} ${user.lastName} deleted successfully`);
+        } else {
+          console.error('Failed to delete user:', response?.message);
+          alert(`Failed to delete user: ${response?.message || 'Unknown error'}`);
+        }
+      } catch (error: any) {
+        console.error('Error deleting user - Full error object:', error);
+        console.error('Error message:', error.message);
+        console.error('Error status:', error.status);
+        console.error('Error response:', error.response);
+        alert(`Error deleting user: ${error.message || error.status || 'Network error occurred'}`);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-vh-100 bg-light" style={{overflowX: 'hidden'}}>
@@ -453,9 +670,11 @@ export default function Accounts() {
                       onChange={(e) => setFilterRole(e.target.value)}
                     >
                       <option value="all">All Roles</option>
-                      <option value="admin">Admin</option>
-                      <option value="manager">Manager</option>
-                      <option value="user">User</option>
+                      {roles.map((role) => (
+                        <option key={role.userRoleId} value={role.role.toLowerCase()}>
+                          {role.role}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="col-md-3">
@@ -472,19 +691,36 @@ export default function Accounts() {
 
         {/* Users Grid */}
         <div className="row g-4">
-          {filteredUsers.map((user) => (
-            <div key={user.userId} className="col-xl-4 col-lg-6">
-              <div className="card border-0 rounded-4 shadow-sm h-100 dashboard-card">
-                <div className="card-body p-4">
-                  <div className="d-flex align-items-start justify-content-between mb-3">
+          {currentUsers.map((user) => (
+            <div key={user.userId} className="col-xl-3 col-lg-4 col-md-6 col-sm-12">
+              <div 
+                className="card border-0 rounded-4 shadow-sm h-100 dashboard-card" 
+                style={{ cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}
+                onClick={(e) => {
+                  // Don't open modal if clicking on dropdown
+                  if (!(e.target as HTMLElement).closest('.dropdown')) {
+                    setUserDetailModal(user);
+                  }
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '';
+                }}
+              >
+                <div className="card-body p-3">
+                  <div className="d-flex align-items-start justify-content-between mb-2">
                     <div className="d-flex align-items-center">
-                      <div className="rounded-circle bg-primary bg-opacity-10 p-3 me-3">
-                        <Users className="text-primary" size={24} />
+                      <div className="rounded-circle bg-primary bg-opacity-10 p-2 me-2">
+                        <Users className="text-primary" size={20} />
                       </div>
                       <div>
-                        <h5 className="fw-bold text-dark mb-1">
+                        <h6 className="fw-bold text-dark mb-0">
                           {user.firstName} {user.lastName}
-                        </h5>
+                        </h6>
                         <p className="text-muted mb-0 small">@{user.username}</p>
                       </div>
                     </div>
@@ -493,55 +729,98 @@ export default function Accounts() {
                         className="btn btn-sm btn-outline-secondary rounded-3"
                         type="button"
                         data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <MoreVertical size={16} />
                       </button>
-                      <ul className="dropdown-menu">
-                        <li><a className="dropdown-item" href="#"><Edit3 size={14} className="me-2" />Edit</a></li>
-                        <li><a className="dropdown-item" href="#"><Shield size={14} className="me-2" />Permissions</a></li>
+                      <ul className="dropdown-menu dropdown-menu-end" style={{ width: '190px' }}>
+                        <li>
+                          <button 
+                            className="dropdown-item d-flex align-items-center w-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFreezeUser(user);
+                            }}
+                            style={{ whiteSpace: 'nowrap', textAlign: 'left' }}
+                          >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', width: '100%' }}>
+                              {user.isActive ? (
+                                <><Lock size={14} className="me-2 flex-shrink-0" /><span>Freeze Account</span></>
+                              ) : (
+                                <><Unlock size={14} className="me-2 flex-shrink-0" /><span>Unfreeze Account</span></>
+                              )}
+                            </span>
+                          </button>
+                        </li>
+                        <li>
+                          <button 
+                            className="dropdown-item d-flex align-items-center w-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEmailUser(user);
+                            }}
+                            style={{ whiteSpace: 'nowrap', textAlign: 'left' }}
+                          >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', width: '100%' }}>
+                              <Mail size={14} className="me-2 flex-shrink-0" /><span>Send Email</span>
+                            </span>
+                          </button>
+                        </li>
                         <li><hr className="dropdown-divider" /></li>
-                        <li><a className="dropdown-item text-danger" href="#"><Trash2 size={14} className="me-2" />Delete</a></li>
+                        <li>
+                          <button 
+                            className="dropdown-item text-danger d-flex align-items-center w-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteUser(user);
+                            }}
+                            style={{ whiteSpace: 'nowrap', textAlign: 'left' }}
+                          >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', width: '100%' }}>
+                              <Trash2 size={14} className="me-2 flex-shrink-0" /><span>Delete User</span>
+                            </span>
+                          </button>
+                        </li>
                       </ul>
                     </div>
                   </div>
 
-                  <div className="row g-2 mb-3">
-                    <div className="col-12">
-                      <span className={`badge bg-${getRoleBadgeColor(user.role)} bg-opacity-10 text-${getRoleBadgeColor(user.role)} fw-semibold`}>
-                        {user.role}
+                  <div className="mb-2">
+                    <span className={`badge bg-${getRoleBadgeColor(user.role)} bg-opacity-10 text-${getRoleBadgeColor(user.role)} fw-semibold small`}>
+                      {user.role}
+                    </span>
+                    {user.isActive ? (
+                      <span className="badge bg-success bg-opacity-10 text-success fw-semibold ms-1 small">
+                        <CheckCircle2 size={10} className="me-1" />
+                        Active
                       </span>
-                      {user.isActive ? (
-                        <span className="badge bg-success bg-opacity-10 text-success fw-semibold ms-2">
-                          <CheckCircle2 size={12} className="me-1" />
-                          Active
-                        </span>
-                      ) : (
-                        <span className="badge bg-secondary bg-opacity-10 text-secondary fw-semibold ms-2">
-                          <XCircle size={12} className="me-1" />
-                          Inactive
-                        </span>
-                      )}
-                    </div>
+                    ) : (
+                      <span className="badge bg-secondary bg-opacity-10 text-secondary fw-semibold ms-1 small">
+                        <XCircle size={10} className="me-1" />
+                        Inactive
+                      </span>
+                    )}
                   </div>
 
-                  <div className="mb-3">
-                    <div className="d-flex align-items-center mb-2">
-                      <Mail className="text-muted me-2" size={14} />
-                      <span className="small text-dark">{user.email}</span>
+                  <div className="mb-2">
+                    <div className="d-flex align-items-center mb-1">
+                      <Mail className="text-muted me-2" size={12} />
+                      <span className="small text-dark text-truncate" style={{maxWidth: '150px'}} title={user.email}>{user.email}</span>
                     </div>
                     {user.phoneNumber && (
-                      <div className="d-flex align-items-center mb-2">
-                        <Phone className="text-muted me-2" size={14} />
+                      <div className="d-flex align-items-center mb-1">
+                        <Phone className="text-muted me-2" size={12} />
                         <span className="small text-dark">{user.phoneNumber}</span>
                       </div>
                     )}
-                    <div className="d-flex align-items-center mb-2">
-                      <Calendar className="text-muted me-2" size={14} />
+                    <div className="d-flex align-items-center">
+                      <Calendar className="text-muted me-2" size={12} />
                       <span className="small text-muted">Joined {formatDate(user.createdAt)}</span>
                     </div>
                   </div>
 
-                  <div className="bg-light rounded-3 p-3">
+                  <div className="bg-light rounded-3 p-2">
                     <div className="d-flex justify-content-between align-items-center">
                       <span className="small fw-semibold text-muted">Last Login</span>
                       <span className="small text-dark">{formatLastLogin(user.lastLogin)}</span>
@@ -578,6 +857,451 @@ export default function Accounts() {
           )}
         </div>
 
+        {/* Pagination */}
+        {filteredUsers.length > 0 && totalPages > 1 && (
+          <div className="d-flex justify-content-between align-items-center mt-4">
+            <div className="d-flex align-items-center gap-3">
+              <span className="text-muted">
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredUsers.length)} of {filteredUsers.length} users
+              </span>
+              <div className="d-flex align-items-center gap-2">
+                <span className="text-muted small">Users per page:</span>
+                <select 
+                  className="form-select form-select-sm" 
+                  style={{width: 'auto'}}
+                  value={usersPerPage}
+                  onChange={(e) => {
+                    setUsersPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+            
+            <nav>
+              <ul className="pagination pagination-sm mb-0">
+                <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                  <button 
+                    className="page-link" 
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronsLeft size={16} />
+                  </button>
+                </li>
+                <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                  <button 
+                    className="page-link" 
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                </li>
+                
+                {/* Page numbers */}
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum: number;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <li key={pageNum} className={`page-item ${currentPage === pageNum ? 'active' : ''}`}>
+                      <button 
+                        className="page-link" 
+                        onClick={() => setCurrentPage(pageNum)}
+                      >
+                        {pageNum}
+                      </button>
+                    </li>
+                  );
+                })}
+                
+                <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                  <button 
+                    className="page-link" 
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </li>
+                <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                  <button 
+                    className="page-link" 
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronsRight size={16} />
+                  </button>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        )}
+
+        {/* User Detail Modal */}
+        {userDetailModal && (
+          <div className="modal d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+            <div className="modal-dialog modal-dialog-centered modal-lg">
+              <div className="modal-content border-0 rounded-4">
+                <div className="modal-header border-0 pb-0">
+                  <div className="d-flex align-items-center">
+                    <div className="rounded-circle bg-primary bg-opacity-10 p-2 me-3">
+                      <Users className="text-primary" size={20} />
+                    </div>
+                    <div>
+                      <h5 className="modal-title fw-bold mb-0">
+                        {userDetailModal.firstName} {userDetailModal.lastName}
+                      </h5>
+                      <p className="text-muted small mb-0">@{userDetailModal.username}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => setUserDetailModal(null)}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <div className="row g-4">
+                    {/* Status and Role */}
+                    <div className="col-12">
+                      <div className="d-flex gap-2 mb-3">
+                        <span className={`badge bg-${getRoleBadgeColor(userDetailModal.role)} bg-opacity-10 text-${getRoleBadgeColor(userDetailModal.role)} fw-semibold px-3 py-2`}>
+                          <Shield size={14} className="me-1" />
+                          {userDetailModal.role}
+                        </span>
+                        {userDetailModal.isActive ? (
+                          <span className="badge bg-success bg-opacity-10 text-success fw-semibold px-3 py-2">
+                            <CheckCircle2 size={14} className="me-1" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="badge bg-secondary bg-opacity-10 text-secondary fw-semibold px-3 py-2">
+                            <XCircle size={14} className="me-1" />
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Basic Information */}
+                    <div className="col-md-6">
+                      <div className="bg-primary bg-opacity-10 rounded-4 p-4">
+                        <h6 className="fw-bold text-primary mb-3">
+                          <Users size={16} className="me-2" />
+                          Basic Information
+                        </h6>
+                        <div className="row g-3">
+                          <div className="col-12">
+                            <div className="small text-muted">User ID</div>
+                            <div className="fw-semibold text-dark">{userDetailModal.userId}</div>
+                          </div>
+                          <div className="col-6">
+                            <div className="small text-muted">First Name</div>
+                            <div className="fw-semibold text-dark">{userDetailModal.firstName}</div>
+                          </div>
+                          <div className="col-6">
+                            <div className="small text-muted">Last Name</div>
+                            <div className="fw-semibold text-dark">{userDetailModal.lastName}</div>
+                          </div>
+                          <div className="col-12">
+                            <div className="small text-muted">Username</div>
+                            <div className="fw-semibold text-dark">@{userDetailModal.username}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Contact Information */}
+                    <div className="col-md-6">
+                      <div className="bg-info bg-opacity-10 rounded-4 p-4">
+                        <h6 className="fw-bold text-info mb-3">
+                          <Mail size={16} className="me-2" />
+                          Contact Information
+                        </h6>
+                        <div className="row g-3">
+                          <div className="col-12">
+                            <div className="d-flex align-items-center mb-3">
+                              <Mail className="text-info me-3" size={16} />
+                              <div>
+                                <div className="small text-muted">Email Address</div>
+                                <div className="fw-semibold text-dark">{userDetailModal.email}</div>
+                              </div>
+                            </div>
+                            {userDetailModal.phoneNumber && (
+                              <div className="d-flex align-items-center">
+                                <Phone className="text-info me-3" size={16} />
+                                <div>
+                                  <div className="small text-muted">Phone Number</div>
+                                  <div className="fw-semibold text-dark">{userDetailModal.phoneNumber}</div>
+                                </div>
+                              </div>
+                            )}
+                            {!userDetailModal.phoneNumber && (
+                              <div className="d-flex align-items-center">
+                                <Phone className="text-muted me-3" size={16} />
+                                <div>
+                                  <div className="small text-muted">Phone Number</div>
+                                  <div className="text-muted">Not provided</div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Activity Information */}
+                    <div className="col-12">
+                      <div className="bg-success bg-opacity-10 rounded-4 p-4">
+                        <h6 className="fw-bold text-success mb-3">
+                          <Calendar size={16} className="me-2" />
+                          Activity Information
+                        </h6>
+                        <div className="row g-3">
+                          <div className="col-md-4">
+                            <div className="text-center">
+                              <div className="small text-muted">Last Login</div>
+                              <div className="fw-bold text-dark h5 mb-0">{formatLastLogin(userDetailModal.lastLogin)}</div>
+                            </div>
+                          </div>
+                          <div className="col-md-4">
+                            <div className="text-center">
+                              <div className="small text-muted">Member Since</div>
+                              <div className="fw-bold text-dark h5 mb-0">{formatDate(userDetailModal.createdAt)}</div>
+                            </div>
+                          </div>
+                          <div className="col-md-4">
+                            <div className="text-center">
+                              <div className="small text-muted">Account Status</div>
+                              <div className="fw-bold text-dark h5 mb-0">
+                                {userDetailModal.isActive ? 'Active' : 'Inactive'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer border-0">
+                  <div className="d-flex gap-2 w-100">
+                    <button 
+                      className="btn btn-outline-primary rounded-3 flex-fill"
+                      onClick={() => {
+                        setEditUserForm({
+                          userId: userDetailModal.userId,
+                          firstName: userDetailModal.firstName,
+                          lastName: userDetailModal.lastName,
+                          username: userDetailModal.username,
+                          email: userDetailModal.email,
+                          phoneNumber: userDetailModal.phoneNumber || '',
+                          role: userDetailModal.role,
+                          isActive: userDetailModal.isActive
+                        });
+                        setUserDetailModal(null);
+                        setShowEditUser(true);
+                      }}
+                    >
+                      <Edit3 size={16} className="me-2" />
+                      Edit User
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Edit User Modal */}
+        {showEditUser && (
+          <div className="modal d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+            <div className="modal-dialog modal-dialog-centered modal-lg">
+              <div className="modal-content border-0 rounded-4">
+                <div className="modal-header border-0 pb-0">
+                  <h5 className="modal-title fw-bold">Edit User</h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={resetEditUserModal}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  {editSubmitSuccess ? (
+                    <div className="text-center py-4">
+                      <CheckCircle2 size={64} className="text-success mb-3" />
+                      <h4 className="text-success fw-bold">User Updated Successfully!</h4>
+                      <p className="text-muted">The user information has been updated.</p>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleEditUserSubmit}>
+                      <div className="row g-3">
+                        <div className="col-md-6">
+                          <label className="form-label fw-semibold">First Name</label>
+                          <input 
+                            type="text" 
+                            className={`form-control rounded-3 ${editFormErrors.firstName ? 'is-invalid' : ''}`}
+                            placeholder="Enter first name" 
+                            value={editUserForm.firstName}
+                            onChange={(e) => handleEditInputChange('firstName', e.target.value)}
+                          />
+                          {editFormErrors.firstName && (
+                            <div className="invalid-feedback d-flex align-items-center">
+                              <AlertCircle size={16} className="me-1" />
+                              {editFormErrors.firstName}
+                            </div>
+                          )}
+                        </div>
+                        <div className="col-md-6">
+                          <label className="form-label fw-semibold">Last Name</label>
+                          <input 
+                            type="text" 
+                            className={`form-control rounded-3 ${editFormErrors.lastName ? 'is-invalid' : ''}`}
+                            placeholder="Enter last name" 
+                            value={editUserForm.lastName}
+                            onChange={(e) => handleEditInputChange('lastName', e.target.value)}
+                          />
+                          {editFormErrors.lastName && (
+                            <div className="invalid-feedback d-flex align-items-center">
+                              <AlertCircle size={16} className="me-1" />
+                              {editFormErrors.lastName}
+                            </div>
+                          )}
+                        </div>
+                        <div className="col-12">
+                          <label className="form-label fw-semibold">Username</label>
+                          <input 
+                            type="text" 
+                            className={`form-control rounded-3 ${editFormErrors.username ? 'is-invalid' : ''}`}
+                            placeholder="Enter username" 
+                            value={editUserForm.username}
+                            onChange={(e) => handleEditInputChange('username', e.target.value)}
+                          />
+                          {editFormErrors.username && (
+                            <div className="invalid-feedback d-flex align-items-center">
+                              <AlertCircle size={16} className="me-1" />
+                              {editFormErrors.username}
+                            </div>
+                          )}
+                        </div>
+                        <div className="col-12">
+                          <label className="form-label fw-semibold">Email</label>
+                          <input 
+                            type="email" 
+                            className={`form-control rounded-3 ${editFormErrors.email ? 'is-invalid' : ''}`}
+                            placeholder="Enter email address" 
+                            value={editUserForm.email}
+                            onChange={(e) => handleEditInputChange('email', e.target.value)}
+                          />
+                          {editFormErrors.email && (
+                            <div className="invalid-feedback d-flex align-items-center">
+                              <AlertCircle size={16} className="me-1" />
+                              {editFormErrors.email}
+                            </div>
+                          )}
+                        </div>
+                        <div className="col-md-6">
+                          <label className="form-label fw-semibold">Phone Number</label>
+                          <input 
+                            type="tel" 
+                            className={`form-control rounded-3 ${editFormErrors.phoneNumber ? 'is-invalid' : ''}`}
+                            placeholder="e.g., +1 (555) 123-4567 or 555-123-4567" 
+                            value={editUserForm.phoneNumber}
+                            onChange={(e) => handleEditInputChange('phoneNumber', e.target.value)}
+                          />
+                          {editFormErrors.phoneNumber && (
+                            <div className="invalid-feedback d-flex align-items-center">
+                              <AlertCircle size={16} className="me-1" />
+                              {editFormErrors.phoneNumber}
+                            </div>
+                          )}
+                        </div>
+                        <div className="col-md-6">
+                          <label className="form-label fw-semibold">Role</label>
+                          <select 
+                            className={`form-select rounded-3 ${editFormErrors.role ? 'is-invalid' : ''}`}
+                            value={editUserForm.role}
+                            onChange={(e) => handleEditInputChange('role', e.target.value)}
+                          >
+                            <option value="">Select a role</option>
+                            {roles.map((role) => (
+                              <option key={role.userRoleId} value={role.role}>
+                                {role.role}
+                              </option>
+                            ))}
+                          </select>
+                          {editFormErrors.role && (
+                            <div className="invalid-feedback d-flex align-items-center">
+                              <AlertCircle size={16} className="me-1" />
+                              {editFormErrors.role}
+                            </div>
+                          )}
+                        </div>
+                        <div className="col-12">
+                          <div className="form-check">
+                            <input 
+                              className="form-check-input" 
+                              type="checkbox" 
+                              id="isActive"
+                              checked={editUserForm.isActive}
+                              onChange={(e) => handleEditInputChange('isActive', e.target.checked)}
+                            />
+                            <label className="form-check-label fw-semibold" htmlFor="isActive">
+                              Active User
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </form>
+                  )}
+                </div>
+                {!editSubmitSuccess && (
+                  <div className="modal-footer border-0 pt-0">
+                    <button
+                      type="button"
+                      className="btn btn-secondary rounded-3"
+                      onClick={resetEditUserModal}
+                      disabled={isEditSubmitting}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="btn btn-primary rounded-3"
+                      onClick={handleEditUserSubmit}
+                      disabled={isEditSubmitting}
+                    >
+                      {isEditSubmitting ? (
+                        <>
+                          <div className="spinner-border spinner-border-sm me-2" role="status">
+                            <span className="visually-hidden">Loading...</span>
+                          </div>
+                          Updating User...
+                        </>
+                      ) : (
+                        'Update User'
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Add User Modal */}
         {showAddUser && (
           <div className="modal d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>

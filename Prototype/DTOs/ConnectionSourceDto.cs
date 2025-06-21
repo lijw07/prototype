@@ -23,8 +23,8 @@ public class ConnectionSourceDto
     [StringLength(100, ErrorMessage = "Database name cannot exceed 100 characters")]
     public string? DatabaseName { get; set; }
 
-    [Required(ErrorMessage = "URL is required")]
-    [Url(ErrorMessage = "Invalid URL format")]
+    [Required(ErrorMessage = "Connection string is required")]
+    [StringLength(500, MinimumLength = 1, ErrorMessage = "Connection string must be between 1 and 500 characters")]
     public required string Url { get; set; }
 
     [StringLength(100, ErrorMessage = "Username cannot exceed 100 characters")]

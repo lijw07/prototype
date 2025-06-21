@@ -5,7 +5,7 @@ using Prototype.Services.Interfaces;
 namespace Prototype.Controllers.Login;
 
 [ApiController]
-[Route("[controller]")]
+[Route("login")]
 public class LoginController : ControllerBase
 {
     private readonly IAuthenticationService _authService;

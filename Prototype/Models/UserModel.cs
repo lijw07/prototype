@@ -31,8 +31,14 @@ public class UserModel
     [StringLength(20)]
     public required string PhoneNumber { get; set; }
     
-    // TODO(lijw07): Add support for permissions once roles are defined
-    public Guid? UserPermissionsId { get; set; }
+    [Required]
+    public required bool IsActive { get; set; } = true;
+    
+    [Required]
+    [StringLength(50)]
+    public required string Role { get; set; } = "User";
+    
+    public DateTime? LastLogin { get; set; }
     
     [Required]
     public required DateTime CreatedAt { get; set; }

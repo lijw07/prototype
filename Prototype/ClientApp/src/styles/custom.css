@@ -56,6 +56,12 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
+/* Disable hover effect for login cards */
+.login-card,
+.login-card:hover {
+  transform: none !important;
+}
+
 .card-body {
   padding: 1.5rem;
 }
@@ -276,6 +282,12 @@ body {
   min-height: 100vh;
 }
 
+/* Ensure header stays on top of login page */
+header, .navbar, nav {
+  position: relative !important;
+  z-index: 1000 !important;
+}
+
 .login-card {
   backdrop-filter: blur(10px);
   background: rgba(255, 255, 255, 0.95);
@@ -318,6 +330,52 @@ body {
   background-clip: text;
 }
 
+/* Remove Bootstrap's default exclamation mark icons from invalid form fields */
+.form-control.is-invalid,
+.was-validated .form-control:invalid {
+  background-image: none !important;
+}
+
+/* Ensure consistent sizing for large form controls in both valid and invalid states */
+.form-control-lg,
+.form-control-lg.is-invalid,
+.was-validated .form-control-lg:invalid {
+  padding: 1rem 1rem !important;
+  font-size: 1.25rem !important;
+  border-radius: var(--border-radius-lg) !important;
+  border-width: 2px !important;
+  height: calc(1.5em + 2rem + 4px) !important;
+  line-height: 1.5 !important;
+  background-image: none !important;
+}
+
+/* Maintain right padding for password field with button */
+.form-control-lg.pe-5,
+.form-control-lg.pe-5.is-invalid,
+.was-validated .form-control-lg.pe-5:invalid {
+  padding-right: 3rem !important;
+}
+
+/* Maintain left padding for search field with icon */
+.form-control-lg.ps-5,
+.form-control-lg.ps-5.is-invalid,
+.was-validated .form-control-lg.ps-5:invalid {
+  padding-left: 3rem !important;
+}
+
+/* Ensure password visibility button stays aligned regardless of validation state in login form */
+.position-relative input[type="password"] + button.position-absolute,
+.position-relative input[type="text"] + button.position-absolute {
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  right: 0.5rem !important;
+  height: 40px !important;
+  width: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -335,4 +393,19 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--gray-500);
+}
+
+
+/* Compact user cards */
+.dashboard-card {
+  font-size: 0.875rem;
+}
+
+.dashboard-card .card-body {
+  padding: 1rem !important;
+}
+
+/* Header specific z-index */
+.navbar {
+  z-index: 1030;
 }

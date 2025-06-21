@@ -45,12 +45,12 @@ public class DatabaseSeeder
 
     private async Task SeedDefaultAdminUser()
     {
-        // Check if any users exist
-        var userExists = await _context.Users.AnyAsync();
+        // Check if admin user exists
+        var existingAdmin = await _context.Users.FirstOrDefaultAsync(u => u.Username == "admin");
         
-        if (!userExists)
+        if (existingAdmin == null)
         {
-            _logger.LogInformation("No users found. Creating default admin user...");
+            _logger.LogInformation("No admin user found. Creating default admin user...");
             
             var defaultAdmin = new UserModel
             {
@@ -61,12 +61,21 @@ public class DatabaseSeeder
                 Email = "admin@prototype.local",
                 PasswordHash = _passwordService.HashPassword("Admin123!"),
                 PhoneNumber = "+1 (555) 000-0000",
+                IsActive = true,
+                Role = "Admin",
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
             };
 
             _context.Users.Add(defaultAdmin);
             _logger.LogInformation("Default admin user created with username: admin and password: Admin123!");
+        }
+        else
+        {
+            // Reset admin password to known value
+            existingAdmin.PasswordHash = _passwordService.HashPassword("Admin123!");
+            existingAdmin.UpdatedAt = DateTime.UtcNow;
+            _logger.LogInformation("Admin user password reset to Admin123!");
         }
     }
 
@@ -89,6 +98,9 @@ public class DatabaseSeeder
                     Email = "john.dev@prototype.local",
                     PasswordHash = _passwordService.HashPassword("Dev123!"),
                     PhoneNumber = "+1 (555) 123-4567",
+                    IsActive = true,
+                    Role = "User",
+                    LastLogin = DateTime.UtcNow.AddDays(-2),
                     CreatedAt = DateTime.UtcNow.AddDays(-30),
                     UpdatedAt = DateTime.UtcNow.AddDays(-30)
                 },
@@ -101,6 +113,9 @@ public class DatabaseSeeder
                     Email = "jane.manager@prototype.local",
                     PasswordHash = _passwordService.HashPassword("Manager123!"),
                     PhoneNumber = "+1 (555) 987-6543",
+                    IsActive = true,
+                    Role = "Manager",
+                    LastLogin = DateTime.UtcNow.AddHours(-4),
                     CreatedAt = DateTime.UtcNow.AddDays(-15),
                     UpdatedAt = DateTime.UtcNow.AddDays(-15)
                 }
@@ -138,6 +153,104 @@ public class DatabaseSeeder
 
             _context.Applications.AddRange(sampleApplications);
             _logger.LogInformation("Added {Count} sample applications for development.", sampleApplications.Length);
+        }
+
+        // Create connections and user-application relationships
+        await SeedApplicationConnectionsAndUserRelationships();
+    }
+
+    private async Task SeedApplicationConnectionsAndUserRelationships()
+    {
+        _logger.LogInformation("Seeding application connections and user-application relationships...");
+        
+        // Check if UserApplication relationships already exist
+        var existingRelationships = await _context.UserApplications.CountAsync();
+        if (existingRelationships > 0)
+        {
+            _logger.LogInformation("User-application relationships already exist. Skipping seeding.");
+            return;
+        }
+
+        // Get all users and applications
+        var users = await _context.Users.ToListAsync();
+        var applications = await _context.Applications.ToListAsync();
+
+        if (!users.Any() || !applications.Any())
+        {
+            _logger.LogWarning("No users or applications found to create relationships.");
+            return;
+        }
+
+        // Create default connections for applications that don't have them
+        var applicationConnections = new List<ApplicationConnectionModel>();
+        foreach (var application in applications)
+        {
+            var existingConnection = await _context.ApplicationConnections
+                .FirstOrDefaultAsync(ac => ac.ApplicationId == application.ApplicationId);
+            
+            if (existingConnection == null)
+            {
+                var connection = new ApplicationConnectionModel
+                {
+                    ApplicationConnectionId = Guid.NewGuid(),
+                    ApplicationId = application.ApplicationId,
+                    Application = application,
+                    Host = "localhost",
+                    Port = "1433", 
+                    DatabaseName = application.ApplicationName.Replace(" ", "_"),
+                    Url = $"Server=localhost,1433;Database={application.ApplicationName.Replace(" ", "_")};Integrated Security=true;",
+                    Username = "defaultuser",
+                    Password = "defaultpass",
+                    AuthenticationType = Prototype.Enum.AuthenticationTypeEnum.UserPassword,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                
+                applicationConnections.Add(connection);
+            }
+        }
+
+        if (applicationConnections.Any())
+        {
+            _context.ApplicationConnections.AddRange(applicationConnections);
+            await _context.SaveChangesAsync(); // Save connections first
+            _logger.LogInformation("Created {Count} default application connections.", applicationConnections.Count);
+        }
+
+        // Now create UserApplication relationships
+        var userApplications = new List<UserApplicationModel>();
+        
+        foreach (var user in users)
+        {
+            foreach (var application in applications)
+            {
+                // Get the connection for this application
+                var connection = await _context.ApplicationConnections
+                    .FirstOrDefaultAsync(ac => ac.ApplicationId == application.ApplicationId);
+                
+                if (connection != null)
+                {
+                    var userApplication = new UserApplicationModel
+                    {
+                        UserApplicationId = Guid.NewGuid(),
+                        UserId = user.UserId,
+                        User = user,
+                        ApplicationId = application.ApplicationId,
+                        Application = application,
+                        ApplicationConnectionId = connection.ApplicationConnectionId,
+                        ApplicationConnection = connection,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    
+                    userApplications.Add(userApplication);
+                }
+            }
+        }
+
+        if (userApplications.Any())
+        {
+            _context.UserApplications.AddRange(userApplications);
+            _logger.LogInformation("Created {Count} user-application relationships.", userApplications.Count);
         }
     }
 }

@@ -129,21 +129,39 @@ export const authApi = {
 // User Settings API
 export const userApi = {
   getProfile: () =>
-    api.get<ApiResponse<{ user: any }>>('/settings/user/profile'),
+    api.get<{ success: boolean; user: any; message?: string }>('/settings/user/profile'),
   
   updateProfile: (userData: {
     firstName: string;
     lastName: string;
     email: string;
   }) =>
-    api.put<ApiResponse>('/settings/user/update-profile', userData),
+    api.put<{ success: boolean; message?: string; user?: any }>('/settings/user/update-profile', userData),
   
   changePassword: (passwordData: {
     currentPassword: string;
     newPassword: string;
     reTypeNewPassword: string;
   }) =>
-    api.post<ApiResponse>('/settings/user/change-password', passwordData),
+    api.post<{ success: boolean; message?: string }>('/settings/user/change-password', passwordData),
+  
+  getAllUsers: () =>
+    api.get<{ success: boolean; users: any[]; message?: string }>('/settings/user/all'),
+  
+  updateUser: (userData: {
+    userId: string;
+    firstName: string;
+    lastName: string;
+    username: string;
+    email: string;
+    phoneNumber?: string;
+    role: string;
+    isActive: boolean;
+  }) =>
+    api.put<{ success: boolean; user?: any; message?: string }>('/settings/user/update', userData),
+  
+  deleteUser: (userId: string) =>
+    api.delete<{ success: boolean; message?: string }>(`/settings/user/delete/${userId}`),
 };
 
 // Application Settings API
@@ -162,6 +180,48 @@ export const applicationApi = {
   
   testConnection: (connectionData: any) =>
     api.post<ApiResponse>('/ApplicationSettings/test-application-connection', connectionData),
+};
+
+// Role Settings API
+export const roleApi = {
+  getAllRoles: () =>
+    api.get<{ success: boolean; roles: any[]; message?: string }>('/settings/roles'),
+  
+  getRoleById: (roleId: string) =>
+    api.get<{ success: boolean; role: any; message?: string }>(`/settings/roles/${roleId}`),
+  
+  createRole: (roleData: { roleName: string }) =>
+    api.post<{ success: boolean; role?: any; message?: string }>('/settings/roles', roleData),
+  
+  updateRole: (roleId: string, roleData: { roleName: string }) =>
+    api.put<{ success: boolean; role?: any; message?: string }>(`/settings/roles/${roleId}`, roleData),
+  
+  deleteRole: (roleId: string) =>
+    api.delete<{ success: boolean; message?: string }>(`/settings/roles/${roleId}`),
+};
+
+// Dashboard API
+export const dashboardApi = {
+  getStatistics: () =>
+    api.get<{ success: boolean; data: any; message?: string }>('/Dashboard/statistics'),
+};
+
+// Audit Logs API
+export const auditLogApi = {
+  getAuditLogs: (page: number = 1, pageSize: number = 100) =>
+    api.get<{ data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }>(`/AuditLogSettings?page=${page}&pageSize=${pageSize}`),
+};
+
+// User Activity Logs API
+export const activityLogApi = {
+  getActivityLogs: (page: number = 1, pageSize: number = 100) =>
+    api.get<{ data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }>(`/UserActivitySettings?page=${page}&pageSize=${pageSize}`),
+};
+
+// Application Logs API
+export const applicationLogApi = {
+  getApplicationLogs: (page: number = 1, pageSize: number = 100) =>
+    api.get<{ success: boolean; data: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number } }>(`/ApplicationLogSettings?page=${page}&pageSize=${pageSize}`),
 };
 
 export default api;

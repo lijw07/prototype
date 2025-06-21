@@ -35,7 +35,7 @@ public class UserActivitySettingsController : BaseSettingsController
                 {
                     log.UserActivityLogId,
                     log.UserId,
-                    Username = log.User!.Username,
+                    Username = log.User != null ? log.User.Username : "Unknown User",
                     log.IpAddress,
                     log.DeviceInformation,
                     log.ActionType,
