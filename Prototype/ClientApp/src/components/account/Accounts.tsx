@@ -20,7 +20,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  AlertTriangle
 } from 'lucide-react';
 import { userApi, roleApi } from '../../services/api';
 import { authApi } from '../../services/api';
@@ -53,6 +54,7 @@ interface NewUserForm {
   phoneNumber: string;
   password: string;
   reEnterPassword: string;
+  role: string;
 }
 
 interface EditUserForm {
@@ -101,13 +103,17 @@ export default function Accounts() {
     email: '',
     phoneNumber: '',
     password: '',
-    reEnterPassword: ''
+    reEnterPassword: '',
+    role: ''
   });
   const [formErrors, setFormErrors] = useState<Partial<NewUserForm>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showReEnterPassword, setShowReEnterPassword] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
 
   // ESC key handler for modal
   useEffect(() => {
@@ -127,56 +133,56 @@ export default function Accounts() {
   }, [showAddUser]);
 
   // Load users and roles from database
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
+  const loadData = async () => {
+    setLoading(true);
+    
+    // Load users - this should always work regardless of roles
+    try {
+      const usersResponse = await userApi.getAllUsers();
       
-      // Load users - this should always work regardless of roles
-      try {
-        const usersResponse = await userApi.getAllUsers();
+      if (usersResponse.success && usersResponse.users) {
+        const transformedUsers: User[] = usersResponse.users.map((user: any) => ({
+          userId: user.userId,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          username: user.username,
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+          isActive: user.isActive,
+          role: user.role,
+          lastLogin: user.lastLogin,
+          createdAt: user.createdAt
+        }));
         
-        if (usersResponse.success && usersResponse.users) {
-          const transformedUsers: User[] = usersResponse.users.map((user: any) => ({
-            userId: user.userId,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            username: user.username,
-            email: user.email,
-            phoneNumber: user.phoneNumber,
-            isActive: user.isActive,
-            role: user.role,
-            lastLogin: user.lastLogin,
-            createdAt: user.createdAt
-          }));
-          
-          setUsers(transformedUsers);
-        } else {
-          console.error('Failed to load users:', usersResponse.message);
-          setUsers([]);
-        }
-      } catch (error) {
-        console.error('Error loading users:', error);
+        setUsers(transformedUsers);
+      } else {
+        console.error('Failed to load users:', usersResponse.message);
         setUsers([]);
       }
+    } catch (error) {
+      console.error('Error loading users:', error);
+      setUsers([]);
+    }
+    
+    // Load roles - independent of users
+    try {
+      const rolesResponse = await roleApi.getAllRoles();
       
-      // Load roles - independent of users
-      try {
-        const rolesResponse = await roleApi.getAllRoles();
-        
-        if (rolesResponse.success && rolesResponse.roles) {
-          setRoles(rolesResponse.roles);
-        } else {
-          console.error('Failed to load roles:', rolesResponse.message);
-          setRoles([]);
-        }
-      } catch (error) {
-        console.error('Error loading roles:', error);
+      if (rolesResponse.success && rolesResponse.roles) {
+        setRoles(rolesResponse.roles);
+      } else {
+        console.error('Failed to load roles:', rolesResponse.message);
         setRoles([]);
       }
-      
-      setLoading(false);
-    };
+    } catch (error) {
+      console.error('Error loading roles:', error);
+      setRoles([]);
+    }
+    
+    setLoading(false);
+  };
 
+  useEffect(() => {
     loadData();
   }, []);
 
@@ -201,6 +207,25 @@ export default function Accounts() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterRole]);
+
+  // Add escape key listener for edit user modal
+  useEffect(() => {
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (showEditUser) {
+          resetEditUserModal();
+        }
+        if (userDetailModal) {
+          setUserDetailModal(null);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscapeKey);
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [showEditUser, userDetailModal]);
 
   const getRoleBadgeColor = (role: string) => {
     // Create a consistent color mapping based on role name
@@ -281,6 +306,11 @@ export default function Accounts() {
       errors.phoneNumber = 'Phone number cannot exceed 20 characters';
     }
 
+    // Role validation
+    if (!newUserForm.role.trim()) {
+      errors.role = 'Role is required';
+    }
+
     // Password validation to match backend requirements
     if (!newUserForm.password.trim()) {
       errors.password = 'Password is required';
@@ -324,15 +354,15 @@ export default function Accounts() {
           email: '',
           phoneNumber: '',
           password: '',
-          reEnterPassword: ''
+          reEnterPassword: '',
+          role: ''
         });
         setFormErrors({});
         
-        // Close modal after 2 seconds
-        setTimeout(() => {
-          setShowAddUser(false);
-          setSubmitSuccess(false);
-        }, 2000);
+        // Refresh the user list to show the newly created user
+        loadData();
+        
+        // User form will be closed manually by user clicking X
       } else {
         // Handle server errors
         console.error('Registration failed:', response);
@@ -392,8 +422,11 @@ export default function Accounts() {
       email: '',
       phoneNumber: '',
       password: '',
-      reEnterPassword: ''
+      reEnterPassword: '',
+      role: ''
     });
+    setShowAddUser(false);
+    setSubmitSuccess(false);
     setFormErrors({});
     setIsSubmitting(false);
     setSubmitSuccess(false);
@@ -475,11 +508,7 @@ export default function Accounts() {
           )
         );
         
-        setTimeout(() => {
-          setShowEditUser(false);
-          setEditSubmitSuccess(false);
-          resetEditUserModal();
-        }, 2000);
+        // Edit form will be closed manually by user clicking X
       } else {
         setEditFormErrors({ email: response?.message || 'Update failed' });
       }
@@ -519,6 +548,8 @@ export default function Accounts() {
       role: '',
       isActive: true
     });
+    setShowEditUser(false);
+    setEditSubmitSuccess(false);
     setEditFormErrors({});
     setIsEditSubmitting(false);
     setEditSubmitSuccess(false);
@@ -558,29 +589,37 @@ export default function Accounts() {
     window.location.href = `mailto:${user.email}`;
   };
 
-  const handleDeleteUser = async (user: User) => {
-    if (window.confirm(`Are you sure you want to delete user ${user.firstName} ${user.lastName}? This action cannot be undone.`)) {
-      try {
-        console.log('Attempting to delete user:', user.userId);
-        const response = await userApi.deleteUser(user.userId);
-        console.log('Delete user response:', response);
+  const handleDeleteUser = async () => {
+    if (!deletingUser) return;
+
+    try {
+      console.log('Attempting to delete user:', deletingUser.userId);
+      const response = await userApi.deleteUser(deletingUser.userId);
+      console.log('Delete user response:', response);
+      
+      if (response && response.success) {
+        // Remove from local state only after successful deletion from database
+        setUsers(prevUsers => prevUsers.filter(u => u.userId !== deletingUser.userId));
+        console.log(`User ${deletingUser.firstName} ${deletingUser.lastName} deleted successfully`);
+        setDeleteSuccess(true);
         
-        if (response && response.success) {
-          // Remove from local state only after successful deletion from database
-          setUsers(prevUsers => prevUsers.filter(u => u.userId !== user.userId));
-          console.log(`User ${user.firstName} ${user.lastName} deleted successfully`);
-        } else {
-          console.error('Failed to delete user:', response?.message);
-          alert(`Failed to delete user: ${response?.message || 'Unknown error'}`);
-        }
-      } catch (error: any) {
-        console.error('Error deleting user - Full error object:', error);
-        console.error('Error message:', error.message);
-        console.error('Error status:', error.status);
-        console.error('Error response:', error.response);
-        alert(`Error deleting user: ${error.message || error.status || 'Network error occurred'}`);
+        // Delete success modal will be closed manually by user clicking X
+      } else {
+        console.error('Failed to delete user:', response?.message);
+        alert(`Failed to delete user: ${response?.message || 'Unknown error'}`);
       }
+    } catch (error: any) {
+      console.error('Error deleting user - Full error object:', error);
+      console.error('Error message:', error.message);
+      console.error('Error status:', error.status);
+      console.error('Error response:', error.response);
+      alert(`Error deleting user: ${error.message || error.status || 'Network error occurred'}`);
     }
+  };
+
+  const confirmDeleteUser = (user: User) => {
+    setDeletingUser(user);
+    setShowDeleteConfirm(true);
   };
 
   if (loading) {
@@ -773,7 +812,7 @@ export default function Accounts() {
                             className="dropdown-item text-danger d-flex align-items-center w-100"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDeleteUser(user);
+                              confirmDeleteUser(user);
                             }}
                             style={{ whiteSpace: 'nowrap', textAlign: 'left' }}
                           >
@@ -1110,7 +1149,7 @@ export default function Accounts() {
                           email: userDetailModal.email,
                           phoneNumber: userDetailModal.phoneNumber || '',
                           role: userDetailModal.role,
-                          isActive: userDetailModal.isActive
+                          isActive: true
                         });
                         setUserDetailModal(null);
                         setShowEditUser(true);
@@ -1250,20 +1289,6 @@ export default function Accounts() {
                             </div>
                           )}
                         </div>
-                        <div className="col-12">
-                          <div className="form-check">
-                            <input 
-                              className="form-check-input" 
-                              type="checkbox" 
-                              id="isActive"
-                              checked={editUserForm.isActive}
-                              onChange={(e) => handleEditInputChange('isActive', e.target.checked)}
-                            />
-                            <label className="form-check-label fw-semibold" htmlFor="isActive">
-                              Active User
-                            </label>
-                          </div>
-                        </div>
                       </div>
                     </form>
                   )}
@@ -1389,7 +1414,7 @@ export default function Accounts() {
                             </div>
                           )}
                         </div>
-                        <div className="col-12">
+                        <div className="col-md-6">
                           <label className="form-label fw-semibold">Phone Number</label>
                           <input 
                             type="tel" 
@@ -1402,6 +1427,27 @@ export default function Accounts() {
                             <div className="invalid-feedback d-flex align-items-center">
                               <AlertCircle size={16} className="me-1" />
                               {formErrors.phoneNumber}
+                            </div>
+                          )}
+                        </div>
+                        <div className="col-md-6">
+                          <label className="form-label fw-semibold">Role</label>
+                          <select 
+                            className={`form-select rounded-3 ${formErrors.role ? 'is-invalid' : ''}`}
+                            value={newUserForm.role}
+                            onChange={(e) => handleInputChange('role', e.target.value)}
+                          >
+                            <option value="">Select a role</option>
+                            {roles.map((role) => (
+                              <option key={role.userRoleId} value={role.role}>
+                                {role.role}
+                              </option>
+                            ))}
+                          </select>
+                          {formErrors.role && (
+                            <div className="invalid-feedback d-flex align-items-center">
+                              <AlertCircle size={16} className="me-1" />
+                              {formErrors.role}
                             </div>
                           )}
                         </div>
@@ -1487,6 +1533,80 @@ export default function Accounts() {
                       ) : (
                         'Create User'
                       )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && deletingUser && (
+          <div className="modal d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)', position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1050}}>
+            <div className="modal-dialog modal-dialog-centered">
+              <div className="modal-content border-0 rounded-4">
+                <div className="modal-header border-0 pb-0">
+                  <h3 className="modal-title fw-bold text-danger">
+                    {deleteSuccess ? 'User Deleted' : 'Confirm Deletion'}
+                  </h3>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setDeletingUser(null);
+                      setDeleteSuccess(false);
+                    }}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  {deleteSuccess ? (
+                    <div className="text-center py-4">
+                      <CheckCircle2 size={64} className="text-success mb-3" />
+                      <h4 className="text-success fw-bold">User Deleted Successfully!</h4>
+                      <p className="text-muted">
+                        <strong>{deletingUser.firstName} {deletingUser.lastName}</strong> has been permanently removed.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <AlertTriangle size={64} className="text-warning mb-3" />
+                      <h4 className="fw-bold">Are you sure you want to delete this user?</h4>
+                      <div className="bg-light rounded-3 p-3 my-3">
+                        <h5 className="fw-bold text-dark mb-1">{deletingUser.firstName} {deletingUser.lastName}</h5>
+                        <p className="text-muted small mb-1">
+                          <Mail className="me-1" size={14} />
+                          {deletingUser.email}
+                        </p>
+                        <p className="text-muted small mb-0">
+                          <Shield className="me-1" size={14} />
+                          Role: {deletingUser.role}
+                        </p>
+                      </div>
+                      <p className="text-danger small fw-semibold">
+                        ⚠️ This action cannot be undone. All user data and permissions will be permanently removed.
+                      </p>
+                    </div>
+                  )}
+                </div>
+                {!deleteSuccess && (
+                  <div className="modal-footer border-0 pt-0">
+                    <button
+                      onClick={() => {
+                        setShowDeleteConfirm(false);
+                        setDeletingUser(null);
+                      }}
+                      className="btn btn-secondary rounded-3 fw-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDeleteUser}
+                      className="btn btn-danger rounded-3 fw-semibold d-flex align-items-center"
+                    >
+                      <Trash2 className="me-2" size={16} />
+                      Delete User
                     </button>
                   </div>
                 )}

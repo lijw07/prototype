@@ -45,7 +45,13 @@ public abstract class BaseSettingsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in {ErrorContext}", errorContext);
+            
+            // In development, return the actual error message
+            #if DEBUG
+            return StatusCode(500, ApiResponse.FailureResponse($"Error: {ex.Message}. Inner: {ex.InnerException?.Message}"));
+            #else
             return StatusCode(500, ApiResponse.FailureResponse("An internal error occurred"));
+            #endif
         }
     }
 
