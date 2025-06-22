@@ -6,8 +6,15 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Data.SqlClient;
 using Prototype.Data;
+using Prototype.Database;
 using Prototype.Database.Interface;
 using Prototype.Database.MicrosoftSQLServer;
+using Prototype.Database.MySql;
+using Prototype.Database.PostgreSql;
+using Prototype.Database.MongoDb;
+using Prototype.Database.Redis;
+using Prototype.Database.Api;
+using Prototype.Database.File;
 using Prototype.Middleware;
 using Prototype.POCO;
 using Prototype.Services;
@@ -64,11 +71,6 @@ builder.Services.AddScoped<IAuthenticatedUserAccessor, AuthenticatedUserAccessor
 builder.Services.AddScoped<IApplicationFactoryService, ApplicationFactoryService>();
 builder.Services.AddScoped<IUserApplicationFactoryService, UserApplicationFactoryService>();
 builder.Services.AddScoped<IApplicationConnectionFactoryService, ApplicationConnectionFactoryService>();
-builder.Services.AddScoped<IConnectionStrategy, UserPasswordStrategy>();
-builder.Services.AddScoped<IConnectionStrategy, NoAuthStrategy>();
-builder.Services.AddScoped<IConnectionStrategy, AzureAdPasswordStrategy>();
-builder.Services.AddScoped<IConnectionStrategy, AzureAdIntegratedStrategy>();
-builder.Services.AddScoped<SqlServerConnectionStrategy>();
 builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<PasswordEncryptionService>();
 builder.Services.AddScoped<ValidationService>();
@@ -83,23 +85,27 @@ builder.Services.AddHttpContextAccessor();
 // Add Memory Cache
 builder.Services.AddMemoryCache();
 
-// Add connection strategies with encryption service
-builder.Services.AddScoped<UserPasswordStrategy>();
-builder.Services.AddScoped<AzureAdPasswordStrategy>();
-builder.Services.AddScoped<AzureAdIntegratedStrategy>();
-builder.Services.AddScoped<NoAuthStrategy>();
+// SQL Server connection strategies are now self-contained in SqlServerDatabaseStrategy
 
-builder.Services.AddScoped<SqlServerConnectionStrategy>(provider =>
-{
-    var strategies = new IConnectionStrategy[]
-    {
-        provider.GetRequiredService<UserPasswordStrategy>(),
-        provider.GetRequiredService<AzureAdPasswordStrategy>(),
-        provider.GetRequiredService<AzureAdIntegratedStrategy>(),
-        provider.GetRequiredService<NoAuthStrategy>()
-    };
-    return new SqlServerConnectionStrategy(strategies);
-});
+// Add Database Connection Strategies
+builder.Services.AddScoped<IDatabaseConnectionStrategy, SqlServerDatabaseStrategy>();
+builder.Services.AddScoped<IDatabaseConnectionStrategy, MySqlDatabaseStrategy>();
+builder.Services.AddScoped<IDatabaseConnectionStrategy, PostgreSqlDatabaseStrategy>();
+builder.Services.AddScoped<IDatabaseConnectionStrategy, MongoDbDatabaseStrategy>();
+builder.Services.AddScoped<IDatabaseConnectionStrategy, RedisDatabaseStrategy>();
+
+// Add API Connection Strategies
+builder.Services.AddScoped<IApiConnectionStrategy, RestApiConnectionStrategy>();
+
+// Add File Connection Strategies
+builder.Services.AddScoped<IFileConnectionStrategy, CsvFileConnectionStrategy>();
+builder.Services.AddScoped<IFileConnectionStrategy, JsonFileConnectionStrategy>();
+
+// Add HttpClient for API connections
+builder.Services.AddHttpClient<RestApiConnectionStrategy>();
+
+// Add Database Connection Factory
+builder.Services.AddScoped<IDatabaseConnectionFactory, DatabaseConnectionFactory>();
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

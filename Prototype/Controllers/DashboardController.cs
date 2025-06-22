@@ -88,7 +88,6 @@ public class DashboardController : ControllerBase
                     totalUsers = totalUsers,
                     recentActivity = recentActivity,
                     systemHealth = "healthy", // You can implement actual health checks later
-                    uptime = "99.9%", // You can implement actual uptime calculation
                     recentActivities = recentActivities.Select(activity => new
                     {
                         actionType = activity.ActionType.ToString(),

@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
+using Prototype.Database;
+using Prototype.Database.Interface;
 using Prototype.DTOs;
 using Prototype.Enum;
 using Prototype.Models;
@@ -12,17 +14,23 @@ using System.Text.Json.Serialization;
 
 namespace Prototype.Controllers.Settings;
 
-[Route("[controller]")]
+[Route("settings/applications")]
 public class ApplicationSettingsController : BaseSettingsController
 {
     private readonly SentinelContext _context;
     private readonly IApplicationFactoryService _applicationFactory;
     private readonly IApplicationConnectionFactoryService _connectionFactory;
+    private readonly IDatabaseConnectionFactory _dbConnectionFactory;
+    private readonly IEnumerable<IApiConnectionStrategy> _apiStrategies;
+    private readonly IEnumerable<IFileConnectionStrategy> _fileStrategies;
 
     public ApplicationSettingsController(
         SentinelContext context,
         IApplicationFactoryService applicationFactory,
         IApplicationConnectionFactoryService connectionFactory,
+        IDatabaseConnectionFactory dbConnectionFactory,
+        IEnumerable<IApiConnectionStrategy> apiStrategies,
+        IEnumerable<IFileConnectionStrategy> fileStrategies,
         IAuthenticatedUserAccessor userAccessor,
         ValidationService validationService,
         TransactionService transactionService,
@@ -32,6 +40,9 @@ public class ApplicationSettingsController : BaseSettingsController
         _context = context;
         _applicationFactory = applicationFactory;
         _connectionFactory = connectionFactory;
+        _dbConnectionFactory = dbConnectionFactory;
+        _apiStrategies = apiStrategies;
+        _fileStrategies = fileStrategies;
     }
 
     [HttpPost("new-application-connection")]
@@ -136,10 +147,19 @@ public class ApplicationSettingsController : BaseSettingsController
                            app.UpdatedAt,
                            Connection = new
                            {
-                               conn.Host,
-                               conn.Port,
-                               conn.DatabaseName,
-                               AuthenticationType = conn.AuthenticationType.ToString()
+                               host = conn.Host,
+                               port = conn.Port,
+                               databaseName = conn.DatabaseName,
+                               authenticationType = conn.AuthenticationType.ToString(),
+                               username = conn.Username,
+                               // Additional fields based on authentication type
+                               authenticationDatabase = conn.AuthenticationDatabase,
+                               awsAccessKeyId = conn.AwsAccessKeyId,
+                               principal = conn.Principal,
+                               serviceName = conn.ServiceName,
+                               serviceRealm = conn.ServiceRealm,
+                               canonicalizeHostName = conn.CanonicalizeHostName
+                               // Note: Password and secret keys are intentionally not returned for security
                            }
                        };
 
@@ -148,6 +168,7 @@ public class ApplicationSettingsController : BaseSettingsController
                 .Skip(skip)
                 .Take(validPageSize)
                 .ToListAsync();
+
 
             var result = CreatePaginatedResponse(applications, validPage, validPageSize, totalCount);
             return new { success = true, data = result };
@@ -272,29 +293,26 @@ public class ApplicationSettingsController : BaseSettingsController
                 };
                 _context.UserActivityLogs.Add(activityLog);
 
-                // Create application log before any deletions
-                var applicationLog = new ApplicationLogModel
+                // Only create application log if we're not deleting the application
+                if (otherUsersUsingApp > 0)
                 {
-                    ApplicationLogId = Guid.NewGuid(),
-                    ApplicationId = appGuid,
-                    Application = null, // Don't set navigation property to avoid tracking issues
-                    ActionType = ActionTypeEnum.ApplicationRemoved,
-                    Metadata = otherUsersUsingApp > 0 
-                        ? $"User {currentUser.Username} removed their access to application '{applicationName}'"
-                        : $"Application '{applicationName}' was permanently deleted by user {currentUser.Username}",
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                _context.ApplicationLogs.Add(applicationLog);
-                
-                _logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", appGuid, ActionTypeEnum.ApplicationRemoved);
-
-                // Save logs first
-                await _context.SaveChangesAsync();
+                    var applicationLog = new ApplicationLogModel
+                    {
+                        ApplicationLogId = Guid.NewGuid(),
+                        ApplicationId = appGuid,
+                        Application = null, // Don't set navigation property to avoid tracking issues
+                        ActionType = ActionTypeEnum.ApplicationRemoved,
+                        Metadata = $"User {currentUser.Username} removed their access to application '{applicationName}'",
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    _context.ApplicationLogs.Add(applicationLog);
+                    
+                    _logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", appGuid, ActionTypeEnum.ApplicationRemoved);
+                }
 
                 // Now remove the current user's relationship
                 _context.UserApplications.Remove(userApplication);
-                await _context.SaveChangesAsync();
 
                 // Only delete the connection if no other users are using it
                 if (otherUsersUsingConnection == 0)
@@ -304,19 +322,50 @@ public class ApplicationSettingsController : BaseSettingsController
                     if (connection != null)
                     {
                         _context.ApplicationConnections.Remove(connection);
-                        await _context.SaveChangesAsync();
                     }
                 }
 
-                // DO NOT delete the application from the database to preserve application logs
-                // The application record will remain in the database for audit/logging purposes
-                // Only the user's access (UserApplication relationship) has been removed above
+                // Only delete the application if no other users are using it
+                if (otherUsersUsingApp == 0)
+                {
+                    // First, we need to delete all application logs for this application
+                    var applicationLogs = await _context.ApplicationLogs
+                        .Where(al => al.ApplicationId == appGuid)
+                        .ToListAsync();
+                    
+                    if (applicationLogs.Any())
+                    {
+                        _context.ApplicationLogs.RemoveRange(applicationLogs);
+                        _logger.LogInformation("Removing {LogCount} application logs before deleting application {ApplicationId}", 
+                            applicationLogs.Count, appGuid);
+                    }
+                    
+                    if (application != null)
+                    {
+                        _context.Applications.Remove(application);
+                        _logger.LogInformation("Application {ApplicationId} permanently deleted from database as no other users were using it", appGuid);
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("Application {ApplicationId} kept in database as {OtherUsersCount} other users are still using it", appGuid, otherUsersUsingApp);
+                }
 
-                return new { success = true, message = "Application deleted successfully" };
+                var message = otherUsersUsingApp > 0 
+                    ? "Your access to the application has been removed" 
+                    : "Application deleted successfully";
+                
+                return new { success = true, message = message };
             });
         }, "deleting application");
     }
 
+    [HttpPost("debug-connection-test")]
+    public async Task<IActionResult> DebugConnectionTest([FromBody] object requestData)
+    {
+        return Ok(new { success = false, message = "DEBUG METHOD CALLED - This proves routing works", connectionValid = false });
+    }
+    
     [HttpPost("test-application-connection")]
     public async Task<IActionResult> TestApplicationConnection([FromBody] object requestData)
     {
@@ -329,10 +378,15 @@ public class ApplicationSettingsController : BaseSettingsController
             try
             {
                 string host, port, description;
+                bool connectionTestResult = false;
+                DataSourceTypeEnum dataSourceType;
                 Guid? testingApplicationId = null;
+                ApplicationConnectionModel? existingConnection = null;
+                ConnectionSourceDto? newConnectionSource = null;
                 
                 // Check if this is a request by applicationId or full data
                 var jsonElement = (System.Text.Json.JsonElement)requestData;
+                _logger.LogInformation("Received connection test request: {JsonData}", jsonElement.GetRawText());
                 
                 if (jsonElement.TryGetProperty("applicationId", out var appIdProperty) && appIdProperty.ValueKind == System.Text.Json.JsonValueKind.String)
                 {
@@ -346,15 +400,21 @@ public class ApplicationSettingsController : BaseSettingsController
                         .Include(ua => ua.ApplicationConnection)
                         .FirstOrDefaultAsync(ua => ua.ApplicationId == applicationId && ua.UserId == currentUser.UserId);
                     
-                    if (userApp?.ApplicationConnection == null)
+                    if (userApp?.ApplicationConnection == null || userApp.Application == null)
                         return new { success = false, message = "Application or connection not found" };
                     
-                    host = userApp.ApplicationConnection.Host;
-                    port = userApp.ApplicationConnection.Port;
-                    description = $"tested connection to existing application {userApp.Application?.ApplicationName}";
+                    existingConnection = userApp.ApplicationConnection;
+                    host = existingConnection.Host;
+                    port = existingConnection.Port;
+                    description = $"tested connection to existing application {userApp.Application.ApplicationName}";
+                    
+                    // Get the data source type
+                    dataSourceType = userApp.Application.ApplicationDataSourceType;
                 }
                 else
                 {
+                    _logger.LogInformation("Testing new application with full connection data");
+                    
                     // Testing new application with full connection data
                     var options = new JsonSerializerOptions
                     {
@@ -362,35 +422,140 @@ public class ApplicationSettingsController : BaseSettingsController
                         PropertyNameCaseInsensitive = true
                     };
                     options.Converters.Add(new JsonStringEnumConverter());
-                    var dto = System.Text.Json.JsonSerializer.Deserialize<ApplicationRequestDto>(jsonElement.GetRawText(), options);
-                    if (dto?.ConnectionSource == null)
-                        return new { success = false, message = "Invalid connection data" };
                     
-                    host = dto.ConnectionSource.Host;
-                    port = dto.ConnectionSource.Port;
-                    description = $"tested connection to new application {dto.ApplicationName}";
+                    try
+                    {
+                        var dto = System.Text.Json.JsonSerializer.Deserialize<ApplicationRequestDto>(jsonElement.GetRawText(), options);
+                        _logger.LogInformation("Deserialized DTO: ApplicationName={ApplicationName}, DataSourceType={DataSourceType}, ConnectionSource null={ConnectionSourceNull}", 
+                            dto?.ApplicationName, dto?.DataSourceType, dto?.ConnectionSource == null);
+                        
+                        if (dto?.ConnectionSource == null)
+                        {
+                            _logger.LogWarning("ConnectionSource is null in deserialized DTO");
+                            return new { success = false, message = "Invalid connection data" };
+                        }
+                        
+                        newConnectionSource = dto.ConnectionSource;
+                        host = dto.ConnectionSource.Host;
+                        port = dto.ConnectionSource.Port;
+                        description = $"tested connection to new application {dto.ApplicationName}";
+                        dataSourceType = dto.DataSourceType;
+                        
+                        _logger.LogInformation("Parsed connection data: Host={Host}, Port={Port}, DataSourceType={DataSourceType}", 
+                            host, port, dataSourceType);
+                    }
+                    catch (Exception deserializeEx)
+                    {
+                        _logger.LogError(deserializeEx, "Failed to deserialize connection test request");
+                        return new { success = false, message = "Failed to parse connection data" };
+                    }
                     
-                    // Validate required fields for new applications
-                    var isValid = !string.IsNullOrEmpty(host) &&
-                                 !string.IsNullOrEmpty(port) &&
-                                 !string.IsNullOrEmpty(dto.ConnectionSource.Url);
-
+                    // Basic validation for required fields
+                    var isValid = !string.IsNullOrEmpty(newConnectionSource.Url);
                     if (!isValid)
                     {
-                        return new { success = false, message = "Invalid connection parameters" };
+                        return new { success = false, message = "Connection URL is required" };
                     }
                 }
 
-                // Log connection test
+                // Perform the actual connection test based on the data source type
+                _logger.LogInformation("Testing connection for data source type: {DataSourceType}", dataSourceType);
+                
+                try
+                {
+                    if (IsDatabaseType(dataSourceType))
+                    {
+                        _logger.LogInformation("Testing database connection for {DataSourceType}", dataSourceType);
+                        
+                        // Test database connection
+                        string connectionString;
+                        if (existingConnection != null)
+                        {
+                            _logger.LogInformation("Building connection string from existing connection");
+                            connectionString = _dbConnectionFactory.BuildConnectionString(dataSourceType, existingConnection);
+                        }
+                        else if (newConnectionSource != null)
+                        {
+                            _logger.LogInformation("Building connection string from new connection source");
+                            connectionString = _dbConnectionFactory.BuildConnectionString(dataSourceType, newConnectionSource);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("No connection data available for testing");
+                            return new { success = false, message = "No connection data available" };
+                        }
+                        
+                        _logger.LogInformation("Built connection string, testing connection...");
+                        connectionTestResult = await _dbConnectionFactory.TestConnectionAsync(dataSourceType, connectionString);
+                        _logger.LogInformation("Database connection test result: {Result}", connectionTestResult);
+                    }
+                    else if (IsApiType(dataSourceType))
+                    {
+                        // Test API connection
+                        var apiStrategy = _apiStrategies.FirstOrDefault(s => s.ConnectionType == dataSourceType);
+                        if (apiStrategy == null)
+                        {
+                            return new { success = false, message = $"API connection type '{dataSourceType}' is not supported" };
+                        }
+                        
+                        if (existingConnection != null)
+                        {
+                            connectionTestResult = await apiStrategy.TestConnectionAsync(existingConnection);
+                        }
+                        else if (newConnectionSource != null)
+                        {
+                            connectionTestResult = await apiStrategy.TestConnectionAsync(newConnectionSource);
+                        }
+                        else
+                        {
+                            return new { success = false, message = "No connection data available" };
+                        }
+                    }
+                    else if (IsFileType(dataSourceType))
+                    {
+                        // Test file connection
+                        var fileStrategy = _fileStrategies.FirstOrDefault(s => s.ConnectionType == dataSourceType);
+                        if (fileStrategy == null)
+                        {
+                            return new { success = false, message = $"File connection type '{dataSourceType}' is not supported" };
+                        }
+                        
+                        if (existingConnection != null)
+                        {
+                            connectionTestResult = await fileStrategy.TestConnectionAsync(existingConnection);
+                        }
+                        else if (newConnectionSource != null)
+                        {
+                            connectionTestResult = await fileStrategy.TestConnectionAsync(newConnectionSource);
+                        }
+                        else
+                        {
+                            return new { success = false, message = "No connection data available" };
+                        }
+                    }
+                    else
+                    {
+                        return new { success = false, message = $"Connection type '{dataSourceType}' is not supported" };
+                    }
+                }
+                catch (Exception testEx)
+                {
+                    _logger.LogError(testEx, "Connection test failed for {DataSourceType}: {Error}", dataSourceType, testEx.Message);
+                    connectionTestResult = false;
+                }
+                
+                _logger.LogInformation("Final connection test result for {DataSourceType}: {Result}", dataSourceType, connectionTestResult);
+
+                // Log connection test attempt
                 var activityLog = new UserActivityLogModel
                 {
                     UserActivityLogId = Guid.NewGuid(),
                     UserId = currentUser.UserId,
-                    User = null, // Don't set navigation property to avoid tracking issues
+                    User = null,
                     IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
                     DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
                     ActionType = ActionTypeEnum.ConnectionAttempt,
-                    Description = $"User {description}",
+                    Description = $"User {description} - Result: {(connectionTestResult ? "Success" : "Failed")}",
                     Timestamp = DateTime.UtcNow
                 };
                 _context.UserActivityLogs.Add(activityLog);
@@ -402,20 +567,21 @@ public class ApplicationSettingsController : BaseSettingsController
                     {
                         ApplicationLogId = Guid.NewGuid(),
                         ApplicationId = testingApplicationId.Value,
-                        Application = null, // Don't set navigation property to avoid tracking issues
+                        Application = null,
                         ActionType = ActionTypeEnum.ConnectionAttempt,
-                        Metadata = $"Connection test performed by user {currentUser.Username}",
+                        Metadata = $"Connection test performed by user {currentUser.Username} - Result: {(connectionTestResult ? "Success" : "Failed")}",
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     };
                     _context.ApplicationLogs.Add(applicationLog);
                     
-                    _logger.LogInformation("Added application log for connection test on application {ApplicationId}", testingApplicationId.Value);
+                    _logger.LogInformation("Added application log for connection test on application {ApplicationId} with result {Result}", testingApplicationId.Value, connectionTestResult);
                 }
 
                 await _context.SaveChangesAsync();
 
-                return new { success = true, message = "Connection test successful", connectionValid = true };
+                var message = connectionTestResult ? "Connection test successful" : "Connection test failed";
+                return new { success = connectionTestResult, message = message, connectionValid = connectionTestResult };
             }
             catch (Exception ex)
             {
@@ -423,5 +589,277 @@ public class ApplicationSettingsController : BaseSettingsController
                 return new { success = false, message = "Connection test failed", error = ex.Message };
             }
         }, "testing application connection");
+    }
+    
+    [HttpPost("test-application-connection-old")]
+    public async Task<IActionResult> TestApplicationConnectionOld([FromBody] object requestData)
+    {
+        _logger.LogCritical("=== CONNECTION TEST METHOD CALLED ===");
+        
+        return await ExecuteWithErrorHandlingAsync<object>(async () =>
+        {
+            _logger.LogCritical("=== INSIDE CONNECTION TEST EXECUTION ===");
+            
+            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            if (currentUser == null)
+            {
+                _logger.LogCritical("=== USER NOT AUTHENTICATED ===");
+                return new { success = false, message = "User not authenticated" };
+            }
+
+            try
+            {
+                string host, port, description;
+                bool connectionTestResult = false;
+                DataSourceTypeEnum dataSourceType;
+                Guid? testingApplicationId = null;
+                ApplicationConnectionModel? existingConnection = null;
+                ConnectionSourceDto? newConnectionSource = null;
+                
+                // Check if this is a request by applicationId or full data
+                var jsonElement = (System.Text.Json.JsonElement)requestData;
+                _logger.LogInformation("Received connection test request: {JsonData}", jsonElement.GetRawText());
+                
+                if (jsonElement.TryGetProperty("applicationId", out var appIdProperty) && appIdProperty.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    // Testing existing application by ID
+                    var applicationId = Guid.Parse(appIdProperty.GetString()!);
+                    testingApplicationId = applicationId;
+                    
+                    // Get the application and its connection
+                    var userApp = await _context.UserApplications
+                        .Include(ua => ua.Application)
+                        .Include(ua => ua.ApplicationConnection)
+                        .FirstOrDefaultAsync(ua => ua.ApplicationId == applicationId && ua.UserId == currentUser.UserId);
+                    
+                    if (userApp?.ApplicationConnection == null || userApp.Application == null)
+                        return new { success = false, message = "Application or connection not found" };
+                    
+                    existingConnection = userApp.ApplicationConnection;
+                    host = existingConnection.Host;
+                    port = existingConnection.Port;
+                    description = $"tested connection to existing application {userApp.Application.ApplicationName}";
+                    
+                    // Get the data source type
+                    dataSourceType = userApp.Application.ApplicationDataSourceType;
+                }
+                else
+                {
+                    _logger.LogInformation("Testing new application with full connection data");
+                    
+                    // Testing new application with full connection data
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                        PropertyNameCaseInsensitive = true
+                    };
+                    options.Converters.Add(new JsonStringEnumConverter());
+                    
+                    try
+                    {
+                        var dto = System.Text.Json.JsonSerializer.Deserialize<ApplicationRequestDto>(jsonElement.GetRawText(), options);
+                        _logger.LogInformation("Deserialized DTO: ApplicationName={ApplicationName}, DataSourceType={DataSourceType}, ConnectionSource null={ConnectionSourceNull}", 
+                            dto?.ApplicationName, dto?.DataSourceType, dto?.ConnectionSource == null);
+                        
+                        if (dto?.ConnectionSource == null)
+                        {
+                            _logger.LogWarning("ConnectionSource is null in deserialized DTO");
+                            return new { success = false, message = "Invalid connection data" };
+                        }
+                        
+                        newConnectionSource = dto.ConnectionSource;
+                        host = dto.ConnectionSource.Host;
+                        port = dto.ConnectionSource.Port;
+                        description = $"tested connection to new application {dto.ApplicationName}";
+                        dataSourceType = dto.DataSourceType;
+                        
+                        _logger.LogInformation("Parsed connection data: Host={Host}, Port={Port}, DataSourceType={DataSourceType}", 
+                            host, port, dataSourceType);
+                    }
+                    catch (Exception deserializeEx)
+                    {
+                        _logger.LogError(deserializeEx, "Failed to deserialize connection test request");
+                        return new { success = false, message = "Failed to parse connection data" };
+                    }
+                    
+                    // Basic validation for required fields
+                    var isValid = !string.IsNullOrEmpty(newConnectionSource.Url);
+                    if (!isValid)
+                    {
+                        return new { success = false, message = "Connection URL is required" };
+                    }
+                }
+
+                // Perform the actual connection test based on the data source type
+                _logger.LogCritical("=== TESTING CONNECTION FOR DATA SOURCE TYPE: {DataSourceType} ===", dataSourceType);
+                
+                // TEMPORARY: Force all connections to fail for testing
+                _logger.LogCritical("=== FORCING CONNECTION FAILURE FOR TESTING ===");
+                connectionTestResult = false;
+                
+                /*
+                try
+                {
+                    if (IsDatabaseType(dataSourceType))
+                    {
+                        _logger.LogInformation("Testing database connection for {DataSourceType}", dataSourceType);
+                        
+                        // Test database connection
+                        string connectionString;
+                        if (existingConnection != null)
+                        {
+                            _logger.LogInformation("Building connection string from existing connection");
+                            connectionString = _dbConnectionFactory.BuildConnectionString(dataSourceType, existingConnection);
+                        }
+                        else if (newConnectionSource != null)
+                        {
+                            _logger.LogInformation("Building connection string from new connection source");
+                            connectionString = _dbConnectionFactory.BuildConnectionString(dataSourceType, newConnectionSource);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("No connection data available for testing");
+                            return new { success = false, message = "No connection data available" };
+                        }
+                        
+                        _logger.LogInformation("Built connection string, testing connection...");
+                        connectionTestResult = await _dbConnectionFactory.TestConnectionAsync(dataSourceType, connectionString);
+                        _logger.LogInformation("Database connection test result: {Result}", connectionTestResult);
+                    }
+                    else if (IsApiType(dataSourceType))
+                    {
+                        // Test API connection
+                        var apiStrategy = _apiStrategies.FirstOrDefault(s => s.ConnectionType == dataSourceType);
+                        if (apiStrategy == null)
+                        {
+                            return new { success = false, message = $"API connection type '{dataSourceType}' is not supported" };
+                        }
+                        
+                        if (existingConnection != null)
+                        {
+                            connectionTestResult = await apiStrategy.TestConnectionAsync(existingConnection);
+                        }
+                        else if (newConnectionSource != null)
+                        {
+                            connectionTestResult = await apiStrategy.TestConnectionAsync(newConnectionSource);
+                        }
+                        else
+                        {
+                            return new { success = false, message = "No connection data available" };
+                        }
+                    }
+                    else if (IsFileType(dataSourceType))
+                    {
+                        // Test file connection
+                        var fileStrategy = _fileStrategies.FirstOrDefault(s => s.ConnectionType == dataSourceType);
+                        if (fileStrategy == null)
+                        {
+                            return new { success = false, message = $"File connection type '{dataSourceType}' is not supported" };
+                        }
+                        
+                        if (existingConnection != null)
+                        {
+                            connectionTestResult = await fileStrategy.TestConnectionAsync(existingConnection);
+                        }
+                        else if (newConnectionSource != null)
+                        {
+                            connectionTestResult = await fileStrategy.TestConnectionAsync(newConnectionSource);
+                        }
+                        else
+                        {
+                            return new { success = false, message = "No connection data available" };
+                        }
+                    }
+                    else
+                    {
+                        return new { success = false, message = $"Connection type '{dataSourceType}' is not supported" };
+                    }
+                }
+                catch (Exception testEx)
+                {
+                    _logger.LogError(testEx, "Connection test failed for {DataSourceType}: {Error}", dataSourceType, testEx.Message);
+                    connectionTestResult = false;
+                }
+                */
+                
+                _logger.LogInformation("Final connection test result for {DataSourceType}: {Result}", dataSourceType, connectionTestResult);
+
+                // Log connection test attempt
+                var activityLog = new UserActivityLogModel
+                {
+                    UserActivityLogId = Guid.NewGuid(),
+                    UserId = currentUser.UserId,
+                    User = null,
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                    DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
+                    ActionType = ActionTypeEnum.ConnectionAttempt,
+                    Description = $"User {description} - Result: {(connectionTestResult ? "Success" : "Failed")}",
+                    Timestamp = DateTime.UtcNow
+                };
+                _context.UserActivityLogs.Add(activityLog);
+
+                // Add application log if testing existing application
+                if (testingApplicationId.HasValue)
+                {
+                    var applicationLog = new ApplicationLogModel
+                    {
+                        ApplicationLogId = Guid.NewGuid(),
+                        ApplicationId = testingApplicationId.Value,
+                        Application = null,
+                        ActionType = ActionTypeEnum.ConnectionAttempt,
+                        Metadata = $"Connection test performed by user {currentUser.Username} - Result: {(connectionTestResult ? "Success" : "Failed")}",
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    _context.ApplicationLogs.Add(applicationLog);
+                    
+                    _logger.LogInformation("Added application log for connection test on application {ApplicationId} with result {Result}", testingApplicationId.Value, connectionTestResult);
+                }
+
+                await _context.SaveChangesAsync();
+
+                var message = connectionTestResult ? "Connection test successful" : "Connection test failed";
+                return new { success = connectionTestResult, message = message, connectionValid = connectionTestResult };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Connection test failed: {Error}", ex.Message);
+                return new { success = false, message = "Connection test failed", error = ex.Message };
+            }
+        }, "testing application connection");
+    }
+
+    private static bool IsDatabaseType(DataSourceTypeEnum dataSourceType)
+    {
+        return dataSourceType is DataSourceTypeEnum.MicrosoftSqlServer or
+               DataSourceTypeEnum.MySql or
+               DataSourceTypeEnum.PostgreSql or
+               DataSourceTypeEnum.MongoDb or
+               DataSourceTypeEnum.Redis or
+               DataSourceTypeEnum.Oracle or
+               DataSourceTypeEnum.MariaDb or
+               DataSourceTypeEnum.Sqlite or
+               DataSourceTypeEnum.Cassandra or
+               DataSourceTypeEnum.ElasticSearch;
+    }
+
+    private static bool IsApiType(DataSourceTypeEnum dataSourceType)
+    {
+        return dataSourceType is DataSourceTypeEnum.RestApi or
+               DataSourceTypeEnum.GraphQL or
+               DataSourceTypeEnum.SoapApi or
+               DataSourceTypeEnum.ODataApi or
+               DataSourceTypeEnum.WebSocket;
+    }
+
+    private static bool IsFileType(DataSourceTypeEnum dataSourceType)
+    {
+        return dataSourceType is DataSourceTypeEnum.CsvFile or
+               DataSourceTypeEnum.JsonFile or
+               DataSourceTypeEnum.XmlFile or
+               DataSourceTypeEnum.ExcelFile or
+               DataSourceTypeEnum.ParquetFile or
+               DataSourceTypeEnum.YamlFile or
+               DataSourceTypeEnum.TextFile;
     }
 }

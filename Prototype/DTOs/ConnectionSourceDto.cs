@@ -55,4 +55,59 @@ public class ConnectionSourceDto
     public string? ServiceRealm { get; set; }
 
     public bool CanonicalizeHostName { get; set; }
+    
+    // API-specific properties
+    [StringLength(1000, ErrorMessage = "API endpoint cannot exceed 1000 characters")]
+    public string? ApiEndpoint { get; set; }
+    
+    [StringLength(20, ErrorMessage = "HTTP method cannot exceed 20 characters")]
+    public string? HttpMethod { get; set; }
+    
+    [StringLength(2000, ErrorMessage = "Headers cannot exceed 2000 characters")]
+    public string? Headers { get; set; }
+    
+    [StringLength(5000, ErrorMessage = "Request body cannot exceed 5000 characters")]
+    public string? RequestBody { get; set; }
+    
+    [StringLength(500, ErrorMessage = "API key cannot exceed 500 characters")]
+    public string? ApiKey { get; set; }
+    
+    [StringLength(1000, ErrorMessage = "Bearer token cannot exceed 1000 characters")]
+    public string? BearerToken { get; set; }
+    
+    [StringLength(500, ErrorMessage = "Client ID cannot exceed 500 characters")]
+    public string? ClientId { get; set; }
+    
+    [StringLength(1000, ErrorMessage = "Client secret cannot exceed 1000 characters")]
+    public string? ClientSecret { get; set; }
+    
+    [StringLength(1000, ErrorMessage = "Refresh token cannot exceed 1000 characters")]
+    public string? RefreshToken { get; set; }
+    
+    [StringLength(1000, ErrorMessage = "Authorization URL cannot exceed 1000 characters")]
+    public string? AuthorizationUrl { get; set; }
+    
+    [StringLength(1000, ErrorMessage = "Token URL cannot exceed 1000 characters")]
+    public string? TokenUrl { get; set; }
+    
+    [StringLength(500, ErrorMessage = "Scope cannot exceed 500 characters")]
+    public string? Scope { get; set; }
+    
+    // File-specific properties
+    [StringLength(1000, ErrorMessage = "File path cannot exceed 1000 characters")]
+    public string? FilePath { get; set; }
+    
+    [StringLength(100, ErrorMessage = "File format cannot exceed 100 characters")]
+    public string? FileFormat { get; set; }
+    
+    [StringLength(10, ErrorMessage = "Delimiter cannot exceed 10 characters")]
+    public string? Delimiter { get; set; }
+    
+    [StringLength(10, ErrorMessage = "Encoding cannot exceed 10 characters")]
+    public string? Encoding { get; set; }
+    
+    public bool HasHeader { get; set; }
+    
+    [StringLength(2000, ErrorMessage = "Custom properties cannot exceed 2000 characters")]
+    public string? CustomProperties { get; set; }
 }

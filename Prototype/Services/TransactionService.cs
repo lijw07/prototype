@@ -19,6 +19,7 @@ public class TransactionService
         try
         {
             var result = await operation();
+            await _context.SaveChangesAsync();
             await transaction.CommitAsync();
             return result;
         }
@@ -36,6 +37,7 @@ public class TransactionService
         try
         {
             await operation();
+            await _context.SaveChangesAsync();
             await transaction.CommitAsync();
         }
         catch (Exception ex)

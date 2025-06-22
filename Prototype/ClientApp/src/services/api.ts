@@ -7,6 +7,13 @@ interface ApiResponse<T = any> {
   errors?: string[];
 }
 
+interface ConnectionTestResponse {
+  success: boolean;
+  message: string;
+  connectionValid?: boolean;
+  errors?: string[];
+}
+
 interface ApiError {
   message: string;
   status: number;
@@ -167,19 +174,19 @@ export const userApi = {
 // Application Settings API
 export const applicationApi = {
   getApplications: (page: number = 1, pageSize: number = 10) =>
-    api.get<ApiResponse<any>>(`/ApplicationSettings/get-applications?page=${page}&pageSize=${pageSize}`),
+    api.get<ApiResponse<any>>(`/settings/applications/get-applications?page=${page}&pageSize=${pageSize}`),
   
   createApplication: (applicationData: any) =>
-    api.post<ApiResponse>('/ApplicationSettings/new-application-connection', applicationData),
+    api.post<ApiResponse>('/settings/applications/new-application-connection', applicationData),
   
   updateApplication: (applicationId: string, applicationData: any) =>
-    api.put<ApiResponse>(`/ApplicationSettings/update-application/${applicationId}`, applicationData),
+    api.put<ApiResponse>(`/settings/applications/update-application/${applicationId}`, applicationData),
   
   deleteApplication: (applicationId: string) =>
-    api.delete<ApiResponse>(`/ApplicationSettings/delete-application/${applicationId}`),
+    api.delete<ApiResponse>(`/settings/applications/delete-application/${applicationId}`),
   
   testConnection: (connectionData: any) =>
-    api.post<ApiResponse>('/ApplicationSettings/test-application-connection', connectionData),
+    api.post<ConnectionTestResponse>('/settings/applications/test-application-connection', connectionData),
 };
 
 // Role Settings API
@@ -225,3 +232,4 @@ export const applicationLogApi = {
 };
 
 export default api;
+export type { ApiResponse, ConnectionTestResponse, ApiError };
