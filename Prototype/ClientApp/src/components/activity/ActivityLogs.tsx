@@ -130,14 +130,14 @@ const ActivityLogs: React.FC = () => {
                         )}
                         
                         {/* Pagination Controls */}
-                        {!loading && userActivityLogs.length > 0 && (
-                            <div className="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+                        {!loading && pagination.totalCount > 0 && pagination.totalPages > 1 && (
+                            <div className="d-flex justify-content-between align-items-center mt-4">
                                 <div className="d-flex align-items-center gap-3">
-                                    <span className="text-muted small">
+                                    <span className="text-muted">
                                         Showing {((pagination.page - 1) * pagination.pageSize) + 1} to {Math.min(pagination.page * pagination.pageSize, pagination.totalCount)} of {pagination.totalCount} entries
                                     </span>
                                     <div className="d-flex align-items-center gap-2">
-                                        <label className="text-muted small mb-0">Per page:</label>
+                                        <span className="text-muted small">Entries per page:</span>
                                         <select 
                                             className="form-select form-select-sm" 
                                             style={{width: 'auto'}}
@@ -152,61 +152,72 @@ const ActivityLogs: React.FC = () => {
                                     </div>
                                 </div>
                                 
-                                <div className="d-flex gap-1">
-                                    <button
-                                        className="btn btn-outline-secondary btn-sm"
-                                        onClick={() => handlePageChange(1)}
-                                        disabled={pagination.page === 1}
-                                    >
-                                        <ChevronsLeft size={16} />
-                                    </button>
-                                    <button
-                                        className="btn btn-outline-secondary btn-sm"
-                                        onClick={() => handlePageChange(pagination.page - 1)}
-                                        disabled={pagination.page === 1}
-                                    >
-                                        <ChevronLeft size={16} />
-                                    </button>
-                                    
-                                    {/* Page numbers */}
-                                    {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                                        let pageNum: number;
-                                        if (pagination.totalPages <= 5) {
-                                            pageNum = i + 1;
-                                        } else if (pagination.page <= 3) {
-                                            pageNum = i + 1;
-                                        } else if (pagination.page >= pagination.totalPages - 2) {
-                                            pageNum = pagination.totalPages - 4 + i;
-                                        } else {
-                                            pageNum = pagination.page - 2 + i;
-                                        }
-                                        
-                                        return (
-                                            <button
-                                                key={pageNum}
-                                                className={`btn btn-sm ${pageNum === pagination.page ? 'btn-primary' : 'btn-outline-secondary'}`}
-                                                onClick={() => handlePageChange(pageNum)}
+                                <nav>
+                                    <ul className="pagination pagination-sm mb-0">
+                                        <li className={`page-item ${pagination.page === 1 ? 'disabled' : ''}`}>
+                                            <button 
+                                                className="page-link" 
+                                                onClick={() => handlePageChange(1)}
+                                                disabled={pagination.page === 1}
                                             >
-                                                {pageNum}
+                                                <ChevronsLeft size={16} />
                                             </button>
-                                        );
-                                    })}
-                                    
-                                    <button
-                                        className="btn btn-outline-secondary btn-sm"
-                                        onClick={() => handlePageChange(pagination.page + 1)}
-                                        disabled={pagination.page === pagination.totalPages}
-                                    >
-                                        <ChevronRight size={16} />
-                                    </button>
-                                    <button
-                                        className="btn btn-outline-secondary btn-sm"
-                                        onClick={() => handlePageChange(pagination.totalPages)}
-                                        disabled={pagination.page === pagination.totalPages}
-                                    >
-                                        <ChevronsRight size={16} />
-                                    </button>
-                                </div>
+                                        </li>
+                                        <li className={`page-item ${pagination.page === 1 ? 'disabled' : ''}`}>
+                                            <button 
+                                                className="page-link" 
+                                                onClick={() => handlePageChange(pagination.page - 1)}
+                                                disabled={pagination.page === 1}
+                                            >
+                                                <ChevronLeft size={16} />
+                                            </button>
+                                        </li>
+                                        
+                                        {/* Page numbers */}
+                                        {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                                            let pageNum: number;
+                                            if (pagination.totalPages <= 5) {
+                                                pageNum = i + 1;
+                                            } else if (pagination.page <= 3) {
+                                                pageNum = i + 1;
+                                            } else if (pagination.page >= pagination.totalPages - 2) {
+                                                pageNum = pagination.totalPages - 4 + i;
+                                            } else {
+                                                pageNum = pagination.page - 2 + i;
+                                            }
+                                            
+                                            return (
+                                                <li key={pageNum} className={`page-item ${pagination.page === pageNum ? 'active' : ''}`}>
+                                                    <button 
+                                                        className="page-link" 
+                                                        onClick={() => handlePageChange(pageNum)}
+                                                    >
+                                                        {pageNum}
+                                                    </button>
+                                                </li>
+                                            );
+                                        })}
+                                        
+                                        <li className={`page-item ${pagination.page === pagination.totalPages ? 'disabled' : ''}`}>
+                                            <button 
+                                                className="page-link" 
+                                                onClick={() => handlePageChange(pagination.page + 1)}
+                                                disabled={pagination.page === pagination.totalPages}
+                                            >
+                                                <ChevronRight size={16} />
+                                            </button>
+                                        </li>
+                                        <li className={`page-item ${pagination.page === pagination.totalPages ? 'disabled' : ''}`}>
+                                            <button 
+                                                className="page-link" 
+                                                onClick={() => handlePageChange(pagination.totalPages)}
+                                                disabled={pagination.page === pagination.totalPages}
+                                            >
+                                                <ChevronsRight size={16} />
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </nav>
                             </div>
                         )}
                     </div>

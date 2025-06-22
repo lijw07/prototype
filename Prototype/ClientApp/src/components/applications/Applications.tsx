@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Plus, Trash2, TestTube, Eye, EyeOff, ChevronLeft, ChevronRight, Loader, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Database, Plus, Trash2, TestTube, Eye, EyeOff, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader, CheckCircle2, AlertTriangle, Search } from 'lucide-react';
 import { applicationApi } from '../../services/api';
 
 interface Application {
     applicationId: string;
     applicationName: string;
     applicationDescription: string;
-    applicationDataSourceType: string;
+    applicationDataSourceType: number;
     connection: {
         host: string;
         port: string;
@@ -25,8 +25,119 @@ interface Application {
     updatedAt?: string;
 }
 
+// Enum mapping to convert numeric values to string names
+const DataSourceTypeEnum: { [key: number]: string } = {
+    // Database connections
+    0: 'MicrosoftSqlServer',
+    1: 'MySql', 
+    2: 'PostgreSql',
+    3: 'MongoDb',
+    4: 'Redis',
+    5: 'Oracle',
+    6: 'MariaDb',
+    7: 'Sqlite',
+    8: 'Cassandra',
+    9: 'ElasticSearch',
+    
+    // API connections
+    10: 'RestApi',
+    11: 'GraphQL',
+    12: 'SoapApi', 
+    13: 'ODataApi',
+    14: 'WebSocket',
+    
+    // File-based connections
+    15: 'CsvFile',
+    16: 'JsonFile',
+    17: 'XmlFile',
+    18: 'ExcelFile',
+    19: 'ParquetFile',
+    20: 'YamlFile',
+    21: 'TextFile',
+    
+    // Cloud storage
+    22: 'AzureBlobStorage',
+    23: 'AmazonS3',
+    24: 'GoogleCloudStorage',
+    
+    // Message queues
+    25: 'RabbitMQ',
+    26: 'ApacheKafka',
+    27: 'AzureServiceBus'
+};
+
+// Helper function to get enum string name from numeric value
+const getDataSourceTypeName = (numericValue: number): string => {
+    return DataSourceTypeEnum[numericValue] || 'MicrosoftSqlServer';
+};
+
 const Applications: React.FC = () => {
+    // Shared function to calculate pagination data to ensure consistency
+    const calculatePaginationData = () => {
+        const hasFilters = searchTerm !== '' || filterConnectionType !== 'all' || 
+                          filterAuthType !== 'all' || sortOrder === 'oldest';
+        
+        // Use allApplications for filtering/sorting, applications for backend pagination
+        const sourceApplications = hasFilters ? allApplications : applications;
+        
+        // Safety check - if source applications is empty, return default values
+        if (!sourceApplications || sourceApplications.length === 0) {
+            return {
+                hasFilters,
+                currentApplications: [],
+                displayTotalPages: 0,
+                displayTotalCount: 0,
+                filteredApplications: []
+            };
+        }
+        
+        const filteredApplications = sourceApplications.filter(app => {
+            const matchesSearch = searchTerm === '' || 
+                                 app.applicationName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                 app.applicationDescription.toLowerCase().includes(searchTerm.toLowerCase());
+            
+            const matchesConnectionType = filterConnectionType === 'all' || 
+                                        DataSourceTypeEnum[app.applicationDataSourceType] === filterConnectionType;
+            
+            const matchesAuthType = filterAuthType === 'all' || 
+                                  app.connection.authenticationType === filterAuthType;
+            
+            return matchesSearch && matchesConnectionType && matchesAuthType;
+        });
+
+        // Sort applications based on creation date
+        const sortedApplications = [...filteredApplications].sort((a, b) => {
+            if (!a.createdAt || !b.createdAt) return 0;
+            const dateA = new Date(a.createdAt).getTime();
+            const dateB = new Date(b.createdAt).getTime();
+            return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+        });
+
+        let displayTotalPages: number, displayTotalCount: number, currentApplications: Application[];
+        if (hasFilters) {
+            // Client-side pagination for filtered/sorted results
+            displayTotalPages = Math.ceil(sortedApplications.length / pageSize);
+            displayTotalCount = sortedApplications.length;
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+            currentApplications = sortedApplications.slice(startIndex, endIndex);
+        } else {
+            // Backend pagination for unfiltered results
+            displayTotalPages = totalPages;
+            displayTotalCount = totalCount;
+            currentApplications = applications;
+        }
+
+        return {
+            hasFilters,
+            currentApplications,
+            displayTotalPages,
+            displayTotalCount,
+            filteredApplications
+        };
+    };
     const [applications, setApplications] = useState<Application[]>([]);
+    const [allApplications, setAllApplications] = useState<Application[]>([]); // Store all applications for client-side operations
     const [loading, setLoading] = useState(false);
     const [testingConnection, setTestingConnection] = useState(false);
     const [connectionTestResult, setConnectionTestResult] = useState<{message: string, success: boolean} | null>(null);
@@ -40,9 +151,15 @@ const Applications: React.FC = () => {
     
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
+    const [pageSize, setPageSize] = useState(4);
     const [totalCount, setTotalCount] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
+    
+    // Search and filter state
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterConnectionType, setFilterConnectionType] = useState<string>('all');
+    const [filterAuthType, setFilterAuthType] = useState<string>('all');
+    const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
     // Application form state
     const [applicationForm, setApplicationForm] = useState({
@@ -100,6 +217,21 @@ const Applications: React.FC = () => {
         awsSession: false
     });
 
+    const fetchAllApplications = async () => {
+        try {
+            // Fetch all applications by requesting a large page size
+            const response = await applicationApi.getApplications(1, 1000); // Large enough to get all
+            if (response.success && response.data?.data) {
+                setAllApplications(response.data.data);
+                return response.data.data;
+            }
+            return [];
+        } catch (error) {
+            console.error('Failed to fetch all applications:', error);
+            return [];
+        }
+    };
+
     const fetchApplications = async (page: number = currentPage, size: number = pageSize) => {
         setLoading(true);
         try {
@@ -118,10 +250,116 @@ const Applications: React.FC = () => {
         }
     };
 
+    // Smart refetch that handles empty pages after deletion
+    const refetchApplications = async () => {
+        setLoading(true);
+        try {
+            const response = await applicationApi.getApplications(currentPage, pageSize);
+            if (response.success && response.data?.data) {
+                const newTotalPages = response.data.totalPages || 1;
+                const newTotalCount = response.data.totalCount || 0;
+                
+                // If current page is beyond available pages and we have items, go to last page
+                if (currentPage > newTotalPages && newTotalCount > 0) {
+                    await fetchApplications(newTotalPages, pageSize);
+                } else if (newTotalCount === 0) {
+                    // If no items at all, go to page 1
+                    setCurrentPage(1);
+                    setApplications([]);
+                    setAllApplications([]);
+                    setTotalCount(0);
+                    setTotalPages(1);
+                    setLoading(false);
+                } else {
+                    // Normal case - update with current data
+                    setApplications(response.data.data);
+                    setTotalCount(newTotalCount);
+                    setTotalPages(newTotalPages);
+                    setLoading(false);
+                }
+            }
+            // Also refresh all applications
+            await fetchAllApplications();
+        } catch (error) {
+            console.error('Failed to fetch applications:', error);
+            setLoading(false);
+        }
+    };
+
+    // Refetch and navigate to first page (where new items should appear)
+    const refetchAndGoToFirstPage = async () => {
+        setLoading(true);
+        try {
+            // Navigate to the first page where new items should appear
+            await fetchApplications(1, pageSize);
+            // Also refresh all applications
+            await fetchAllApplications();
+        } catch (error) {
+            console.error('Failed to fetch applications:', error);
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
         fetchApplications(1, pageSize);
+        // Also fetch all applications for client-side operations
+        fetchAllApplications();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Reset form to initial state
+    const resetForm = () => {
+        setApplicationForm({
+            applicationName: '',
+            applicationDescription: '',
+            dataSourceType: 'MicrosoftSqlServer',
+            connectionSource: {
+                host: '',
+                port: '1433',
+                databaseName: '',
+                authenticationType: 'UserPassword',
+                username: '',
+                password: '',
+                // AWS IAM fields
+                awsAccessKeyId: '',
+                awsSecretAccessKey: '',
+                awsSessionToken: '',
+                // Kerberos/GSSAPI fields
+                principal: '',
+                serviceName: '',
+                serviceRealm: '',
+                canonicalizeHostName: false,
+                // MongoDB specific fields
+                authenticationDatabase: '',
+                // X.509 certificate fields
+                certificateFilePath: '',
+                privateKeyFilePath: '',
+                caCertificateFilePath: '',
+                // API-specific fields
+                apiEndpoint: '',
+                httpMethod: 'GET',
+                headers: '',
+                requestBody: '',
+                apiKey: '',
+                bearerToken: '',
+                clientId: '',
+                clientSecret: '',
+                refreshToken: '',
+                authorizationUrl: '',
+                tokenUrl: '',
+                scope: '',
+                // File-specific fields
+                filePath: '',
+                fileFormat: '',
+                delimiter: ',',
+                encoding: 'UTF-8',
+                hasHeader: true,
+                customProperties: ''
+            }
+        });
+        setEditingApp(null);
+        setSubmitSuccess(false);
+    };
 
     // Add escape key listener to close modals
     useEffect(() => {
@@ -129,7 +367,7 @@ const Applications: React.FC = () => {
             if (event.key === 'Escape') {
                 if (showApplicationForm) {
                     setShowApplicationForm(false);
-                    setEditingApp(null);
+                    resetForm();
                 }
             }
         };
@@ -146,7 +384,7 @@ const Applications: React.FC = () => {
             setApplicationForm({
                 applicationName: editingApp.applicationName,
                 applicationDescription: editingApp.applicationDescription,
-                dataSourceType: editingApp.applicationDataSourceType,
+                dataSourceType: getDataSourceTypeName(editingApp.applicationDataSourceType),
                 connectionSource: {
                     host: editingApp.connection.host,
                     port: editingApp.connection.port,
@@ -294,7 +532,13 @@ const Applications: React.FC = () => {
             
             if (response.success) {
                 setSubmitSuccess(true);
-                fetchApplications(currentPage, pageSize);
+                if (editingApp) {
+                    // When editing, stay on current page
+                    fetchApplications(currentPage, pageSize);
+                } else {
+                    // When creating new, go to first page where new item should appear
+                    refetchAndGoToFirstPage();
+                }
                 
                 // Form will be closed manually by user clicking X
             } else {
@@ -362,7 +606,7 @@ const Applications: React.FC = () => {
             
             if (response.success) {
                 setDeleteSuccess(true);
-                fetchApplications(currentPage, pageSize);
+                refetchApplications();
                 
                 // Delete success modal will be closed manually by user clicking X
             } else {
@@ -404,7 +648,10 @@ const Applications: React.FC = () => {
                                 Database Applications
                             </h2>
                             <button
-                                onClick={() => setShowApplicationForm(true)}
+                                onClick={() => {
+                                    resetForm();
+                                    setShowApplicationForm(true);
+                                }}
                                 className="btn btn-primary rounded-3 fw-semibold d-flex align-items-center"
                             >
                                 <Plus className="me-2" size={18} />
@@ -412,8 +659,119 @@ const Applications: React.FC = () => {
                             </button>
                         </div>
 
+                        {/* Search and Filter Controls */}
+                        <div className="row g-3 mb-4">
+                            <div className="col-md-4">
+                                <div className="position-relative">
+                                    <Search className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" size={16} />
+                                    <input
+                                        type="text"
+                                        className="form-control rounded-3 ps-5"
+                                        placeholder="Search applications..."
+                                        value={searchTerm}
+                                        onChange={(e) => {
+                                            setSearchTerm(e.target.value);
+                                            setCurrentPage(1); // Reset to first page when searching
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                            <div className="col-md-3">
+                                <select
+                                    className="form-select rounded-3"
+                                    value={filterConnectionType}
+                                    onChange={(e) => {
+                                        setFilterConnectionType(e.target.value);
+                                        setCurrentPage(1); // Reset to first page when filtering
+                                    }}
+                                >
+                                    <option value="all">All Connection Types</option>
+                                    <optgroup label="Database Connections">
+                                        <option value="MicrosoftSqlServer">Microsoft SQL Server</option>
+                                        <option value="MySql">MySQL</option>
+                                        <option value="PostgreSql">PostgreSQL</option>
+                                        <option value="MongoDb">MongoDB</option>
+                                        <option value="Redis">Redis</option>
+                                        <option value="Oracle">Oracle Database</option>
+                                        <option value="MariaDb">MariaDB</option>
+                                        <option value="Sqlite">SQLite</option>
+                                        <option value="Cassandra">Apache Cassandra</option>
+                                        <option value="ElasticSearch">Elasticsearch</option>
+                                    </optgroup>
+                                    <optgroup label="API Connections">
+                                        <option value="RestApi">REST API</option>
+                                        <option value="GraphQL">GraphQL</option>
+                                        <option value="SoapApi">SOAP API</option>
+                                        <option value="ODataApi">OData API</option>
+                                        <option value="WebSocket">WebSocket</option>
+                                    </optgroup>
+                                    <optgroup label="File Connections">
+                                        <option value="CsvFile">CSV File</option>
+                                        <option value="JsonFile">JSON File</option>
+                                        <option value="XmlFile">XML File</option>
+                                        <option value="ExcelFile">Excel File</option>
+                                        <option value="ParquetFile">Parquet File</option>
+                                        <option value="YamlFile">YAML File</option>
+                                        <option value="TextFile">Text File</option>
+                                    </optgroup>
+                                    <optgroup label="Cloud Storage">
+                                        <option value="AzureBlobStorage">Azure Blob Storage</option>
+                                        <option value="AmazonS3">Amazon S3</option>
+                                        <option value="GoogleCloudStorage">Google Cloud Storage</option>
+                                    </optgroup>
+                                    <optgroup label="Message Queues">
+                                        <option value="RabbitMQ">RabbitMQ</option>
+                                        <option value="ApacheKafka">Apache Kafka</option>
+                                        <option value="AzureServiceBus">Azure Service Bus</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div className="col-md-3">
+                                <select
+                                    className="form-select rounded-3"
+                                    value={filterAuthType}
+                                    onChange={(e) => {
+                                        setFilterAuthType(e.target.value);
+                                        setCurrentPage(1); // Reset to first page when filtering
+                                    }}
+                                >
+                                    <option value="all">All Auth Types</option>
+                                    <option value="UserPassword">Username & Password</option>
+                                    <option value="WindowsIntegrated">Windows Integrated</option>
+                                    <option value="AzureAdPassword">Azure AD with Password</option>
+                                    <option value="AzureAdIntegrated">Azure AD Integrated</option>
+                                    <option value="NoAuth">No Authentication</option>
+                                    <option value="Kerberos">Kerberos</option>
+                                    <option value="AwsIam">AWS IAM</option>
+                                    <option value="ApiKey">API Key</option>
+                                    <option value="BearerToken">Bearer Token</option>
+                                </select>
+                            </div>
+                            <div className="col-md-2">
+                                <select
+                                    className="form-select rounded-3"
+                                    value={sortOrder}
+                                    onChange={async (e) => {
+                                        const newSortOrder = e.target.value as 'newest' | 'oldest';
+                                        setSortOrder(newSortOrder);
+                                        setCurrentPage(1); // Reset to first page when sorting changes
+                                        
+                                        // If switching to oldest first and we don't have all applications, fetch them
+                                        if (newSortOrder === 'oldest' && allApplications.length === 0) {
+                                            await fetchAllApplications();
+                                        }
+                                    }}
+                                >
+                                    <option value="newest">Newest First</option>
+                                    <option value="oldest">Oldest First</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div className="row g-3">
-                            {applications.map((app) => (
+                            {(() => {
+                                const { currentApplications } = calculatePaginationData();
+                                return currentApplications.map((app) => (
                                 <div key={app.applicationId} className="col-12">
                                     <div 
                                         className="card border border-light rounded-3 h-100" 
@@ -463,15 +821,21 @@ const Applications: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-                            ))}
-                            {applications.length === 0 && !loading && (
-                                <div className="col-12">
-                                    <div className="text-center py-5 text-muted">
-                                        <Database size={48} className="mb-3 opacity-50" />
-                                        <p>No applications configured yet</p>
+                                ));
+                            })()}
+                            {(() => {
+                                const { hasFilters, filteredApplications } = calculatePaginationData();
+                                const isEmpty = hasFilters ? filteredApplications.length === 0 : applications.length === 0;
+                                
+                                return isEmpty && !loading && (
+                                    <div className="col-12">
+                                        <div className="text-center py-5 text-muted">
+                                            <Database size={48} className="mb-3 opacity-50" />
+                                            <p>{hasFilters ? 'No applications match your search criteria' : 'No applications configured yet'}</p>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                );
+                            })()}
                             {loading && (
                                 <div className="col-12">
                                     <div className="text-center py-5 text-muted">
@@ -485,77 +849,138 @@ const Applications: React.FC = () => {
                         </div>
 
                         {/* Pagination Controls */}
-                        {(totalPages > 1 || totalCount > 0) && (
-                            <div className="d-flex justify-content-between align-items-center mt-4">
-                                <div className="d-flex align-items-center gap-3">
-                                    <div className="text-muted small">
-                                        Showing {applications.length} of {totalCount} applications
+                        {(() => {
+                            const { hasFilters, currentApplications, displayTotalPages, displayTotalCount } = calculatePaginationData();
+                            
+                            return (displayTotalCount > 4 || sortOrder === 'oldest') && (
+                                <div className="d-flex justify-content-between align-items-center mt-4">
+                                    <div className="d-flex align-items-center gap-3">
+                                        <span className="text-muted">
+                                            {hasFilters ? (
+                                                `Showing ${currentApplications.length} of ${displayTotalCount} applications (filtered)`
+                                            ) : (
+                                                `Showing ${((currentPage - 1) * pageSize) + 1} to ${Math.min(currentPage * pageSize, displayTotalCount)} of ${displayTotalCount} applications`
+                                            )}
+                                        </span>
+                                        <div className="d-flex align-items-center gap-2">
+                                            <span className="text-muted small">Applications per page:</span>
+                                            <select
+                                                className="form-select form-select-sm"
+                                                style={{ width: 'auto' }}
+                                                value={pageSize}
+                                                onChange={(e) => {
+                                                    const newPageSize = parseInt(e.target.value);
+                                                    setPageSize(newPageSize);
+                                                    setCurrentPage(1);
+                                                    if (!hasFilters) {
+                                                        fetchApplications(1, newPageSize);
+                                                    }
+                                                }}
+                                            >
+                                                <option value={4}>4</option>
+                                                <option value={10}>10</option>
+                                                <option value={20}>20</option>
+                                                <option value={50}>50</option>
+                                            </select>
+                                        </div>
                                     </div>
-                                    <div className="d-flex align-items-center gap-2">
-                                        <label className="text-muted small mb-0">Show:</label>
-                                        <select
-                                            value={pageSize}
-                                            onChange={(e) => {
-                                                const newPageSize = parseInt(e.target.value);
-                                                setPageSize(newPageSize);
-                                                fetchApplications(1, newPageSize);
-                                            }}
-                                            className="form-select form-select-sm"
-                                            style={{ width: 'auto' }}
-                                        >
-                                            <option value={5}>5</option>
-                                            <option value={10}>10</option>
-                                            <option value={20}>20</option>
-                                            <option value={50}>50</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div className="d-flex align-items-center gap-2">
-                                    <button
-                                        onClick={() => fetchApplications(currentPage - 1)}
-                                        disabled={currentPage <= 1}
-                                        className="btn btn-outline-secondary btn-sm d-flex align-items-center"
-                                    >
-                                        <ChevronLeft size={16} className="me-1" />
-                                        Previous
-                                    </button>
                                     
-                                    <div className="d-flex align-items-center gap-1">
-                                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                            let pageNumber: number;
-                                            if (totalPages <= 5) {
-                                                pageNumber = i + 1;
-                                            } else if (currentPage <= 3) {
-                                                pageNumber = i + 1;
-                                            } else if (currentPage >= totalPages - 2) {
-                                                pageNumber = totalPages - 4 + i;
-                                            } else {
-                                                pageNumber = currentPage - 2 + i;
-                                            }
-                                            
-                                            return (
-                                                <button
-                                                    key={pageNumber}
-                                                    onClick={() => fetchApplications(pageNumber)}
-                                                    className={`btn btn-sm ${currentPage === pageNumber ? 'btn-primary' : 'btn-outline-secondary'}`}
+                                    <nav>
+                                        <ul className="pagination pagination-sm mb-0">
+                                            <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                                                <button 
+                                                    className="page-link" 
+                                                    onClick={() => {
+                                                        setCurrentPage(1);
+                                                        if (!hasFilters) {
+                                                            fetchApplications(1);
+                                                        }
+                                                    }}
+                                                    disabled={currentPage === 1}
                                                 >
-                                                    {pageNumber}
+                                                    <ChevronsLeft size={16} />
                                                 </button>
-                                            );
-                                        })}
-                                    </div>
-                                    
-                                    <button
-                                        onClick={() => fetchApplications(currentPage + 1)}
-                                        disabled={currentPage >= totalPages}
-                                        className="btn btn-outline-secondary btn-sm d-flex align-items-center"
-                                    >
-                                        Next
-                                        <ChevronRight size={16} className="ms-1" />
-                                    </button>
+                                            </li>
+                                            <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                                                <button 
+                                                    className="page-link" 
+                                                    onClick={() => {
+                                                        const newPage = currentPage - 1;
+                                                        setCurrentPage(newPage);
+                                                        if (!hasFilters) {
+                                                            fetchApplications(newPage);
+                                                        }
+                                                    }}
+                                                    disabled={currentPage === 1}
+                                                >
+                                                    <ChevronLeft size={16} />
+                                                </button>
+                                            </li>
+                                            
+                                            {/* Page numbers */}
+                                            {Array.from({ length: Math.min(5, displayTotalPages) }, (_, i) => {
+                                                let pageNum: number;
+                                                if (displayTotalPages <= 5) {
+                                                    pageNum = i + 1;
+                                                } else if (currentPage <= 3) {
+                                                    pageNum = i + 1;
+                                                } else if (currentPage >= displayTotalPages - 2) {
+                                                    pageNum = displayTotalPages - 4 + i;
+                                                } else {
+                                                    pageNum = currentPage - 2 + i;
+                                                }
+                                                
+                                                return (
+                                                    <li key={pageNum} className={`page-item ${currentPage === pageNum ? 'active' : ''}`}>
+                                                        <button 
+                                                            className="page-link" 
+                                                            onClick={() => {
+                                                                setCurrentPage(pageNum);
+                                                                if (!hasFilters) {
+                                                                    fetchApplications(pageNum);
+                                                                }
+                                                            }}
+                                                        >
+                                                            {pageNum}
+                                                        </button>
+                                                    </li>
+                                                );
+                                            })}
+                                            
+                                            <li className={`page-item ${currentPage === displayTotalPages ? 'disabled' : ''}`}>
+                                                <button 
+                                                    className="page-link" 
+                                                    onClick={() => {
+                                                        const newPage = currentPage + 1;
+                                                        setCurrentPage(newPage);
+                                                        if (!hasFilters) {
+                                                            fetchApplications(newPage);
+                                                        }
+                                                    }}
+                                                    disabled={currentPage === displayTotalPages}
+                                                >
+                                                    <ChevronRight size={16} />
+                                                </button>
+                                            </li>
+                                            <li className={`page-item ${currentPage === displayTotalPages ? 'disabled' : ''}`}>
+                                                <button 
+                                                    className="page-link" 
+                                                    onClick={() => {
+                                                        setCurrentPage(displayTotalPages);
+                                                        if (!hasFilters) {
+                                                            fetchApplications(displayTotalPages);
+                                                        }
+                                                    }}
+                                                    disabled={currentPage === displayTotalPages}
+                                                >
+                                                    <ChevronsRight size={16} />
+                                                </button>
+                                            </li>
+                                        </ul>
+                                    </nav>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
                     </div>
                 </div>
 
@@ -572,8 +997,7 @@ const Applications: React.FC = () => {
                                         className="btn-close"
                                         onClick={() => {
                                             setShowApplicationForm(false);
-                                            setEditingApp(null);
-                                            setSubmitSuccess(false);
+                                            resetForm();
                                         }}
                                     ></button>
                                 </div>

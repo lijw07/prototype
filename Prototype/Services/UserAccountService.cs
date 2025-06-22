@@ -57,8 +57,7 @@ public class UserAccountService : IUserAccountService
     public async Task<List<UserModel>> GetAllUsersAsync()
     {
         return await _context.Users
-            .OrderBy(u => u.FirstName)
-            .ThenBy(u => u.LastName)
+            .OrderByDescending(u => u.CreatedAt)
             .ToListAsync();
     }
 

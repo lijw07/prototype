@@ -30,11 +30,18 @@ public class RoleSettingsController : BaseSettingsController
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAllRoles()
+    public async Task<IActionResult> GetAllRoles([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var roles = await _userRoleService.GetAllRolesAsync();
+            var (validPage, validPageSize, skip) = ValidatePaginationParameters(page, pageSize);
+
+            var totalCount = await _context.UserRoles.CountAsync();
+            var roles = await _context.UserRoles
+                .OrderByDescending(r => r.CreatedAt)
+                .Skip(skip)
+                .Take(validPageSize)
+                .ToListAsync();
             
             var roleDtos = roles.Select(role => new RoleDto
             {
@@ -44,7 +51,8 @@ public class RoleSettingsController : BaseSettingsController
                 CreatedBy = role.CreatedBy
             }).ToList();
 
-            return new { success = true, roles = roleDtos };
+            var result = CreatePaginatedResponse(roleDtos, validPage, validPageSize, totalCount);
+            return new { success = true, data = result };
         }, "retrieving all roles");
     }
 

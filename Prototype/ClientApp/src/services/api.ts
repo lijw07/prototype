@@ -152,8 +152,8 @@ export const userApi = {
   }) =>
     api.post<{ success: boolean; message?: string }>('/settings/user/change-password', passwordData),
   
-  getAllUsers: () =>
-    api.get<{ success: boolean; users: any[]; message?: string }>('/settings/user/all'),
+  getAllUsers: (page: number = 1, pageSize: number = 10) =>
+    api.get<{ success: boolean; data?: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }; users?: any[]; message?: string }>(`/settings/user/all?page=${page}&pageSize=${pageSize}`),
   
   updateUser: (userData: {
     userId: string;
@@ -191,8 +191,8 @@ export const applicationApi = {
 
 // Role Settings API
 export const roleApi = {
-  getAllRoles: () =>
-    api.get<{ success: boolean; roles: any[]; message?: string }>('/settings/roles'),
+  getAllRoles: (page: number = 1, pageSize: number = 10) =>
+    api.get<{ success: boolean; data?: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }; roles?: any[]; message?: string }>(`/settings/roles?page=${page}&pageSize=${pageSize}`),
   
   getRoleById: (roleId: string) =>
     api.get<{ success: boolean; role: any; message?: string }>(`/settings/roles/${roleId}`),
