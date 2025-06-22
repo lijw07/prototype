@@ -17,7 +17,7 @@ public class UserRoleService : IUserRoleService
     public async Task<IEnumerable<UserRoleModel>> GetAllRolesAsync()
     {
         return await _context.UserRoles
-            .OrderBy(r => r.Role)
+            .OrderByDescending(r => r.CreatedAt)
             .ToListAsync();
     }
 

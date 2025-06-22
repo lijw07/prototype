@@ -165,6 +165,7 @@ public class ApplicationSettingsController : BaseSettingsController
 
             var totalCount = await query.CountAsync();
             var applications = await query
+                .OrderByDescending(x => x.CreatedAt)
                 .Skip(skip)
                 .Take(validPageSize)
                 .ToListAsync();

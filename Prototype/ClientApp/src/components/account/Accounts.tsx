@@ -44,6 +44,7 @@ interface User {
   role: string;
   lastLogin?: string;
   createdAt: string;
+  isTemporary?: boolean;
 }
 
 interface NewUserForm {
@@ -70,9 +71,13 @@ interface EditUserForm {
 
 export default function Accounts() {
   const [users, setUsers] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all'); // active, inactive, all
+  const [filterVerification, setFilterVerification] = useState<string>('all'); // verified, unverified, all
+  const [sortBy, setSortBy] = useState<string>('newest'); // newest, oldest, lastLoginNewest, lastLoginOldest
   const [showAddUser, setShowAddUser] = useState(false);
   const [userDetailModal, setUserDetailModal] = useState<User | null>(null);
   const [showEditUser, setShowEditUser] = useState(false);
@@ -93,7 +98,9 @@ export default function Accounts() {
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [usersPerPage, setUsersPerPage] = useState(20);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   
   // New User Form State
   const [newUserForm, setNewUserForm] = useState<NewUserForm>({
@@ -132,16 +139,78 @@ export default function Accounts() {
     };
   }, [showAddUser]);
 
+  const fetchAllUsers = async () => {
+    try {
+      let allUsers: User[] = [];
+      let currentPage = 1;
+      const maxPageSize = 100; // Backend limit
+      let hasMoreData = true;
+      
+      while (hasMoreData) {
+        const usersResponse = await userApi.getAllUsers(currentPage, maxPageSize);
+        
+        if (usersResponse.success && usersResponse.data?.data) {
+          const transformedUsers: User[] = usersResponse.data.data.map((user: any) => ({
+            userId: user.userId,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            username: user.username,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            isActive: user.isActive,
+            role: user.role,
+            lastLogin: user.lastLogin,
+            createdAt: user.createdAt,
+            isTemporary: user.isTemporary || false
+          }));
+          
+          allUsers = [...allUsers, ...transformedUsers];
+          
+          // Check if we've fetched all pages
+          const totalPages = usersResponse.data.totalPages || 1;
+          hasMoreData = currentPage < totalPages;
+          currentPage++;
+        } else if (usersResponse.success && usersResponse.users) {
+          // Fallback for old API response format
+          const transformedUsers: User[] = usersResponse.users.map((user: any) => ({
+            userId: user.userId,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            username: user.username,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            isActive: user.isActive,
+            role: user.role,
+            lastLogin: user.lastLogin,
+            createdAt: user.createdAt,
+            isTemporary: user.isTemporary || false
+          }));
+          allUsers = transformedUsers;
+          hasMoreData = false; // Old format returns all data at once
+        } else {
+          hasMoreData = false;
+        }
+      }
+      
+      console.log('Fetched all users:', allUsers.length);
+      setAllUsers(allUsers);
+      return allUsers;
+    } catch (error) {
+      console.error('Failed to fetch all users:', error);
+      return [];
+    }
+  };
+
   // Load users and roles from database
-  const loadData = async () => {
+  const loadData = async (page: number = currentPage, size: number = pageSize) => {
     setLoading(true);
     
     // Load users - this should always work regardless of roles
     try {
-      const usersResponse = await userApi.getAllUsers();
+      const usersResponse = await userApi.getAllUsers(page, size);
       
-      if (usersResponse.success && usersResponse.users) {
-        const transformedUsers: User[] = usersResponse.users.map((user: any) => ({
+      if (usersResponse.success && usersResponse.data?.data) {
+        const transformedUsers: User[] = usersResponse.data.data.map((user: any) => ({
           userId: user.userId,
           firstName: user.firstName,
           lastName: user.lastName,
@@ -151,10 +220,39 @@ export default function Accounts() {
           isActive: user.isActive,
           role: user.role,
           lastLogin: user.lastLogin,
-          createdAt: user.createdAt
+          createdAt: user.createdAt,
+          isTemporary: user.isTemporary || false
         }));
         
         setUsers(transformedUsers);
+        setCurrentPage(usersResponse.data.page || page);
+        setPageSize(usersResponse.data.pageSize || size);
+        setTotalCount(usersResponse.data.totalCount || 0);
+        setTotalPages(usersResponse.data.totalPages || 1);
+      } else if (usersResponse.success && usersResponse.users) {
+        // Fallback for old API response format - use client-side pagination
+        const allTransformedUsers: User[] = usersResponse.users.map((user: any) => ({
+          userId: user.userId,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          username: user.username,
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+          isActive: user.isActive,
+          role: user.role,
+          lastLogin: user.lastLogin,
+          createdAt: user.createdAt,
+          isTemporary: user.isTemporary || false
+        }));
+        const startIndex = (page - 1) * size;
+        const endIndex = startIndex + size;
+        const paginatedUsers = allTransformedUsers.slice(startIndex, endIndex);
+        setUsers(paginatedUsers);
+        // Set pagination values for non-paginated response
+        setTotalCount(allTransformedUsers.length);
+        setTotalPages(Math.ceil(allTransformedUsers.length / size));
+        setCurrentPage(page);
+        setPageSize(size);
       } else {
         console.error('Failed to load users:', usersResponse.message);
         setUsers([]);
@@ -166,9 +264,12 @@ export default function Accounts() {
     
     // Load roles - independent of users
     try {
-      const rolesResponse = await roleApi.getAllRoles();
+      const rolesResponse = await roleApi.getAllRoles(1, 100); // Get up to 100 roles
       
-      if (rolesResponse.success && rolesResponse.roles) {
+      if (rolesResponse.success && rolesResponse.data?.data) {
+        setRoles(rolesResponse.data.data);
+      } else if (rolesResponse.success && rolesResponse.roles) {
+        // Fallback for old API response format
         setRoles(rolesResponse.roles);
       } else {
         console.error('Failed to load roles:', rolesResponse.message);
@@ -182,31 +283,120 @@ export default function Accounts() {
     setLoading(false);
   };
 
+  // Smart refetch that handles empty pages after deletion  
+  const refetchUsers = async () => {
+    if (hasFilters) {
+      // For filtered view, reload all data and let frontend handle filtering
+      await loadData(1, 100); // Load more data for filtering
+      // Also refresh all users
+      await fetchAllUsers();
+    } else {
+      // For paginated view, check if we need to adjust page
+      const response = await userApi.getAllUsers(currentPage, pageSize);
+      if (response.success && response.data?.data) {
+        const newTotalPages = response.data.totalPages || 1;
+        const newTotalCount = response.data.totalCount || 0;
+        
+        if (currentPage > newTotalPages && newTotalCount > 0) {
+          // Navigate to last available page
+          setCurrentPage(newTotalPages);
+          await loadData(newTotalPages, pageSize);
+        } else if (newTotalCount === 0) {
+          // If no users at all, go to page 1
+          setCurrentPage(1);
+          await loadData(1, pageSize);
+        } else {
+          // Current page is valid, just update data
+          await loadData(currentPage, pageSize);
+        }
+      }
+      // Also refresh all users
+      await fetchAllUsers();
+    }
+  };
+
+  // Refetch and navigate to first page (where new items should appear)
+  const refetchAndGoToFirstPage = async () => {
+    setCurrentPage(1);
+    await loadData(1, pageSize);
+    // Also refresh all users
+    await fetchAllUsers();
+  };
+
   useEffect(() => {
-    loadData();
+    loadData(1, pageSize);
+    // Also fetch all users for client-side operations
+    fetchAllUsers();
   }, []);
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  // Use filtered/sorted users for display (when filters are active)
+  // Use backend pagination when no filters are applied
+  const hasFilters = searchTerm !== '' || filterRole !== 'all' || filterStatus !== 'all' || filterVerification !== 'all' || sortBy !== 'newest';
+  
+  // Use allUsers for filtering/sorting, users for backend pagination
+  const sourceUsers = hasFilters ? allUsers : users;
+  
+  // Filter users
+  const filteredUsers = sourceUsers.filter(user => {
+    const matchesSearch = searchTerm === '' || 
+                         user.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesRole = filterRole === 'all' || user.role.toLowerCase() === filterRole.toLowerCase();
     
-    return matchesSearch && matchesRole;
+    const matchesStatus = filterStatus === 'all' || 
+                         (filterStatus === 'active' && user.isActive) ||
+                         (filterStatus === 'inactive' && !user.isActive);
+    
+    const matchesVerification = filterVerification === 'all' ||
+                               (filterVerification === 'verified' && !user.isTemporary) ||
+                               (filterVerification === 'unverified' && user.isTemporary);
+    
+    return matchesSearch && matchesRole && matchesStatus && matchesVerification;
   });
 
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
-  const startIndex = (currentPage - 1) * usersPerPage;
-  const endIndex = startIndex + usersPerPage;
-  const currentUsers = filteredUsers.slice(startIndex, endIndex);
+  // Sort users based on selected sort option
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    switch (sortBy) {
+      case 'oldest':
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'lastLoginNewest':
+        if (!a.lastLogin && !b.lastLogin) return 0;
+        if (!a.lastLogin) return 1; // Put users without login at the end
+        if (!b.lastLogin) return -1;
+        return new Date(b.lastLogin).getTime() - new Date(a.lastLogin).getTime();
+      case 'lastLoginOldest':
+        if (!a.lastLogin && !b.lastLogin) return 0;
+        if (!a.lastLogin) return 1; // Put users without login at the end
+        if (!b.lastLogin) return -1;
+        return new Date(a.lastLogin).getTime() - new Date(b.lastLogin).getTime();
+      case 'newest':
+      default:
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+  });
+  
+  let currentUsers: User[], displayTotalPages: number, displayTotalCount: number;
+  if (hasFilters) {
+    // Client-side pagination for filtered results
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    currentUsers = sortedUsers.slice(startIndex, endIndex);
+    displayTotalPages = Math.ceil(sortedUsers.length / pageSize);
+    displayTotalCount = sortedUsers.length;
+  } else {
+    // Backend pagination for unfiltered results
+    currentUsers = users;
+    displayTotalPages = totalPages;
+    displayTotalCount = totalCount;
+  }
 
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterRole]);
+  }, [searchTerm, filterRole, filterStatus, filterVerification, sortBy]);
 
   // Add escape key listener for edit user modal
   useEffect(() => {
@@ -359,8 +549,8 @@ export default function Accounts() {
         });
         setFormErrors({});
         
-        // Refresh the user list to show the newly created user
-        loadData();
+        // Refresh the user list and go to first page to show the newly created user
+        refetchAndGoToFirstPage();
         
         // User form will be closed manually by user clicking X
       } else {
@@ -598,10 +788,11 @@ export default function Accounts() {
       console.log('Delete user response:', response);
       
       if (response && response.success) {
-        // Remove from local state only after successful deletion from database
-        setUsers(prevUsers => prevUsers.filter(u => u.userId !== deletingUser.userId));
         console.log(`User ${deletingUser.firstName} ${deletingUser.lastName} deleted successfully`);
         setDeleteSuccess(true);
+        
+        // Smart refetch to handle pagination after deletion
+        refetchUsers();
         
         // Delete success modal will be closed manually by user clicking X
       } else {
@@ -690,19 +881,19 @@ export default function Accounts() {
             <div className="card border-0 rounded-4 shadow-sm">
               <div className="card-body p-4">
                 <div className="row g-3">
-                  <div className="col-md-6">
+                  <div className="col-md-3">
                     <div className="position-relative">
                       <Search className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" size={18} />
                       <input
                         type="text"
                         className="form-control form-control-lg rounded-3 ps-5"
-                        placeholder="Search users by name, username, or email..."
+                        placeholder="Search users by name, username, .."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
                     </div>
                   </div>
-                  <div className="col-md-3">
+                  <div className="col-md-2">
                     <select
                       className="form-select form-select-lg rounded-3"
                       value={filterRole}
@@ -716,10 +907,53 @@ export default function Accounts() {
                       ))}
                     </select>
                   </div>
-                  <div className="col-md-3">
+                  <div className="col-md-2">
+                    <select
+                      className="form-select form-select-lg rounded-3"
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value)}
+                    >
+                      <option value="all">All Status</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+                  <div className="col-md-2">
+                    <select
+                      className="form-select form-select-lg rounded-3"
+                      value={filterVerification}
+                      onChange={(e) => setFilterVerification(e.target.value)}
+                    >
+                      <option value="all">All Users</option>
+                      <option value="verified">Verified</option>
+                      <option value="unverified">Unverified</option>
+                    </select>
+                  </div>
+                  <div className="col-md-2">
+                    <select
+                      className="form-select form-select-lg rounded-3"
+                      value={sortBy}
+                      onChange={async (e) => {
+                        const newSortBy = e.target.value;
+                        setSortBy(newSortBy);
+                        setCurrentPage(1); // Reset to first page when sorting changes
+                        
+                        // If switching to a client-side sort and we don't have all users, fetch them
+                        if (newSortBy !== 'newest' && allUsers.length === 0) {
+                          await fetchAllUsers();
+                        }
+                      }}
+                    >
+                      <option value="newest">Newest First</option>
+                      <option value="oldest">Oldest First</option>
+                      <option value="lastLoginNewest">Last Login (Recent)</option>
+                      <option value="lastLoginOldest">Last Login (Oldest)</option>
+                    </select>
+                  </div>
+                  <div className="col-md-1">
                     <div className="bg-light rounded-3 p-2 text-center">
-                      <div className="fw-bold text-primary">{filteredUsers.length}</div>
-                      <div className="small text-muted">Total Users</div>
+                      <div className="fw-bold text-primary small">{displayTotalCount}</div>
+                      <div className="small text-muted">Users</div>
                     </div>
                   </div>
                 </div>
@@ -840,6 +1074,17 @@ export default function Accounts() {
                         Inactive
                       </span>
                     )}
+                    {user.isTemporary ? (
+                      <span className="badge bg-warning bg-opacity-10 text-warning fw-semibold ms-1 small">
+                        <AlertTriangle size={10} className="me-1" />
+                        Unverified
+                      </span>
+                    ) : (
+                      <span className="badge bg-info bg-opacity-10 text-info fw-semibold ms-1 small">
+                        <CheckCircle2 size={10} className="me-1" />
+                        Verified
+                      </span>
+                    )}
                   </div>
 
                   <div className="mb-2">
@@ -897,21 +1142,29 @@ export default function Accounts() {
         </div>
 
         {/* Pagination */}
-        {filteredUsers.length > 0 && totalPages > 1 && (
+        {(displayTotalCount > pageSize || sortBy === 'oldest' || sortBy === 'lastLoginNewest' || sortBy === 'lastLoginOldest') && (
           <div className="d-flex justify-content-between align-items-center mt-4">
             <div className="d-flex align-items-center gap-3">
               <span className="text-muted">
-                Showing {startIndex + 1} to {Math.min(endIndex, filteredUsers.length)} of {filteredUsers.length} users
+                {hasFilters ? (
+                  `Showing ${currentUsers.length} of ${displayTotalCount} users (filtered)`
+                ) : (
+                  `Showing ${((currentPage - 1) * pageSize) + 1} to ${Math.min(currentPage * pageSize, displayTotalCount)} of ${displayTotalCount} users`
+                )}
               </span>
               <div className="d-flex align-items-center gap-2">
                 <span className="text-muted small">Users per page:</span>
                 <select 
                   className="form-select form-select-sm" 
                   style={{width: 'auto'}}
-                  value={usersPerPage}
+                  value={pageSize}
                   onChange={(e) => {
-                    setUsersPerPage(Number(e.target.value));
+                    const newPageSize = Number(e.target.value);
+                    setPageSize(newPageSize);
                     setCurrentPage(1);
+                    if (!hasFilters) {
+                      loadData(1, newPageSize);
+                    }
                   }}
                 >
                   <option value={20}>20</option>
@@ -926,7 +1179,12 @@ export default function Accounts() {
                 <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                   <button 
                     className="page-link" 
-                    onClick={() => setCurrentPage(1)}
+                    onClick={() => {
+                      setCurrentPage(1);
+                      if (!hasFilters) {
+                        loadData(1, pageSize);
+                      }
+                    }}
                     disabled={currentPage === 1}
                   >
                     <ChevronsLeft size={16} />
@@ -935,7 +1193,13 @@ export default function Accounts() {
                 <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                   <button 
                     className="page-link" 
-                    onClick={() => setCurrentPage(currentPage - 1)}
+                    onClick={() => {
+                      const newPage = currentPage - 1;
+                      setCurrentPage(newPage);
+                      if (!hasFilters) {
+                        loadData(newPage, pageSize);
+                      }
+                    }}
                     disabled={currentPage === 1}
                   >
                     <ChevronLeft size={16} />
@@ -943,14 +1207,14 @@ export default function Accounts() {
                 </li>
                 
                 {/* Page numbers */}
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                {Array.from({ length: Math.min(5, displayTotalPages) }, (_, i) => {
                   let pageNum: number;
-                  if (totalPages <= 5) {
+                  if (displayTotalPages <= 5) {
                     pageNum = i + 1;
                   } else if (currentPage <= 3) {
                     pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
+                  } else if (currentPage >= displayTotalPages - 2) {
+                    pageNum = displayTotalPages - 4 + i;
                   } else {
                     pageNum = currentPage - 2 + i;
                   }
@@ -959,7 +1223,12 @@ export default function Accounts() {
                     <li key={pageNum} className={`page-item ${currentPage === pageNum ? 'active' : ''}`}>
                       <button 
                         className="page-link" 
-                        onClick={() => setCurrentPage(pageNum)}
+                        onClick={() => {
+                          setCurrentPage(pageNum);
+                          if (!hasFilters) {
+                            loadData(pageNum, pageSize);
+                          }
+                        }}
                       >
                         {pageNum}
                       </button>
@@ -967,20 +1236,31 @@ export default function Accounts() {
                   );
                 })}
                 
-                <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                <li className={`page-item ${currentPage === displayTotalPages ? 'disabled' : ''}`}>
                   <button 
                     className="page-link" 
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
+                    onClick={() => {
+                      const newPage = currentPage + 1;
+                      setCurrentPage(newPage);
+                      if (!hasFilters) {
+                        loadData(newPage, pageSize);
+                      }
+                    }}
+                    disabled={currentPage === displayTotalPages}
                   >
                     <ChevronRight size={16} />
                   </button>
                 </li>
-                <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                <li className={`page-item ${currentPage === displayTotalPages ? 'disabled' : ''}`}>
                   <button 
                     className="page-link" 
-                    onClick={() => setCurrentPage(totalPages)}
-                    disabled={currentPage === totalPages}
+                    onClick={() => {
+                      setCurrentPage(displayTotalPages);
+                      if (!hasFilters) {
+                        loadData(displayTotalPages, pageSize);
+                      }
+                    }}
+                    disabled={currentPage === displayTotalPages}
                   >
                     <ChevronsRight size={16} />
                   </button>

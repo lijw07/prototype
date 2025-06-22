@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Plus, Edit, Trash2, Users, Key, CheckCircle2, AlertCircle, Loader, AlertTriangle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Shield, Plus, Edit, Trash2, Users, Key, CheckCircle2, AlertCircle, Loader, AlertTriangle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from 'lucide-react';
 import { roleApi } from '../../services/api';
 
 interface Role {
@@ -11,6 +11,7 @@ interface Role {
 
 const Roles: React.FC = () => {
     const [roles, setRoles] = useState<Role[]>([]);
+    const [allRoles, setAllRoles] = useState<Role[]>([]); // Store all roles for client-side operations
     const [loading, setLoading] = useState(false);
     const [showRoleForm, setShowRoleForm] = useState(false);
     const [editingRole, setEditingRole] = useState<Role | null>(null);
@@ -22,21 +23,61 @@ const Roles: React.FC = () => {
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
-    const [rolesPerPage, setRolesPerPage] = useState(20);
+    const [pageSize, setPageSize] = useState(4);
+    const [totalCount, setTotalCount] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+
+    // Search and sorting state
+    const [searchTerm, setSearchTerm] = useState('');
+    const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
     const [roleForm, setRoleForm] = useState({
         roleName: ''
     });
 
-    const fetchRoles = async () => {
+    const fetchAllRoles = async () => {
+        try {
+            // Fetch all roles by requesting a large page size
+            const response = await roleApi.getAllRoles(1, 1000); // Large enough to get all
+            if (response.success && response.data?.data) {
+                setAllRoles(response.data.data);
+                return response.data.data;
+            } else if (response.success && response.roles) {
+                setAllRoles(response.roles);
+                return response.roles;
+            }
+            return [];
+        } catch (error) {
+            console.error('Failed to fetch all roles:', error);
+            return [];
+        }
+    };
+
+    const fetchRoles = async (page: number = currentPage, size: number = pageSize) => {
         setLoading(true);
         try {
             console.log('Fetching roles...');
-            const response = await roleApi.getAllRoles();
+            const response = await roleApi.getAllRoles(page, size);
             console.log('Fetch roles response:', response);
-            if (response.success && response.roles) {
-                console.log('Setting roles:', response.roles);
-                setRoles(response.roles);
+            if (response.success && response.data?.data) {
+                console.log('Setting roles:', response.data.data);
+                setRoles(response.data.data);
+                setCurrentPage(response.data.page || page);
+                setPageSize(response.data.pageSize || size);
+                setTotalCount(response.data.totalCount || 0);
+                setTotalPages(response.data.totalPages || 1);
+            } else if (response.success && response.roles) {
+                // Fallback for old API response format - use client-side pagination
+                console.log('Setting roles (fallback):', response.roles);
+                const startIndex = (page - 1) * size;
+                const endIndex = startIndex + size;
+                const paginatedRoles = response.roles.slice(startIndex, endIndex);
+                setRoles(paginatedRoles);
+                // Set pagination values for non-paginated response
+                setTotalCount(response.roles.length);
+                setTotalPages(Math.ceil(response.roles.length / size));
+                setCurrentPage(page);
+                setPageSize(size);
             } else {
                 console.log('No roles returned or response not successful');
             }
@@ -47,8 +88,53 @@ const Roles: React.FC = () => {
         }
     };
 
+    // Smart refetch that handles empty pages after deletion
+    const refetchRoles = async () => {
+        // First, check the current state after deletion
+        const response = await roleApi.getAllRoles(currentPage, pageSize);
+        if (response.success) {
+            let totalItems = 0;
+            if (response.data?.totalCount !== undefined) {
+                totalItems = response.data.totalCount;
+            } else if (response.roles) {
+                totalItems = response.roles.length;
+            }
+            
+            const newTotalPages = Math.ceil(totalItems / pageSize);
+            
+            // Check if current page is beyond available pages
+            if (currentPage > newTotalPages && totalItems > 0) {
+                // Navigate to last available page
+                setCurrentPage(newTotalPages);
+                await fetchRoles(newTotalPages, pageSize);
+            } else if (totalItems === 0) {
+                // If no roles at all, go to page 1
+                setCurrentPage(1);
+                await fetchRoles(1, pageSize);
+            } else {
+                // Current page is valid, just refresh
+                await fetchRoles(currentPage, pageSize);
+            }
+        } else {
+            // If the request failed, just refresh current page
+            await fetchRoles(currentPage, pageSize);
+        }
+        // Also refresh all roles
+        await fetchAllRoles();
+    };
+
+    // Refetch and navigate to first page (where new items should appear)
+    const refetchAndGoToFirstPage = async () => {
+        setCurrentPage(1);
+        await fetchRoles(1, pageSize);
+        // Also refresh all roles
+        await fetchAllRoles();
+    };
+
     useEffect(() => {
-        fetchRoles();
+        fetchRoles(1, pageSize);
+        // Also fetch all roles for client-side operations
+        fetchAllRoles();
     }, []);
 
     // Add escape key listener to close modals
@@ -77,7 +163,7 @@ const Roles: React.FC = () => {
                 const response = await roleApi.updateRole(editingRole.userRoleId, { roleName: roleForm.roleName });
                 if (response.success) {
                     setSubmitSuccess(true);
-                    fetchRoles();
+                    refetchRoles(); // Stay on current page when editing
                     
                     // Role form will be closed manually by user clicking X
                 } else {
@@ -91,7 +177,7 @@ const Roles: React.FC = () => {
                 if (response.success) {
                     setSubmitSuccess(true);
                     console.log('Fetching roles after creation...');
-                    fetchRoles();
+                    refetchAndGoToFirstPage(); // Go to first page where new role should appear
                     
                     // Role form will be closed manually by user clicking X
                 } else {
@@ -113,7 +199,7 @@ const Roles: React.FC = () => {
             const response = await roleApi.deleteRole(deletingRole.userRoleId);
             if (response.success) {
                 setDeleteSuccess(true);
-                fetchRoles();
+                refetchRoles();
                 
                 // Delete success modal will be closed manually by user clicking X
             } else {
@@ -138,6 +224,43 @@ const Roles: React.FC = () => {
         });
         setShowRoleForm(true);
     };
+
+    // Use filtered/sorted roles for display (when filters are active)
+    // Use backend pagination when no filters are applied
+    const hasFilters = searchTerm !== '' || sortOrder === 'oldest';
+    
+    // Use allRoles for filtering/sorting, roles for backend pagination
+    const sourceRoles = hasFilters ? allRoles : roles;
+    
+    // Filter and sort roles
+    const filteredRoles = sourceRoles.filter(role => {
+        const matchesSearch = searchTerm === '' || 
+                             role.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             role.createdBy.toLowerCase().includes(searchTerm.toLowerCase());
+        return matchesSearch;
+    });
+
+    // Sort roles based on creation date
+    const sortedRoles = [...filteredRoles].sort((a, b) => {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+    
+    let currentRoles: Role[], displayTotalPages: number, displayTotalCount: number;
+    if (hasFilters) {
+        // Client-side pagination for filtered results
+        const startIndex = (currentPage - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        currentRoles = sortedRoles.slice(startIndex, endIndex);
+        displayTotalPages = Math.ceil(sortedRoles.length / pageSize);
+        displayTotalCount = sortedRoles.length;
+    } else {
+        // Backend pagination for unfiltered results
+        currentRoles = roles;
+        displayTotalPages = totalPages;
+        displayTotalCount = totalCount;
+    }
 
     return (
         <div className="min-vh-100 bg-light" style={{overflowX: 'hidden'}}>
@@ -168,6 +291,44 @@ const Roles: React.FC = () => {
                             </button>
                         </div>
 
+                        {/* Search and Sort Controls */}
+                        <div className="row g-3 mb-4">
+                            <div className="col-md-8">
+                                <div className="position-relative">
+                                    <Search className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" size={16} />
+                                    <input
+                                        type="text"
+                                        className="form-control rounded-3 ps-5"
+                                        placeholder="Search roles..."
+                                        value={searchTerm}
+                                        onChange={(e) => {
+                                            setSearchTerm(e.target.value);
+                                            setCurrentPage(1); // Reset to first page when searching
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                            <div className="col-md-4">
+                                <select
+                                    className="form-select rounded-3"
+                                    value={sortOrder}
+                                    onChange={async (e) => {
+                                        const newSortOrder = e.target.value as 'newest' | 'oldest';
+                                        setSortOrder(newSortOrder);
+                                        setCurrentPage(1); // Reset to first page when sorting changes
+                                        
+                                        // If switching to oldest first and we don't have all roles, fetch them
+                                        if (newSortOrder === 'oldest' && allRoles.length === 0) {
+                                            await fetchAllRoles();
+                                        }
+                                    }}
+                                >
+                                    <option value="newest">Newest First</option>
+                                    <option value="oldest">Oldest First</option>
+                                </select>
+                            </div>
+                        </div>
+
                         {loading ? (
                             <div className="d-flex align-items-center text-muted">
                                 <div className="spinner-border spinner-border-sm me-2" role="status">
@@ -176,77 +337,83 @@ const Roles: React.FC = () => {
                                 Loading roles...
                             </div>
                         ) : (
-                            <div className="row g-3">
-                                {roles
-                                    .slice((currentPage - 1) * rolesPerPage, currentPage * rolesPerPage)
-                                    .map((role) => (
-                                    <div key={role.userRoleId} className="col-12">
-                                        <div 
-                                            className="card border border-light rounded-3 h-100" 
-                                            style={{cursor: 'pointer'}}
-                                            onClick={() => openEditRole(role)}
-                                        >
-                                            <div className="card-body p-4">
-                                                <div className="d-flex justify-content-between align-items-start mb-3">
-                                                    <div className="flex-grow-1">
-                                                        <h5 className="card-title fw-bold text-dark mb-1 d-flex align-items-center" style={{wordWrap: 'break-word', overflowWrap: 'break-word'}}>
-                                                            {role.role}
-                                                            <CheckCircle2 className="text-success ms-2" size={16} />
-                                                        </h5>
-                                                        <p className="card-text text-muted small mb-2">
-                                                            Created by {role.createdBy} on {new Date(role.createdAt).toLocaleDateString()}
-                                                        </p>
-                                                    </div>
-                                                    <div className="d-flex flex-column gap-1">
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                confirmDeleteRole(role);
-                                                            }}
-                                                            className="btn btn-outline-danger btn-sm rounded-3"
-                                                            title="Delete Role"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
+                            <>
+                                <div className="row g-3">
+                                    {currentRoles.map((role) => (
+                                        <div key={role.userRoleId} className="col-12">
+                                            <div 
+                                                className="card border border-light rounded-3 h-100" 
+                                                style={{cursor: 'pointer'}}
+                                                onClick={() => openEditRole(role)}
+                                            >
+                                                <div className="card-body p-4">
+                                                    <div className="d-flex justify-content-between align-items-start mb-3">
+                                                        <div className="flex-grow-1">
+                                                            <h5 className="card-title fw-bold text-dark mb-1 d-flex align-items-center" style={{wordWrap: 'break-word', overflowWrap: 'break-word'}}>
+                                                                {role.role}
+                                                                <CheckCircle2 className="text-success ms-2" size={16} />
+                                                            </h5>
+                                                            <p className="card-text text-muted small mb-2">
+                                                                Created by {role.createdBy} on {new Date(role.createdAt).toLocaleDateString()}
+                                                            </p>
+                                                        </div>
+                                                        <div className="d-flex flex-column gap-1">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    confirmDeleteRole(role);
+                                                                }}
+                                                                className="btn btn-outline-danger btn-sm rounded-3"
+                                                                title="Delete Role"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
-                                {roles.length === 0 && (
-                                    <div className="col-12">
-                                        <div className="text-center py-5 text-muted">
-                                            <Shield size={48} className="mb-3 opacity-50" />
-                                            <p>No roles configured yet</p>
+                                    ))}
+                                    {currentRoles.length === 0 && !loading && (
+                                        <div className="col-12">
+                                            <div className="text-center py-5 text-muted">
+                                                <Shield size={48} className="mb-3 opacity-50" />
+                                                <p>{hasFilters ? 'No roles match your search' : 'No roles configured yet'}</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                                    )}
+                                </div>
 
-                        {/* Pagination */}
-                        {roles.length > 0 && Math.ceil(roles.length / rolesPerPage) > 1 && (
+                                {/* Pagination */}
+                                {displayTotalCount > 4 && (
                             <div className="d-flex justify-content-between align-items-center mt-4">
                                 <div className="d-flex align-items-center gap-3">
                                     <span className="text-muted">
-                                        Showing {((currentPage - 1) * rolesPerPage) + 1} to {Math.min(currentPage * rolesPerPage, roles.length)} of {roles.length} roles
+                                        {hasFilters ? (
+                                            `Showing ${currentRoles.length} of ${displayTotalCount} roles (filtered)`
+                                        ) : (
+                                            `Showing ${((currentPage - 1) * pageSize) + 1} to ${Math.min(currentPage * pageSize, displayTotalCount)} of ${displayTotalCount} roles`
+                                        )}
                                     </span>
                                     <div className="d-flex align-items-center gap-2">
                                         <span className="text-muted small">Roles per page:</span>
                                         <select 
                                             className="form-select form-select-sm" 
                                             style={{width: 'auto'}}
-                                            value={rolesPerPage}
+                                            value={pageSize}
                                             onChange={(e) => {
-                                                setRolesPerPage(Number(e.target.value));
+                                                const newPageSize = Number(e.target.value);
+                                                setPageSize(newPageSize);
                                                 setCurrentPage(1);
+                                                if (!hasFilters) {
+                                                    fetchRoles(1, newPageSize);
+                                                }
                                             }}
                                         >
+                                            <option value={4}>4</option>
                                             <option value={10}>10</option>
                                             <option value={20}>20</option>
                                             <option value={50}>50</option>
-                                            <option value={100}>100</option>
                                         </select>
                                     </div>
                                 </div>
@@ -256,7 +423,12 @@ const Roles: React.FC = () => {
                                         <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                                             <button 
                                                 className="page-link" 
-                                                onClick={() => setCurrentPage(1)}
+                                                onClick={() => {
+                                                    setCurrentPage(1);
+                                                    if (!hasFilters) {
+                                                        fetchRoles(1, pageSize);
+                                                    }
+                                                }}
                                                 disabled={currentPage === 1}
                                             >
                                                 <ChevronsLeft size={16} />
@@ -265,7 +437,13 @@ const Roles: React.FC = () => {
                                         <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                                             <button 
                                                 className="page-link" 
-                                                onClick={() => setCurrentPage(currentPage - 1)}
+                                                onClick={() => {
+                                                    const newPage = currentPage - 1;
+                                                    setCurrentPage(newPage);
+                                                    if (!hasFilters) {
+                                                        fetchRoles(newPage, pageSize);
+                                                    }
+                                                }}
                                                 disabled={currentPage === 1}
                                             >
                                                 <ChevronLeft size={16} />
@@ -273,15 +451,14 @@ const Roles: React.FC = () => {
                                         </li>
                                         
                                         {/* Page numbers */}
-                                        {Array.from({ length: Math.min(5, Math.ceil(roles.length / rolesPerPage)) }, (_, i) => {
-                                            const totalPages = Math.ceil(roles.length / rolesPerPage);
+                                        {Array.from({ length: Math.min(5, displayTotalPages) }, (_, i) => {
                                             let pageNum: number;
-                                            if (totalPages <= 5) {
+                                            if (displayTotalPages <= 5) {
                                                 pageNum = i + 1;
                                             } else if (currentPage <= 3) {
                                                 pageNum = i + 1;
-                                            } else if (currentPage >= totalPages - 2) {
-                                                pageNum = totalPages - 4 + i;
+                                            } else if (currentPage >= displayTotalPages - 2) {
+                                                pageNum = displayTotalPages - 4 + i;
                                             } else {
                                                 pageNum = currentPage - 2 + i;
                                             }
@@ -290,7 +467,12 @@ const Roles: React.FC = () => {
                                                 <li key={pageNum} className={`page-item ${currentPage === pageNum ? 'active' : ''}`}>
                                                     <button 
                                                         className="page-link" 
-                                                        onClick={() => setCurrentPage(pageNum)}
+                                                        onClick={() => {
+                                                            setCurrentPage(pageNum);
+                                                            if (!hasFilters) {
+                                                                fetchRoles(pageNum, pageSize);
+                                                            }
+                                                        }}
                                                     >
                                                         {pageNum}
                                                     </button>
@@ -298,20 +480,31 @@ const Roles: React.FC = () => {
                                             );
                                         })}
                                         
-                                        <li className={`page-item ${currentPage === Math.ceil(roles.length / rolesPerPage) ? 'disabled' : ''}`}>
+                                        <li className={`page-item ${currentPage === displayTotalPages ? 'disabled' : ''}`}>
                                             <button 
                                                 className="page-link" 
-                                                onClick={() => setCurrentPage(currentPage + 1)}
-                                                disabled={currentPage === Math.ceil(roles.length / rolesPerPage)}
+                                                onClick={() => {
+                                                    const newPage = currentPage + 1;
+                                                    setCurrentPage(newPage);
+                                                    if (!hasFilters) {
+                                                        fetchRoles(newPage, pageSize);
+                                                    }
+                                                }}
+                                                disabled={currentPage === displayTotalPages}
                                             >
                                                 <ChevronRight size={16} />
                                             </button>
                                         </li>
-                                        <li className={`page-item ${currentPage === Math.ceil(roles.length / rolesPerPage) ? 'disabled' : ''}`}>
+                                        <li className={`page-item ${currentPage === displayTotalPages ? 'disabled' : ''}`}>
                                             <button 
                                                 className="page-link" 
-                                                onClick={() => setCurrentPage(Math.ceil(roles.length / rolesPerPage))}
-                                                disabled={currentPage === Math.ceil(roles.length / rolesPerPage)}
+                                                onClick={() => {
+                                                    setCurrentPage(displayTotalPages);
+                                                    if (!hasFilters) {
+                                                        fetchRoles(displayTotalPages, pageSize);
+                                                    }
+                                                }}
+                                                disabled={currentPage === displayTotalPages}
                                             >
                                                 <ChevronsRight size={16} />
                                             </button>
@@ -319,6 +512,8 @@ const Roles: React.FC = () => {
                                     </ul>
                                 </nav>
                             </div>
+                        )}
+                            </>
                         )}
                     </div>
                 </div>

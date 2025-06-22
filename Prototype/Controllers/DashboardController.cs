@@ -55,8 +55,13 @@ public class DashboardController : ControllerBase
                 .Distinct()
                 .CountAsync();
 
-            // Get total users in the system (for system-wide stats)
-            var totalUsers = await _context.Users.CountAsync();
+            // Get user statistics breakdown
+            var totalVerifiedUsers = await _context.Users.CountAsync();
+            var totalTemporaryUsers = await _context.TemporaryUsers.CountAsync();
+            var totalUsers = totalVerifiedUsers + totalTemporaryUsers;
+            
+            // Get total roles in the system
+            var totalRoles = await _context.UserRoles.CountAsync();
 
             // Get recent activity count (last 24 hours for this user)
             var twentyFourHoursAgo = DateTime.UtcNow.AddHours(-24);
@@ -84,8 +89,10 @@ public class DashboardController : ControllerBase
                 data = new
                 {
                     totalApplications = totalApplications,
-                    activeConnections = Math.Max(activeConnections, userApplications.Count), // At least show user's apps
+                    totalRoles = totalRoles,
                     totalUsers = totalUsers,
+                    totalVerifiedUsers = totalVerifiedUsers,
+                    totalTemporaryUsers = totalTemporaryUsers,
                     recentActivity = recentActivity,
                     systemHealth = "healthy", // You can implement actual health checks later
                     recentActivities = recentActivities.Select(activity => new

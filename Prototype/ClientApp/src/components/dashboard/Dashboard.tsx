@@ -21,12 +21,14 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { dashboardApi, applicationApi, userApi } from '../../services/api';
+import { dashboardApi, applicationApi, userApi, roleApi } from '../../services/api';
 
 interface DashboardStats {
   totalApplications: number;
-  activeConnections: number;
+  totalRoles: number;
   totalUsers: number;
+  totalVerifiedUsers: number;
+  totalTemporaryUsers: number;
   recentActivity: number;
   systemHealth: 'healthy' | 'warning' | 'error';
   uptime: string;
@@ -46,8 +48,10 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({
     totalApplications: 0,
-    activeConnections: 0,
+    totalRoles: 0,
     totalUsers: 0,
+    totalVerifiedUsers: 0,
+    totalTemporaryUsers: 0,
     recentActivity: 0,
     systemHealth: 'healthy',
     uptime: '99.9%',
@@ -71,18 +75,34 @@ export default function Dashboard() {
       }
       
       // Fallback: Get data from existing APIs
-      const [appsResponse, usersResponse] = await Promise.all([
+      const [appsResponse, usersResponse, rolesResponse] = await Promise.all([
         applicationApi.getApplications(1, 1000), // Get many apps to count total
-        userApi.getAllUsers() // Get all users
+        userApi.getAllUsers(1, 1000), // Get all users for counting
+        roleApi.getAllRoles(1, 100) // Get roles for counting
       ]);
       
       const totalApplications = appsResponse.success ? (appsResponse.data?.totalCount || appsResponse.data?.data?.length || 0) : 0;
-      const totalUsers = usersResponse.success ? (usersResponse.users?.length || 0) : 0;
+      
+      // Count users by type from the combined response
+      let totalUsers = 0;
+      let totalVerifiedUsers = 0;
+      let totalTemporaryUsers = 0;
+      
+      if (usersResponse.success && usersResponse.data?.data) {
+        const users = usersResponse.data.data;
+        totalUsers = users.length;
+        totalVerifiedUsers = users.filter((user: any) => !user.isTemporary).length;
+        totalTemporaryUsers = users.filter((user: any) => user.isTemporary).length;
+      }
+      
+      const totalRoles = rolesResponse.success ? (rolesResponse.data?.totalCount || rolesResponse.data?.data?.length || 0) : 0;
       
       setStats({
         totalApplications,
-        activeConnections: totalApplications, // Use applications as proxy for connections
+        totalRoles,
         totalUsers,
+        totalVerifiedUsers,
+        totalTemporaryUsers,
         recentActivity: 0, // Will implement later when backend is ready
         systemHealth: 'healthy',
         uptime: '99.9%',
@@ -132,25 +152,22 @@ export default function Dashboard() {
       description: 'Applications you have access to'
     },
     {
-      title: 'Active Connections',
-      value: stats.activeConnections,
+      title: 'Roles',
+      value: stats.totalRoles,
       icon: Server,
       color: 'success',
-      description: 'Available connections'
+      description: 'Currently available roles'
     },
     {
       title: 'Total Users',
       value: stats.totalUsers,
       icon: Users,
       color: 'info',
-      description: 'System-wide users'
-    },
-    {
-      title: 'Your Activity',
-      value: stats.recentActivity,
-      icon: Activity,
-      color: 'warning',
-      description: 'Your actions (24h)'
+      description: `${stats.totalVerifiedUsers} verified, ${stats.totalTemporaryUsers} unverified`,
+      breakdown: {
+        verified: stats.totalVerifiedUsers,
+        temporary: stats.totalTemporaryUsers
+      }
     }
   ];
 
@@ -199,8 +216,9 @@ export default function Dashboard() {
         <div className="row g-4 mb-4">
           {dashboardCards.map((card, index) => {
             const IconComponent = card.icon;
+            const isUserCard = card.title === 'Total Users';
             return (
-              <div key={index} className="col-lg-3 col-md-6">
+              <div key={index} className="col-lg-4 col-md-6">
                 <div className="card border-0 rounded-4 shadow-sm h-100 dashboard-card animate-fade-in" 
                      style={{ animationDelay: `${index * 0.1}s` }}>
                   <div className="card-body p-4">
@@ -216,11 +234,27 @@ export default function Dashboard() {
                           <span className="visually-hidden">Loading...</span>
                         </div>
                       ) : (
-                        card.value.toLocaleString()
+                        (card.value || 0).toLocaleString()
                       )}
                     </h3>
                     <h6 className="fw-semibold text-muted mb-1">{card.title}</h6>
                     <p className="small text-muted mb-0">{card.description}</p>
+                    
+                    {/* User breakdown for Total Users card */}
+                    {isUserCard && (card as any).breakdown && !loading && (
+                      <div className="mt-3 pt-3 border-top">
+                        <div className="row g-2 text-center">
+                          <div className="col-6">
+                            <div className="small fw-semibold text-success">{(card as any).breakdown.verified}</div>
+                            <div className="small text-muted">Verified</div>
+                          </div>
+                          <div className="col-6">
+                            <div className="small fw-semibold text-warning">{(card as any).breakdown.temporary}</div>
+                            <div className="small text-muted">Unverified</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -230,97 +264,8 @@ export default function Dashboard() {
 
         {/* Content Grid */}
         <div className="row g-4">
-          {/* Recent Activity */}
-          <div className="col-lg-8">
-            <div className="card border-0 rounded-4 shadow-sm h-100">
-              <div className="card-body p-4">
-                <div className="d-flex align-items-center justify-content-between mb-4">
-                  <div className="d-flex align-items-center">
-                    <Activity className="text-primary me-3" size={24} />
-                    <h5 className="card-title fw-bold mb-0">Recent Activity</h5>
-                  </div>
-                  <button 
-                    className="btn btn-outline-primary btn-sm"
-                    onClick={() => navigate('/activity-logs')}
-                  >
-                    View All
-                  </button>
-                </div>
-                <div className="list-group list-group-flush">
-                  {loading ? (
-                    <div className="text-center py-4">
-                      <div className="spinner-border spinner-border-sm" role="status">
-                        <span className="visually-hidden">Loading...</span>
-                      </div>
-                      <div className="small text-muted mt-2">Loading recent activities...</div>
-                    </div>
-                  ) : stats.recentActivities && stats.recentActivities.length > 0 ? (
-                    stats.recentActivities.map((activity, index) => {
-                      const getActivityIcon = (actionType: string) => {
-                        switch (actionType) {
-                          case 'ApplicationAdded':
-                            return <Database className="text-success" size={16} />;
-                          case 'ApplicationUpdated':
-                            return <Database className="text-info" size={16} />;
-                          case 'ApplicationDeleted':
-                            return <Database className="text-danger" size={16} />;
-                          case 'UserLogin':
-                            return <Users className="text-primary" size={16} />;
-                          case 'UserLogout':
-                            return <Users className="text-muted" size={16} />;
-                          case 'PasswordChanged':
-                            return <Shield className="text-warning" size={16} />;
-                          default:
-                            return <Activity className="text-primary" size={16} />;
-                        }
-                      };
-
-                      const getActivityColor = (actionType: string) => {
-                        switch (actionType) {
-                          case 'ApplicationAdded':
-                            return 'success';
-                          case 'ApplicationUpdated':
-                            return 'info';
-                          case 'ApplicationDeleted':
-                            return 'danger';
-                          case 'UserLogin':
-                            return 'primary';
-                          case 'UserLogout':
-                            return 'secondary';
-                          case 'PasswordChanged':
-                            return 'warning';
-                          default:
-                            return 'primary';
-                        }
-                      };
-
-                      return (
-                        <div key={index} className="list-group-item border-0 px-0 py-3">
-                          <div className="d-flex align-items-start">
-                            <div className={`rounded-circle bg-${getActivityColor(activity.actionType)} bg-opacity-10 p-2 me-3`}>
-                              {getActivityIcon(activity.actionType)}
-                            </div>
-                            <div className="flex-grow-1">
-                              <div className="fw-semibold text-dark">{activity.description}</div>
-                              <div className="small text-muted">{activity.timeAgo}</div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="text-center py-4 text-muted">
-                      <Activity size={48} className="mb-3 opacity-50" />
-                      <p>No recent activity to display</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* System Health & Metrics */}
-          <div className="col-lg-4">
+          <div className="col-lg-6">
             <div className="row g-4">
               {/* System Health */}
               <div className="col-12">
@@ -399,7 +344,7 @@ export default function Dashboard() {
                           <Eye className="text-info me-2" size={16} />
                           <span className="small">Active Sessions</span>
                         </div>
-                        <span className="badge bg-info">{Math.floor(stats.totalUsers * 0.15)}</span>
+                        <span className="badge bg-info">{Math.floor((stats.totalUsers || 0) * 0.15)}</span>
                       </div>
                     </div>
                   </div>
@@ -430,7 +375,7 @@ export default function Dashboard() {
                   <div className="col-md-6">
                     <div className="bg-light rounded-3 p-3 text-center">
                       <Zap className="text-success mb-2" size={32} />
-                      <div className="fw-bold h4 mb-1">{loading ? '...' : stats.activeConnections}</div>
+                      <div className="fw-bold h4 mb-1">{loading ? '...' : stats.totalRoles}</div>
                       <div className="small text-muted">Active Connections</div>
                     </div>
                   </div>

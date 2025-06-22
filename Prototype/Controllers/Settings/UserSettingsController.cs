@@ -236,27 +236,61 @@ public class UserSettingsController : BaseSettingsController
     }
 
     [HttpGet("all")]
-    public async Task<IActionResult> GetAllUsers()
+    public async Task<IActionResult> GetAllUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var users = await _userAccountService.GetAllUsersAsync();
-            
-            var userDtos = users.Select(user => new UserDto
-            {
-                UserId = user.UserId,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Username = user.Username,
-                Email = user.Email,
-                PhoneNumber = user.PhoneNumber,
-                IsActive = user.IsActive,
-                Role = user.Role,
-                LastLogin = user.LastLogin,
-                CreatedAt = user.CreatedAt
-            }).ToList();
+            var (validPage, validPageSize, skip) = ValidatePaginationParameters(page, pageSize);
 
-            return new { success = true, users = userDtos };
+            // Get verified users
+            var users = await _context.Users
+                .Select(user => new UserDto
+                {
+                    UserId = user.UserId,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    Username = user.Username,
+                    Email = user.Email,
+                    PhoneNumber = user.PhoneNumber,
+                    IsActive = user.IsActive,
+                    Role = user.Role,
+                    LastLogin = user.LastLogin,
+                    CreatedAt = user.CreatedAt,
+                    IsTemporary = false
+                })
+                .ToListAsync();
+
+            // Get temporary (unverified) users
+            var tempUsers = await _context.TemporaryUsers
+                .Select(tempUser => new UserDto
+                {
+                    UserId = tempUser.TemporaryUserId,
+                    FirstName = tempUser.FirstName,
+                    LastName = tempUser.LastName,
+                    Username = tempUser.Username,
+                    Email = tempUser.Email,
+                    PhoneNumber = tempUser.PhoneNumber,
+                    IsActive = false, // Temporary users are inactive until verified
+                    Role = "User", // Default role for temporary users
+                    LastLogin = null, // Temporary users haven't logged in
+                    CreatedAt = tempUser.CreatedAt,
+                    IsTemporary = true
+                })
+                .ToListAsync();
+
+            // Combine and sort all users by creation date
+            var allUsers = users.Concat(tempUsers)
+                .OrderByDescending(u => u.CreatedAt)
+                .ToList();
+
+            var totalCount = allUsers.Count;
+            var paginatedUsers = allUsers
+                .Skip(skip)
+                .Take(validPageSize)
+                .ToList();
+
+            var result = CreatePaginatedResponse(paginatedUsers, validPage, validPageSize, totalCount);
+            return new { success = true, data = result };
         }, "retrieving all users");
     }
 
