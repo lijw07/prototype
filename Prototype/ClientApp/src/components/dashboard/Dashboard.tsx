@@ -21,7 +21,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { dashboardApi, applicationApi, userApi, roleApi } from '../../services/api';
+import { dashboardApi, applicationApi, userApi, roleApi, auditLogApi, activityLogApi, applicationLogApi, systemHealthApi } from '../../services/api';
 
 interface DashboardStats {
   totalApplications: number;
@@ -41,6 +41,15 @@ interface DashboardStats {
   }[];
 }
 
+interface LogEntry {
+  id: string;
+  type: 'audit' | 'activity' | 'application';
+  message: string;
+  timestamp: string;
+  user?: string;
+  severity?: string;
+}
+
 export default function Dashboard() {
   const [seconds, setSeconds] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -58,6 +67,11 @@ export default function Dashboard() {
     recentActivities: []
   });
   const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logsLoading, setLogsLoading] = useState(true);
+  const [currentLogPage, setCurrentLogPage] = useState(1);
+  const [totalLogPages, setTotalLogPages] = useState(1);
+  const [systemHealth, setSystemHealth] = useState<any>(null);
 
   const fetchDashboardStats = async () => {
     try {
@@ -116,9 +130,102 @@ export default function Dashboard() {
     }
   };
 
+  const fetchLogs = async (page: number = 1) => {
+    try {
+      setLogsLoading(true);
+      
+      // Fetch 2 logs from each type to get a mix, limiting to 4 total
+      const [auditResponse, activityResponse, applicationResponse] = await Promise.all([
+        auditLogApi.getAuditLogs(page, 2),
+        activityLogApi.getActivityLogs(page, 2),
+        applicationLogApi.getApplicationLogs(page, 2)
+      ]);
+      
+      const combinedLogs: LogEntry[] = [];
+      
+      // Add audit logs
+      if (auditResponse?.data) {
+        auditResponse.data.slice(0, 2).forEach((log: any) => {
+          combinedLogs.push({
+            id: log.id || log.auditLogId || Math.random().toString(),
+            type: 'audit',
+            message: log.description || log.actionType || 'Audit action performed',
+            timestamp: log.timestamp || log.createdDate || new Date().toISOString(),
+            user: log.userName || log.user || log.userId,
+            severity: 'info'
+          });
+        });
+      }
+      
+      // Add activity logs
+      if (activityResponse?.data) {
+        activityResponse.data.slice(0, 2).forEach((log: any) => {
+          combinedLogs.push({
+            id: log.id || log.userActivityLogId || Math.random().toString(),
+            type: 'activity',
+            message: log.description || log.actionType || 'User activity logged',
+            timestamp: log.timestamp || log.createdDate || new Date().toISOString(),
+            user: log.userName || log.user || log.userId,
+            severity: 'info'
+          });
+        });
+      }
+      
+      // Add application logs
+      if (applicationResponse?.data?.data) {
+        applicationResponse.data.data.slice(0, 2).forEach((log: any) => {
+          combinedLogs.push({
+            id: log.id || log.applicationLogId || Math.random().toString(),
+            type: 'application',
+            message: log.metadata || log.message || log.description || log.actionType || 'Application event',
+            timestamp: log.timestamp || log.createdDate || new Date().toISOString(),
+            severity: log.severity || 'info',
+            user: log.userName || log.user
+          });
+        });
+      }
+      
+      // Sort by timestamp and limit to 4
+      combinedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setLogs(combinedLogs.slice(0, 4));
+      
+      // Calculate total pages based on the average of all log types
+      const totalCounts = [
+        auditResponse?.totalCount || 0,
+        activityResponse?.totalCount || 0,
+        applicationResponse?.data?.totalCount || 0
+      ];
+      const avgCount = Math.ceil(totalCounts.reduce((a, b) => a + b, 0) / 3);
+      setTotalLogPages(Math.ceil(avgCount / 4));
+      
+    } catch (error) {
+      console.error('Failed to fetch logs:', error);
+      setLogs([]);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const fetchSystemHealth = async () => {
+    try {
+      const response = await systemHealthApi.getHealthOverview();
+      if (response.success && response.data) {
+        setSystemHealth(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch system health:', error);
+    }
+  };
+
   useEffect(() => {
     fetchDashboardStats();
+    fetchLogs(1);
+    fetchSystemHealth();
   }, []);
+
+  useEffect(() => {
+    fetchLogs(currentLogPage);
+  }, [currentLogPage]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -141,6 +248,47 @@ export default function Dashboard() {
     if (hour < 12) return 'Good morning';
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
+  };
+
+  const formatLogTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+  };
+
+  const getLogTypeColor = (type: 'audit' | 'activity' | 'application') => {
+    switch (type) {
+      case 'audit':
+        return 'warning';
+      case 'activity':
+        return 'info';
+      case 'application':
+        return 'primary';
+      default:
+        return 'secondary';
+    }
+  };
+
+  const getLogTypeIcon = (type: 'audit' | 'activity' | 'application') => {
+    switch (type) {
+      case 'audit':
+        return Shield;
+      case 'activity':
+        return Users;
+      case 'application':
+        return Database;
+      default:
+        return FileText;
+    }
   };
 
   const dashboardCards = [
@@ -262,89 +410,50 @@ export default function Dashboard() {
           })}
         </div>
 
-        {/* Content Grid */}
+        {/* Dashboard Cards Grid - 2x2 Layout */}
         <div className="row g-4">
-          {/* System Health & Metrics */}
+          {/* System Health */}
           <div className="col-lg-6">
-            <div className="row g-4">
-              {/* System Health */}
-              <div className="col-12">
-                <div className="card border-0 rounded-4 shadow-sm">
-                  <div className="card-body p-4">
-                    <div className="d-flex align-items-center mb-3">
-                      <Server className="text-success me-3" size={24} />
-                      <h5 className="card-title fw-bold mb-0">System Health</h5>
-                    </div>
-                    <div className="row g-3">
-                      <div className="col-6">
-                        <div className="text-center">
-                          <Cpu className="text-primary mb-2" size={24} />
-                          <div className="small fw-semibold">CPU Usage</div>
-                          <div className="text-success fw-bold">12%</div>
-                        </div>
-                      </div>
-                      <div className="col-6">
-                        <div className="text-center">
-                          <HardDrive className="text-info mb-2" size={24} />
-                          <div className="small fw-semibold">Memory</div>
-                          <div className="text-success fw-bold">68%</div>
-                        </div>
-                      </div>
-                      <div className="col-6">
-                        <div className="text-center">
-                          <Wifi className="text-success mb-2" size={24} />
-                          <div className="small fw-semibold">Network</div>
-                          <div className="text-success fw-bold">Stable</div>
-                        </div>
-                      </div>
-                      <div className="col-6">
-                        <div className="text-center">
-                          <Globe className="text-warning mb-2" size={24} />
-                          <div className="small fw-semibold">Uptime</div>
-                          <div className="text-success fw-bold">{stats.uptime}</div>
-                        </div>
+            <div className="card border-0 rounded-4 shadow-sm h-100">
+              <div className="card-body p-4">
+                <div className="d-flex align-items-center mb-3">
+                  <Server className="text-success me-3" size={24} />
+                  <h5 className="card-title fw-bold mb-0">System Health</h5>
+                </div>
+                <div className="row g-3">
+                  <div className="col-6">
+                    <div className="text-center">
+                      <Cpu className="text-primary mb-2" size={24} />
+                      <div className="small fw-semibold">CPU Usage</div>
+                      <div className="text-success fw-bold">
+                        {systemHealth?.performance?.cpu?.usage || 12}%
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Security Overview */}
-              <div className="col-12">
-                <div className="card border-0 rounded-4 shadow-sm">
-                  <div className="card-body p-4">
-                    <div className="d-flex align-items-center mb-3">
-                      <Shield className="text-warning me-3" size={24} />
-                      <h5 className="card-title fw-bold mb-0">Security Overview</h5>
+                  <div className="col-6">
+                    <div className="text-center">
+                      <HardDrive className="text-info mb-2" size={24} />
+                      <div className="small fw-semibold">Memory</div>
+                      <div className="text-success fw-bold">
+                        {systemHealth?.performance?.memory?.usage || 68}%
+                      </div>
                     </div>
-                    <div className="space-y-3">
-                      <div className="d-flex justify-content-between align-items-center py-2">
-                        <div className="d-flex align-items-center">
-                          <CheckCircle2 className="text-success me-2" size={16} />
-                          <span className="small">Authentication</span>
-                        </div>
-                        <span className="badge bg-success">Secure</span>
+                  </div>
+                  <div className="col-6">
+                    <div className="text-center">
+                      <Wifi className="text-success mb-2" size={24} />
+                      <div className="small fw-semibold">Network</div>
+                      <div className="text-success fw-bold">
+                        {systemHealth?.performance?.network?.status || 'Stable'}
                       </div>
-                      <div className="d-flex justify-content-between align-items-center py-2">
-                        <div className="d-flex align-items-center">
-                          <CheckCircle2 className="text-success me-2" size={16} />
-                          <span className="small">SSL/TLS</span>
-                        </div>
-                        <span className="badge bg-success">Active</span>
-                      </div>
-                      <div className="d-flex justify-content-between align-items-center py-2">
-                        <div className="d-flex align-items-center">
-                          <AlertCircle className="text-warning me-2" size={16} />
-                          <span className="small">Failed Logins</span>
-                        </div>
-                        <span className="badge bg-warning">3 Today</span>
-                      </div>
-                      <div className="d-flex justify-content-between align-items-center py-2">
-                        <div className="d-flex align-items-center">
-                          <Eye className="text-info me-2" size={16} />
-                          <span className="small">Active Sessions</span>
-                        </div>
-                        <span className="badge bg-info">{Math.floor((stats.totalUsers || 0) * 0.15)}</span>
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div className="text-center">
+                      <Globe className="text-warning mb-2" size={24} />
+                      <div className="small fw-semibold">Health Score</div>
+                      <div className="text-success fw-bold">
+                        {systemHealth?.overall?.healthScore || 99}/100
                       </div>
                     </div>
                   </div>
@@ -352,13 +461,52 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Additional Enterprise Widgets */}
-        <div className="row g-4 mt-2">
+          {/* Security Overview */}
+          <div className="col-lg-6">
+            <div className="card border-0 rounded-4 shadow-sm h-100">
+              <div className="card-body p-4">
+                <div className="d-flex align-items-center mb-3">
+                  <Shield className="text-warning me-3" size={24} />
+                  <h5 className="card-title fw-bold mb-0">Security Overview</h5>
+                </div>
+                <div className="space-y-3">
+                  <div className="d-flex justify-content-between align-items-center py-2">
+                    <div className="d-flex align-items-center">
+                      <CheckCircle2 className="text-success me-2" size={16} />
+                      <span className="small">Authentication</span>
+                    </div>
+                    <span className="badge bg-success">Secure</span>
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center py-2">
+                    <div className="d-flex align-items-center">
+                      <CheckCircle2 className="text-success me-2" size={16} />
+                      <span className="small">SSL/TLS</span>
+                    </div>
+                    <span className="badge bg-success">Active</span>
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center py-2">
+                    <div className="d-flex align-items-center">
+                      <AlertCircle className="text-warning me-2" size={16} />
+                      <span className="small">Failed Logins</span>
+                    </div>
+                    <span className="badge bg-warning">3 Today</span>
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center py-2">
+                    <div className="d-flex align-items-center">
+                      <Eye className="text-info me-2" size={16} />
+                      <span className="small">Active Sessions</span>
+                    </div>
+                    <span className="badge bg-info">{Math.floor((stats.totalUsers || 0) * 0.15)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Application Statistics */}
           <div className="col-lg-6">
-            <div className="card border-0 rounded-4 shadow-sm">
+            <div className="card border-0 rounded-4 shadow-sm h-100">
               <div className="card-body p-4">
                 <div className="d-flex align-items-center mb-4">
                   <BarChart3 className="text-primary me-3" size={24} />
@@ -398,59 +546,77 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* System Events Timeline */}
+          {/* Logs */}
           <div className="col-lg-6">
-            <div className="card border-0 rounded-4 shadow-sm">
+            <div className="card border-0 rounded-4 shadow-sm h-100">
               <div className="card-body p-4">
                 <div className="d-flex align-items-center justify-content-between mb-4">
                   <div className="d-flex align-items-center">
-                    <Calendar className="text-primary me-3" size={24} />
-                    <h5 className="card-title fw-bold mb-0">System Events</h5>
+                    <FileText className="text-primary me-3" size={24} />
+                    <h5 className="card-title fw-bold mb-0">Recent Logs</h5>
                   </div>
-                  <button 
-                    className="btn btn-outline-primary btn-sm"
-                    onClick={() => navigate('/audit-logs')}
-                  >
-                    View All
-                  </button>
+                  <div className="btn-group btn-group-sm" role="group">
+                    <button 
+                      className="btn btn-outline-primary"
+                      onClick={() => setCurrentLogPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentLogPage === 1 || logsLoading}
+                    >
+                      Previous
+                    </button>
+                    <button 
+                      className="btn btn-outline-primary"
+                      disabled
+                    >
+                      {currentLogPage} / {totalLogPages}
+                    </button>
+                    <button 
+                      className="btn btn-outline-primary"
+                      onClick={() => setCurrentLogPage(prev => Math.min(totalLogPages, prev + 1))}
+                      disabled={currentLogPage === totalLogPages || logsLoading}
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
-                <div className="timeline">
-                  <div className="d-flex align-items-start mb-3">
-                    <div className="rounded-circle bg-success bg-opacity-10 p-2 me-3 flex-shrink-0">
-                      <CheckCircle2 className="text-success" size={16} />
+                <div className="logs-container">
+                  {logsLoading ? (
+                    <div className="text-center py-4">
+                      <div className="spinner-border spinner-border-sm text-primary" role="status">
+                        <span className="visually-hidden">Loading logs...</span>
+                      </div>
                     </div>
-                    <div className="flex-grow-1">
-                      <div className="fw-semibold">System Health Check</div>
-                      <div className="small text-muted">All systems operational • 5 minutes ago</div>
+                  ) : logs.length > 0 ? (
+                    logs.map((log) => {
+                      const LogIcon = getLogTypeIcon(log.type);
+                      const logColor = getLogTypeColor(log.type);
+                      return (
+                        <div key={log.id} className="d-flex align-items-start mb-3">
+                          <div className={`rounded-circle bg-${logColor} bg-opacity-10 p-2 me-3 flex-shrink-0`}>
+                            <LogIcon className={`text-${logColor}`} size={16} />
+                          </div>
+                          <div className="flex-grow-1">
+                            <div className="d-flex justify-content-between align-items-start">
+                              <div>
+                                <div className="fw-semibold">{log.message}</div>
+                                <div className="small text-muted">
+                                  <span className={`badge bg-${logColor} bg-opacity-10 text-${logColor} me-2`}>
+                                    {log.type.charAt(0).toUpperCase() + log.type.slice(1)}
+                                  </span>
+                                  {log.user && <span className="me-2">by {log.user}</span>}
+                                  <span>{formatLogTimestamp(log.timestamp)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-4 text-muted">
+                      <FileText size={32} className="mb-2 opacity-50" />
+                      <div>No logs available</div>
                     </div>
-                  </div>
-                  <div className="d-flex align-items-start mb-3">
-                    <div className="rounded-circle bg-primary bg-opacity-10 p-2 me-3 flex-shrink-0">
-                      <Database className="text-primary" size={16} />
-                    </div>
-                    <div className="flex-grow-1">
-                      <div className="fw-semibold">Database Backup Completed</div>
-                      <div className="small text-muted">Automated backup successful • 1 hour ago</div>
-                    </div>
-                  </div>
-                  <div className="d-flex align-items-start mb-3">
-                    <div className="rounded-circle bg-info bg-opacity-10 p-2 me-3 flex-shrink-0">
-                      <Users className="text-info" size={16} />
-                    </div>
-                    <div className="flex-grow-1">
-                      <div className="fw-semibold">User Session Cleanup</div>
-                      <div className="small text-muted">Expired sessions removed • 2 hours ago</div>
-                    </div>
-                  </div>
-                  <div className="d-flex align-items-start">
-                    <div className="rounded-circle bg-warning bg-opacity-10 p-2 me-3 flex-shrink-0">
-                      <Shield className="text-warning" size={16} />
-                    </div>
-                    <div className="flex-grow-1">
-                      <div className="fw-semibold">Security Scan</div>
-                      <div className="small text-muted">Weekly security audit completed • 6 hours ago</div>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>

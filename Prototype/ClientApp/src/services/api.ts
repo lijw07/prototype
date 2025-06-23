@@ -29,6 +29,10 @@ class ApiService {
 
   private getAuthHeaders(): HeadersInit {
     const token = localStorage.getItem('authToken');
+    console.log('Auth token exists:', !!token);
+    if (token) {
+      console.log('Token length:', token.length);
+    }
     return {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` }),
@@ -83,10 +87,16 @@ class ApiService {
   }
 
   async delete<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const fullUrl = `${this.baseUrl}${endpoint}`;
+    console.log('DELETE request to:', fullUrl);
+    const headers = this.getAuthHeaders();
+    console.log('DELETE headers:', headers);
+    const response = await fetch(fullUrl, {
       method: 'DELETE',
-      headers: this.getAuthHeaders(),
+      headers: headers,
     });
+    console.log('DELETE response status:', response.status);
+    console.log('DELETE response headers:', Object.fromEntries(response.headers.entries()));
     return this.handleResponse<T>(response);
   }
 }
@@ -169,6 +179,22 @@ export const userApi = {
   
   deleteUser: (userId: string) =>
     api.delete<{ success: boolean; message?: string }>(`/settings/user/delete/${userId}`),
+  
+  updateTemporaryUser: (userData: {
+    temporaryUserId: string;
+    firstName: string;
+    lastName: string;
+    username: string;
+    email: string;
+    phoneNumber?: string;
+  }) =>
+    api.put<{ success: boolean; user?: any; message?: string }>('/settings/user/update-temporary', userData),
+  
+  deleteTemporaryUser: (temporaryUserId: string) => {
+    const url = `/settings/user/delete-temporary/${temporaryUserId}`;
+    console.log('DELETE Temporary User URL:', url);
+    return api.delete<{ success: boolean; message?: string }>(url);
+  },
 };
 
 // Application Settings API
@@ -203,6 +229,9 @@ export const roleApi = {
   updateRole: (roleId: string, roleData: { roleName: string }) =>
     api.put<{ success: boolean; role?: any; message?: string }>(`/settings/roles/${roleId}`, roleData),
   
+  getRoleDeletionConstraints: (roleId: string) =>
+    api.get<{ success: boolean; canDelete: boolean; usersCount: number; temporaryUsersCount: number; constraintMessage: string; roleName: string }>(`/settings/roles/${roleId}/deletion-constraints`),
+  
   deleteRole: (roleId: string) =>
     api.delete<{ success: boolean; message?: string }>(`/settings/roles/${roleId}`),
 };
@@ -229,6 +258,75 @@ export const activityLogApi = {
 export const applicationLogApi = {
   getApplicationLogs: (page: number = 1, pageSize: number = 100) =>
     api.get<{ success: boolean; data: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number } }>(`/ApplicationLogSettings?page=${page}&pageSize=${pageSize}`),
+};
+
+// Security Dashboard API
+export const securityDashboardApi = {
+  getSecurityOverview: () =>
+    api.get<{ success: boolean; data: any }>('/api/security-dashboard/overview'),
+  
+  getFailedLogins: (days: number = 7) =>
+    api.get<{ success: boolean; data: any[] }>(`/api/security-dashboard/failed-logins?days=${days}`),
+};
+
+// System Health API
+export const systemHealthApi = {
+  getHealthOverview: () =>
+    api.get<{ success: boolean; data: any }>('/api/system-health/overview'),
+    
+  getDatabaseConnections: () =>
+    api.get<{ success: boolean; data: any[] }>('/api/system-health/database-connections'),
+    
+  getPerformanceMetrics: () =>
+    api.get<{ success: boolean; data: any }>('/api/system-health/performance-metrics'),
+};
+
+// Executive Dashboard API
+export const executiveDashboardApi = {
+  getExecutiveOverview: () =>
+    api.get<{ success: boolean; data: any }>('/api/executive-dashboard/overview'),
+    
+  getBusinessMetrics: () =>
+    api.get<{ success: boolean; data: any }>('/api/executive-dashboard/business-metrics'),
+    
+  getGrowthTrends: (months: number = 6) =>
+    api.get<{ success: boolean; data: any }>(`/api/executive-dashboard/growth-trends?months=${months}`),
+};
+
+// User Provisioning API
+export const userProvisioningApi = {
+  getProvisioningOverview: () =>
+    api.get<{ success: boolean; data: any }>('/api/user-provisioning/overview'),
+    
+  getPendingRequests: (page: number = 1, pageSize: number = 10) =>
+    api.get<{ success: boolean; data: any }>(`/api/user-provisioning/pending-requests?page=${page}&pageSize=${pageSize}`),
+    
+  autoProvisionUsers: (request: any) =>
+    api.post<{ success: boolean; data: any }>('/api/user-provisioning/auto-provision', request),
+    
+  bulkProvisionUsers: (request: any) =>
+    api.post<{ success: boolean; data: any }>('/api/user-provisioning/bulk-provision', request),
+    
+  getProvisioningTemplates: () =>
+    api.get<{ success: boolean; data: any }>('/api/user-provisioning/provisioning-templates'),
+};
+
+// Compliance API
+export const complianceApi = {
+  getComplianceOverview: () =>
+    api.get<{ success: boolean; data: any }>('/api/compliance/overview'),
+    
+  generateAuditReport: (period: string = '30', format: string = 'summary') =>
+    api.get<{ success: boolean; data: any }>(`/api/compliance/audit-report?period=${period}&format=${format}`),
+    
+  getPolicyViolations: (page: number = 1, pageSize: number = 10) =>
+    api.get<{ success: boolean; data: any }>(`/api/compliance/policy-violations?page=${page}&pageSize=${pageSize}`),
+    
+  getComplianceFrameworks: () =>
+    api.get<{ success: boolean; data: any }>('/api/compliance/frameworks'),
+    
+  generateCustomReport: (request: any) =>
+    api.post<{ success: boolean; data: any }>('/api/compliance/generate-report', request),
 };
 
 export default api;

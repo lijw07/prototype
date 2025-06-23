@@ -14,6 +14,11 @@ import ActivityLogs from './components/activity/ActivityLogs';
 import Applications from './components/applications/Applications';
 import ApplicationLogs from './components/application-logs/ApplicationLogs';
 import Roles from './components/roles/Roles';
+import SecurityDashboard from './components/security/SecurityDashboard';
+import SystemHealthDashboard from './components/health/SystemHealthDashboard';
+import ExecutiveDashboard from './components/executive/ExecutiveDashboard';
+import UserProvisioning from './components/provisioning/UserProvisioning';
+import ComplianceDashboard from './components/compliance/ComplianceDashboard';
 import Home from './components/home/Home';
 
 // Conditional redirect component
@@ -48,6 +53,31 @@ export default function App() {
           <Route path="/dashboard" element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/security-dashboard" element={
+            <ProtectedRoute>
+              <SecurityDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/system-health" element={
+            <ProtectedRoute>
+              <SystemHealthDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/executive-dashboard" element={
+            <ProtectedRoute>
+              <ExecutiveDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/user-provisioning" element={
+            <ProtectedRoute>
+              <UserProvisioning />
+            </ProtectedRoute>
+          } />
+          <Route path="/compliance" element={
+            <ProtectedRoute>
+              <ComplianceDashboard />
             </ProtectedRoute>
           } />
           <Route path="/accounts" element={

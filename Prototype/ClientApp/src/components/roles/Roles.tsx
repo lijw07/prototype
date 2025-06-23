@@ -20,6 +20,14 @@ const Roles: React.FC = () => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deletingRole, setDeletingRole] = useState<Role | null>(null);
     const [deleteSuccess, setDeleteSuccess] = useState(false);
+    const [deletionConstraints, setDeletionConstraints] = useState<{
+        canDelete: boolean;
+        usersCount: number;
+        temporaryUsersCount: number;
+        constraintMessage: string;
+        roleName: string;
+    } | null>(null);
+    const [loadingConstraints, setLoadingConstraints] = useState(false);
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
@@ -211,9 +219,35 @@ const Roles: React.FC = () => {
         }
     };
 
-    const confirmDeleteRole = (role: Role) => {
+    const confirmDeleteRole = async (role: Role) => {
         setDeletingRole(role);
         setShowDeleteConfirm(true);
+        setLoadingConstraints(true);
+        setDeletionConstraints(null);
+        
+        try {
+            const response = await roleApi.getRoleDeletionConstraints(role.userRoleId);
+            if (response.success) {
+                setDeletionConstraints({
+                    canDelete: response.canDelete,
+                    usersCount: response.usersCount,
+                    temporaryUsersCount: response.temporaryUsersCount,
+                    constraintMessage: response.constraintMessage,
+                    roleName: response.roleName
+                });
+            }
+        } catch (error) {
+            console.error('Failed to fetch deletion constraints:', error);
+            setDeletionConstraints({
+                canDelete: false,
+                usersCount: 0,
+                temporaryUsersCount: 0,
+                constraintMessage: "Unable to check role constraints. Please try again.",
+                roleName: role.role
+            });
+        } finally {
+            setLoadingConstraints(false);
+        }
     };
 
 
@@ -623,15 +657,54 @@ const Roles: React.FC = () => {
                                         </div>
                                     ) : (
                                         <div className="text-center py-4">
-                                            <AlertTriangle size={64} className="text-warning mb-3" />
-                                            <h4 className="fw-bold">Are you sure you want to delete this role?</h4>
-                                            <div className="bg-light rounded-3 p-3 my-3">
-                                                <h5 className="fw-bold text-dark mb-1">{deletingRole.role}</h5>
-                                                <p className="text-muted small mb-0">Created by {deletingRole.createdBy} on {new Date(deletingRole.createdAt).toLocaleDateString()}</p>
-                                            </div>
-                                            <p className="text-danger small fw-semibold">
-                                                ⚠️ This action cannot be undone. Users with this role may lose access permissions.
-                                            </p>
+                                            {loadingConstraints ? (
+                                                <div>
+                                                    <Loader size={64} className="text-primary mb-3" style={{animation: 'spin 2s linear infinite'}} />
+                                                    <h4 className="fw-bold">Checking role constraints...</h4>
+                                                    <p className="text-muted">Please wait while we verify if this role can be deleted.</p>
+                                                </div>
+                                            ) : deletionConstraints?.canDelete === false ? (
+                                                <div>
+                                                    <AlertCircle size={64} className="text-danger mb-3" />
+                                                    <h4 className="fw-bold text-danger">Cannot Delete Role</h4>
+                                                    <div className="bg-light rounded-3 p-3 my-3">
+                                                        <h5 className="fw-bold text-dark mb-1">{deletingRole.role}</h5>
+                                                        <p className="text-muted small mb-0">Created by {deletingRole.createdBy} on {new Date(deletingRole.createdAt).toLocaleDateString()}</p>
+                                                    </div>
+                                                    <div className="alert alert-danger text-start">
+                                                        <div className="fw-semibold mb-2">Deletion blocked due to:</div>
+                                                        {deletionConstraints.usersCount > 0 && (
+                                                            <div className="mb-2">
+                                                                • <strong>{deletionConstraints.usersCount}</strong> user{deletionConstraints.usersCount > 1 ? 's are' : ' is'} assigned this role
+                                                            </div>
+                                                        )}
+                                                        {deletionConstraints.temporaryUsersCount > 0 && (
+                                                            <div className="mb-2">
+                                                                • <strong>{deletionConstraints.temporaryUsersCount}</strong> temporary user{deletionConstraints.temporaryUsersCount > 1 ? 's' : ''} will be assigned this role upon activation
+                                                            </div>
+                                                        )}
+                                                        <div className="small text-muted mt-2">
+                                                            Please reassign users to different roles before deletion.
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <AlertTriangle size={64} className="text-warning mb-3" />
+                                                    <h4 className="fw-bold">Are you sure you want to delete this role?</h4>
+                                                    <div className="bg-light rounded-3 p-3 my-3">
+                                                        <h5 className="fw-bold text-dark mb-1">{deletingRole.role}</h5>
+                                                        <p className="text-muted small mb-0">Created by {deletingRole.createdBy} on {new Date(deletingRole.createdAt).toLocaleDateString()}</p>
+                                                    </div>
+                                                    <div className="alert alert-success text-start">
+                                                        <div className="fw-semibold mb-1">✓ Safe to delete</div>
+                                                        <div className="small">This role is not assigned to any users and can be safely removed.</div>
+                                                    </div>
+                                                    <p className="text-danger small fw-semibold">
+                                                        ⚠️ This action cannot be undone.
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -641,18 +714,22 @@ const Roles: React.FC = () => {
                                             onClick={() => {
                                                 setShowDeleteConfirm(false);
                                                 setDeletingRole(null);
+                                                setDeletionConstraints(null);
                                             }}
                                             className="btn btn-secondary rounded-3 fw-semibold"
                                         >
-                                            Cancel
+                                            {deletionConstraints?.canDelete === false ? 'Close' : 'Cancel'}
                                         </button>
-                                        <button
-                                            onClick={deleteRole}
-                                            className="btn btn-danger rounded-3 fw-semibold d-flex align-items-center"
-                                        >
-                                            <Trash2 className="me-2" size={16} />
-                                            Delete Role
-                                        </button>
+                                        {(!deletionConstraints || deletionConstraints.canDelete === true) && (
+                                            <button
+                                                onClick={deleteRole}
+                                                disabled={loadingConstraints || deletionConstraints?.canDelete === false}
+                                                className="btn btn-danger rounded-3 fw-semibold d-flex align-items-center"
+                                            >
+                                                <Trash2 className="me-2" size={16} />
+                                                Delete Role
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>
