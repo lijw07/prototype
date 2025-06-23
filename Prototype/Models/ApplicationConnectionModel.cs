@@ -127,6 +127,26 @@ public class ApplicationConnectionModel
     
     [StringLength(2000)]
     public string? CustomProperties { get; set; } // JSON string for extensibility
+    
+    // Azure Storage specific fields
+    [StringLength(255)]
+    public string? AzureStorageAccountName { get; set; }
+    
+    [StringLength(500)]
+    public string? AzureStorageAccountKey { get; set; }
+    
+    [StringLength(1000)]
+    public string? AzureSasToken { get; set; }
+    
+    // Google Cloud Storage specific fields
+    [StringLength(5000)]
+    public string? GcpServiceAccountJson { get; set; }
+    
+    [StringLength(255)]
+    public string? GcpAccessKeyId { get; set; }
+    
+    [StringLength(500)]
+    public string? GcpSecretAccessKey { get; set; }
 
     // Navigation properties
     public virtual ICollection<UserApplicationModel> UserApplications { get; set; } = new List<UserApplicationModel>();

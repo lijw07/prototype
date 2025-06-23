@@ -34,6 +34,8 @@ RUN apt-get update && \
 # Enable file watcher for hot reload
 ENV DOTNET_USE_POLLING_FILE_WATCHER=1
 ENV DOTNET_ENVIRONMENT=Development
+# Disable hot reload for debugging (uncomment if needed)
+# ENV DOTNET_HOTRELOAD_ENABLED=false
 
 # Create non-root user for security
 RUN adduser --disabled-password --gecos '' dotnetuser && \
@@ -48,7 +50,8 @@ EXPOSE 57404
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-CMD ["dotnet", "watch", "run", "--urls", "http://0.0.0.0:8080"]
+# For debugging with hot reload support
+ENTRYPOINT ["dotnet", "watch", "run", "--urls", "http://0.0.0.0:8080"]
 
 # Production stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS prod

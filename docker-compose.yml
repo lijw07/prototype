@@ -47,6 +47,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
+      - DOTNET_MODIFIABLE_ASSEMBLIES=Debug
       # Database Configuration
       - DB_HOST=db
       - DB_PORT=1433

@@ -20,6 +20,8 @@ import ExecutiveDashboard from './components/executive/ExecutiveDashboard';
 import UserProvisioning from './components/provisioning/UserProvisioning';
 import ComplianceDashboard from './components/compliance/ComplianceDashboard';
 import Home from './components/home/Home';
+import About from './components/pages/About';
+import Contact from './components/pages/Contact';
 
 // Conditional redirect component
 function ConditionalRedirect() {
@@ -45,6 +47,8 @@ export default function App() {
         <Routes>
           {/* Public routes */}
           <Route path="/home" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
           <Route path="/login" element={<Login />} />
           <Route path="/verify" element={<VerifyEmailPage />} />
           <Route path="/reset-password" element={<ResetPassword />} />

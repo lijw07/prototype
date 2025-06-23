@@ -235,6 +235,26 @@ public class UserSettingsController : BaseSettingsController
         }, "retrieving profile");
     }
 
+    [HttpGet("counts")]
+    public async Task<IActionResult> GetUserCounts()
+    {
+        return await ExecuteWithErrorHandlingAsync<object>(async () =>
+        {
+            var totalVerifiedUsers = await _context.Users.CountAsync();
+            var totalTemporaryUsers = await _context.TemporaryUsers.CountAsync();
+            var totalUsers = totalVerifiedUsers + totalTemporaryUsers;
+
+            return new { 
+                success = true, 
+                data = new {
+                    totalUsers = totalUsers,
+                    totalVerifiedUsers = totalVerifiedUsers,
+                    totalTemporaryUsers = totalTemporaryUsers
+                }
+            };
+        }, "retrieving user counts");
+    }
+
     [HttpGet("all")]
     public async Task<IActionResult> GetAllUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
@@ -371,7 +391,7 @@ public class UserSettingsController : BaseSettingsController
         }, "updating user");
     }
 
-    [HttpDelete("delete/{userId}")]
+    [HttpDelete("delete/{userId:guid}")]
     public async Task<IActionResult> DeleteUser(Guid userId)
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
@@ -520,13 +540,7 @@ public class UserSettingsController : BaseSettingsController
         }, "updating temporary user");
     }
 
-    [HttpGet("temp-delete-test/{id}")]
-    public IActionResult TempDeleteTest(string id)
-    {
-        return Ok(new { message = "Route works", id = id });
-    }
-
-    [HttpDelete("delete-temporary/{temporaryUserId}")]
+    [HttpDelete("delete-temporary-user/{temporaryUserId:guid}")]
     public async Task<IActionResult> DeleteTemporaryUser(Guid temporaryUserId)
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
@@ -583,5 +597,4 @@ public class UserSettingsController : BaseSettingsController
             return new { success = true, message = "Temporary user deleted successfully" };
         }, "deleting temporary user");
     }
-
 }

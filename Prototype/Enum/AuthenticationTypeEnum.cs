@@ -35,5 +35,13 @@ public enum AuthenticationTypeEnum
     FileSystem,
     SharedAccessSignature,
     AccessKey,
-    ServicePrincipal
+    ServicePrincipal,
+    
+    // AWS authentication
+    AwsAccessKey,
+    AwsSessionToken,
+    
+    // Azure authentication
+    AzureStorageKey,
+    AzureSas
 }

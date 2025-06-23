@@ -5,18 +5,18 @@ using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
 
-namespace Prototype.Database.MySql;
+namespace Prototype.Database.MariaDb;
 
-public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
+public class MariaDbDatabaseStrategy : IDatabaseConnectionStrategy
 {
     private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<MySqlDatabaseStrategy> _logger;
+    private readonly ILogger<MariaDbDatabaseStrategy> _logger;
 
-    public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.MySql;
+    public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.MariaDb;
 
-    public MySqlDatabaseStrategy(
+    public MariaDbDatabaseStrategy(
         PasswordEncryptionService encryptionService,
-        ILogger<MySqlDatabaseStrategy> logger)
+        ILogger<MariaDbDatabaseStrategy> logger)
     {
         _encryptionService = encryptionService;
         _logger = logger;
@@ -36,7 +36,7 @@ public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
 
     public string BuildConnectionString(ConnectionSourceDto source)
     {
-        var connectionString = $"DRIVER={{MySQL ODBC 8.0 Unicode Driver}};SERVER={source.Host};PORT={source.Port};DATABASE={source.DatabaseName};";
+        var connectionString = $"DRIVER={{MariaDB ODBC 3.1 Driver}};SERVER={source.Host};PORT={source.Port};DATABASE={source.DatabaseName};";
 
         switch (source.AuthenticationType)
         {
@@ -45,22 +45,22 @@ public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
                 break;
                 
             case AuthenticationTypeEnum.NoAuth:
-                // MySQL typically still needs credentials, but we can try without
+                // MariaDB typically still needs credentials, but we can try without
                 break;
                 
             default:
-                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for MySQL.");
+                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for MariaDB.");
         }
 
-        // Additional MySQL ODBC options
-        connectionString += "CHARSET=utf8mb4;SSLMODE=PREFERRED;";
+        // MariaDB ODBC options
+        connectionString += "CHARSET=utf8mb4;AUTO_RECONNECT=1;";
 
         return connectionString;
     }
 
     public string BuildConnectionString(ApplicationConnectionModel source)
     {
-        var connectionString = $"DRIVER={{MySQL ODBC 8.0 Unicode Driver}};SERVER={source.Host};PORT={source.Port};DATABASE={source.DatabaseName};";
+        var connectionString = $"DRIVER={{MariaDB ODBC 3.1 Driver}};SERVER={source.Host};PORT={source.Port};DATABASE={source.DatabaseName};";
 
         switch (source.AuthenticationType)
         {
@@ -70,14 +70,14 @@ public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
                 break;
                 
             case AuthenticationTypeEnum.NoAuth:
-                // MySQL typically still needs credentials
+                // MariaDB typically still needs credentials
                 break;
                 
             default:
-                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for MySQL.");
+                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for MariaDB.");
         }
 
-        connectionString += "CHARSET=utf8mb4;SSLMODE=PREFERRED;";
+        connectionString += "CHARSET=utf8mb4;AUTO_RECONNECT=1;";
 
         return connectionString;
     }
@@ -96,7 +96,7 @@ public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "MySQL ODBC connection test failed: {Error}", ex.Message);
+            _logger.LogError(ex, "MariaDB ODBC connection test failed: {Error}", ex.Message);
             return false;
         }
     }

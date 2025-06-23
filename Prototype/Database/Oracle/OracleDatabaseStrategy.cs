@@ -5,18 +5,18 @@ using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
 
-namespace Prototype.Database.MySql;
+namespace Prototype.Database.Oracle;
 
-public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
+public class OracleDatabaseStrategy : IDatabaseConnectionStrategy
 {
     private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<MySqlDatabaseStrategy> _logger;
+    private readonly ILogger<OracleDatabaseStrategy> _logger;
 
-    public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.MySql;
+    public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.Oracle;
 
-    public MySqlDatabaseStrategy(
+    public OracleDatabaseStrategy(
         PasswordEncryptionService encryptionService,
-        ILogger<MySqlDatabaseStrategy> logger)
+        ILogger<OracleDatabaseStrategy> logger)
     {
         _encryptionService = encryptionService;
         _logger = logger;
@@ -27,7 +27,7 @@ public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
         return new Dictionary<AuthenticationTypeEnum, bool>
         {
             { AuthenticationTypeEnum.UserPassword, true },
-            { AuthenticationTypeEnum.NoAuth, true },
+            { AuthenticationTypeEnum.NoAuth, false },
             { AuthenticationTypeEnum.WindowsIntegrated, false },
             { AuthenticationTypeEnum.AzureAdPassword, false },
             { AuthenticationTypeEnum.AzureAdIntegrated, false }
@@ -36,7 +36,7 @@ public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
 
     public string BuildConnectionString(ConnectionSourceDto source)
     {
-        var connectionString = $"DRIVER={{MySQL ODBC 8.0 Unicode Driver}};SERVER={source.Host};PORT={source.Port};DATABASE={source.DatabaseName};";
+        var connectionString = $"DRIVER={{Oracle in XE}};DBQ={source.Host}:{source.Port}/{source.DatabaseName};";
 
         switch (source.AuthenticationType)
         {
@@ -44,23 +44,16 @@ public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
                 connectionString += $"UID={source.Username};PWD={source.Password};";
                 break;
                 
-            case AuthenticationTypeEnum.NoAuth:
-                // MySQL typically still needs credentials, but we can try without
-                break;
-                
             default:
-                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for MySQL.");
+                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for Oracle.");
         }
-
-        // Additional MySQL ODBC options
-        connectionString += "CHARSET=utf8mb4;SSLMODE=PREFERRED;";
 
         return connectionString;
     }
 
     public string BuildConnectionString(ApplicationConnectionModel source)
     {
-        var connectionString = $"DRIVER={{MySQL ODBC 8.0 Unicode Driver}};SERVER={source.Host};PORT={source.Port};DATABASE={source.DatabaseName};";
+        var connectionString = $"DRIVER={{Oracle in XE}};DBQ={source.Host}:{source.Port}/{source.DatabaseName};";
 
         switch (source.AuthenticationType)
         {
@@ -69,15 +62,9 @@ public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
                 connectionString += $"UID={source.Username};PWD={password};";
                 break;
                 
-            case AuthenticationTypeEnum.NoAuth:
-                // MySQL typically still needs credentials
-                break;
-                
             default:
-                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for MySQL.");
+                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for Oracle.");
         }
-
-        connectionString += "CHARSET=utf8mb4;SSLMODE=PREFERRED;";
 
         return connectionString;
     }
@@ -89,14 +76,14 @@ public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
             using var connection = new OdbcConnection(connectionString);
             await connection.OpenAsync();
             
-            using var command = new OdbcCommand("SELECT 1", connection);
+            using var command = new OdbcCommand("SELECT 1 FROM DUAL", connection);
             var result = await command.ExecuteScalarAsync();
             
-            return result != null && result.ToString() == "1";
+            return result != null;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "MySQL ODBC connection test failed: {Error}", ex.Message);
+            _logger.LogError(ex, "Oracle ODBC connection test failed: {Error}", ex.Message);
             return false;
         }
     }

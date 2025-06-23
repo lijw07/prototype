@@ -164,6 +164,9 @@ export const userApi = {
   
   getAllUsers: (page: number = 1, pageSize: number = 10) =>
     api.get<{ success: boolean; data?: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }; users?: any[]; message?: string }>(`/settings/user/all?page=${page}&pageSize=${pageSize}`),
+
+  getUserCounts: () =>
+    api.get<{ success: boolean; data: { totalUsers: number; totalVerifiedUsers: number; totalTemporaryUsers: number }; message?: string }>('/settings/user/counts'),
   
   updateUser: (userData: {
     userId: string;
@@ -177,8 +180,11 @@ export const userApi = {
   }) =>
     api.put<{ success: boolean; user?: any; message?: string }>('/settings/user/update', userData),
   
-  deleteUser: (userId: string) =>
-    api.delete<{ success: boolean; message?: string }>(`/settings/user/delete/${userId}`),
+  deleteUser: (userId: string) => {
+    const url = `/settings/user/delete/${userId}`;
+    console.log('DELETE User URL:', url);
+    return api.delete<{ success: boolean; message?: string }>(url);
+  },
   
   updateTemporaryUser: (userData: {
     temporaryUserId: string;
@@ -281,6 +287,7 @@ export const systemHealthApi = {
     api.get<{ success: boolean; data: any }>('/api/system-health/performance-metrics'),
 };
 
+// Executive Dashboard API
 // Executive Dashboard API
 export const executiveDashboardApi = {
   getExecutiveOverview: () =>

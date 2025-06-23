@@ -80,33 +80,34 @@ export default function Dashboard() {
       // Try to get data from dashboard API first
       try {
         const response = await dashboardApi.getStatistics();
+        console.log('Dashboard API response:', response);
         if (response.success && response.data) {
           setStats(response.data);
           return;
         }
       } catch (dashboardError) {
+        console.error('Dashboard API error:', dashboardError);
         console.log('Dashboard API not available, using alternative approach');
       }
       
-      // Fallback: Get data from existing APIs
-      const [appsResponse, usersResponse, rolesResponse] = await Promise.all([
-        applicationApi.getApplications(1, 1000), // Get many apps to count total
-        userApi.getAllUsers(1, 1000), // Get all users for counting
+      // Fallback: Get data from existing APIs with accurate counts
+      const [appsResponse, userCountsResponse, rolesResponse] = await Promise.all([
+        applicationApi.getApplications(1, 100), // Get apps for count
+        userApi.getUserCounts(), // Get exact user counts
         roleApi.getAllRoles(1, 100) // Get roles for counting
       ]);
       
       const totalApplications = appsResponse.success ? (appsResponse.data?.totalCount || appsResponse.data?.data?.length || 0) : 0;
       
-      // Count users by type from the combined response
+      // Get accurate user counts from the dedicated counts endpoint
       let totalUsers = 0;
       let totalVerifiedUsers = 0;
       let totalTemporaryUsers = 0;
       
-      if (usersResponse.success && usersResponse.data?.data) {
-        const users = usersResponse.data.data;
-        totalUsers = users.length;
-        totalVerifiedUsers = users.filter((user: any) => !user.isTemporary).length;
-        totalTemporaryUsers = users.filter((user: any) => user.isTemporary).length;
+      if (userCountsResponse.success && userCountsResponse.data) {
+        totalUsers = userCountsResponse.data.totalUsers;
+        totalVerifiedUsers = userCountsResponse.data.totalVerifiedUsers;
+        totalTemporaryUsers = userCountsResponse.data.totalTemporaryUsers;
       }
       
       const totalRoles = rolesResponse.success ? (rolesResponse.data?.totalCount || rolesResponse.data?.data?.length || 0) : 0;

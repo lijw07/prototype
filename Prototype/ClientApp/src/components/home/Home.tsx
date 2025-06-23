@@ -17,7 +17,15 @@ import {
   Settings,
   BarChart3,
   Eye,
-  Clock
+  Clock,
+  Building2,
+  Network,
+  Workflow,
+  FileCheck,
+  Award,
+  Headphones,
+  Code,
+  Cloud
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -25,16 +33,16 @@ export default function Home() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [animatedCounters, setAnimatedCounters] = useState({
-    users: 0,
-    applications: 0,
+    enterprises: 0,
     connections: 0,
+    users: 0,
     uptime: 0
   });
 
   // Animated counters effect
   useEffect(() => {
-    const targets = { users: 3000, applications: 43, connections: 127, uptime: 99.9 };
-    const duration = 2000; // 2 seconds
+    const targets = { enterprises: 500, connections: 50000, users: 100000, uptime: 99.99 };
+    const duration = 2500;
     const steps = 60;
     const interval = duration / steps;
 
@@ -42,12 +50,12 @@ export default function Home() {
     const timer = setInterval(() => {
       step++;
       const progress = step / steps;
-      const easeOut = 1 - Math.pow(1 - progress, 3); // Ease-out cubic
+      const easeOut = 1 - Math.pow(1 - progress, 3);
 
       setAnimatedCounters({
-        users: Math.floor(targets.users * easeOut),
-        applications: Math.floor(targets.applications * easeOut),
+        enterprises: Math.floor(targets.enterprises * easeOut),
         connections: Math.floor(targets.connections * easeOut),
+        users: Math.floor(targets.users * easeOut),
         uptime: Math.min(targets.uptime, (targets.uptime * easeOut))
       });
 
@@ -60,167 +68,104 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  const features = [
-    {
-      icon: Database,
-      title: "Multi-Database Support",
-      description: "Connect to SQL Server, MySQL, MongoDB, and more with unified access control.",
-      color: "primary"
-    },
-    {
-      icon: Shield,
-      title: "Enterprise Security",
-      description: "Advanced authentication, encryption, and compliance-ready audit trails.",
-      color: "success"
-    },
-    {
-      icon: Users,
-      title: "Role-Based Access",
-      description: "Granular permissions and role management for teams of any size.",
-      color: "info"
-    },
-    {
-      icon: TrendingUp,
-      title: "Real-Time Analytics",
-      description: "Comprehensive dashboards and monitoring for operational excellence.",
-      color: "warning"
-    }
-  ];
-
-  const testimonials = [
-    {
-      quote: "CAMS transformed our database access management. The security and ease of use are unmatched.",
-      author: "Sarah Chen",
-      role: "CTO, TechCorp",
-      rating: 5
-    },
-    {
-      quote: "Finally, a solution that scales with our enterprise needs while maintaining simplicity.",
-      author: "Michael Rodriguez",
-      role: "IT Director, Global Systems",
-      rating: 5
-    },
-    {
-      quote: "The audit capabilities alone saved us months of compliance work. Highly recommended.",
-      author: "Dr. Emily Watson",
-      role: "Security Lead, FinanceFirst",
-      rating: 5
-    }
-  ];
-
   return (
-    <div className="min-vh-100 bg-light">
+    <div className="min-vh-100">
       {/* Hero Section */}
-      <section className="position-relative overflow-hidden bg-gradient-primary py-5">
-        <div className="position-absolute top-0 start-0 w-100 h-100" style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          opacity: 0.9
+      <section className="position-relative overflow-hidden" style={{
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #3730a3 25%, #1e40af 50%, #2563eb 75%, #3b82f6 100%)',
+        minHeight: '100vh',
+        paddingTop: '100px'
+      }}>
+        {/* Animated Background Pattern */}
+        <div className="position-absolute w-100 h-100" style={{
+          backgroundImage: `radial-gradient(circle at 25% 25%, rgba(255,255,255,0.1) 1px, transparent 1px),
+                           radial-gradient(circle at 75% 75%, rgba(255,255,255,0.05) 1px, transparent 1px)`,
+          backgroundSize: '50px 50px, 100px 100px',
+          animation: 'float 20s ease-in-out infinite'
         }}></div>
-        
-        {/* Animated Background Elements */}
-        <div className="position-absolute top-0 start-0 w-100 h-100 overflow-hidden">
-          <div className="position-absolute animate-float" style={{
-            top: '10%', left: '10%', animation: 'float 6s ease-in-out infinite'
-          }}>
-            <Shield size={32} className="text-white opacity-25" />
-          </div>
-          <div className="position-absolute animate-float" style={{
-            top: '20%', right: '15%', animation: 'float 8s ease-in-out infinite 2s'
-          }}>
-            <Database size={24} className="text-white opacity-25" />
-          </div>
-          <div className="position-absolute animate-float" style={{
-            bottom: '20%', left: '20%', animation: 'float 7s ease-in-out infinite 1s'
-          }}>
-            <Globe size={28} className="text-white opacity-25" />
-          </div>
-          <div className="position-absolute animate-float" style={{
-            bottom: '30%', right: '10%', animation: 'float 9s ease-in-out infinite 3s'
-          }}>
-            <Zap size={20} className="text-white opacity-25" />
-          </div>
-        </div>
 
         <div className="container position-relative" style={{ zIndex: 10 }}>
           <div className="row align-items-center min-vh-100 py-5">
-            <div className="col-lg-6">
+            <div className="col-lg-6 pe-lg-5">
               <div className="mb-4">
-                <span className="badge bg-white text-primary rounded-pill px-3 py-2 fw-semibold mb-3">
-                  <Sparkles size={16} className="me-2" />
-                  Enterprise-Grade Solution
-                </span>
+                <div className="d-inline-flex align-items-center bg-white bg-opacity-20 backdrop-blur rounded-pill px-4 py-2 mb-4">
+                  <Award className="text-warning me-2" size={18} />
+                  <span className="text-white fw-semibold small">Enterprise-Grade Middleware Platform</span>
+                </div>
               </div>
               
-              <h1 className="display-3 fw-bold text-white mb-4 lh-1">
-                Centralized Access
-                <span className="d-block text-warning">Management System</span>
+              <h1 className="display-2 fw-bold text-white mb-4 lh-1">
+                The Future of
+                <span className="d-block text-warning fw-bolder">Employee Access Management</span>
               </h1>
               
-              <p className="lead text-white mb-4 opacity-90">
-                Secure, scalable, and intelligent database access management. 
-                Streamline your operations with enterprise-grade security and 
-                comprehensive audit capabilities.
+              <p className="lead text-white mb-5 opacity-90 fs-4">
+                CAMS is the intelligent middleware hub that automates employee provisioning across all your systems. 
+                Connect to any database, API, or cloud service while maintaining enterprise security and compliance.
               </p>
               
-              <div className="d-flex flex-column flex-sm-row gap-3 mb-5">
+              <div className="d-flex flex-column flex-sm-row gap-4 mb-5">
                 {user ? (
                   <button 
-                    className="btn btn-warning btn-lg rounded-3 fw-semibold px-4 py-3 shadow-lg"
+                    className="btn btn-warning btn-lg rounded-3 fw-bold px-5 py-3 shadow-lg d-flex align-items-center"
                     onClick={() => navigate('/dashboard')}
+                    style={{ fontSize: '1.1rem' }}
                   >
-                    <BarChart3 className="me-2" size={20} />
-                    Go to Dashboard
-                    <ArrowRight className="ms-2" size={20} />
+                    <BarChart3 className="me-2" size={22} />
+                    Access Dashboard
+                    <ArrowRight className="ms-2" size={22} />
                   </button>
                 ) : (
                   <button 
-                    className="btn btn-warning btn-lg rounded-3 fw-semibold px-4 py-3 shadow-lg"
+                    className="btn btn-warning btn-lg rounded-3 fw-bold px-5 py-3 shadow-lg d-flex align-items-center"
                     onClick={() => navigate('/login')}
+                    style={{ fontSize: '1.1rem' }}
                   >
-                    <Shield className="me-2" size={20} />
-                    Get Started
-                    <ArrowRight className="ms-2" size={20} />
+                    <Zap className="me-2" size={22} />
+                    Start Free Trial
+                    <ArrowRight className="ms-2" size={22} />
                   </button>
                 )}
                 
-                <button className="btn btn-outline-light btn-lg rounded-3 fw-semibold px-4 py-3">
-                  <Eye className="me-2" size={20} />
+                <button className="btn btn-outline-light btn-lg rounded-3 fw-semibold px-5 py-3 d-flex align-items-center"
+                        style={{ fontSize: '1.1rem' }}>
+                  <Eye className="me-2" size={22} />
                   Watch Demo
                 </button>
               </div>
 
-              {/* Stats */}
+              {/* Enterprise Stats */}
               <div className="row g-4">
                 <div className="col-6 col-md-3">
                   <div className="text-center">
-                    <div className="h2 fw-bold text-warning mb-1">
-                      {animatedCounters.users.toLocaleString()}+
+                    <div className="h1 fw-bold text-warning mb-1">
+                      {animatedCounters.enterprises.toLocaleString()}+
                     </div>
-                    <div className="small text-white opacity-75">Active Users</div>
+                    <div className="text-white opacity-80 fw-medium">Enterprises</div>
                   </div>
                 </div>
                 <div className="col-6 col-md-3">
                   <div className="text-center">
-                    <div className="h2 fw-bold text-warning mb-1">
-                      {animatedCounters.applications}+
+                    <div className="h1 fw-bold text-warning mb-1">
+                      {(animatedCounters.connections / 1000).toFixed(0)}K+
                     </div>
-                    <div className="small text-white opacity-75">Applications</div>
+                    <div className="text-white opacity-80 fw-medium">Connections</div>
                   </div>
                 </div>
                 <div className="col-6 col-md-3">
                   <div className="text-center">
-                    <div className="h2 fw-bold text-warning mb-1">
-                      {animatedCounters.connections}+
+                    <div className="h1 fw-bold text-warning mb-1">
+                      {(animatedCounters.users / 1000).toFixed(0)}K+
                     </div>
-                    <div className="small text-white opacity-75">Connections</div>
+                    <div className="text-white opacity-80 fw-medium">Users</div>
                   </div>
                 </div>
                 <div className="col-6 col-md-3">
                   <div className="text-center">
-                    <div className="h2 fw-bold text-warning mb-1">
-                      {animatedCounters.uptime.toFixed(1)}%
+                    <div className="h1 fw-bold text-warning mb-1">
+                      {animatedCounters.uptime.toFixed(2)}%
                     </div>
-                    <div className="small text-white opacity-75">Uptime</div>
+                    <div className="text-white opacity-80 fw-medium">Uptime</div>
                   </div>
                 </div>
               </div>
@@ -228,34 +173,65 @@ export default function Home() {
             
             <div className="col-lg-6">
               <div className="position-relative">
-                {/* Floating Dashboard Preview */}
-                <div className="card border-0 shadow-lg rounded-4 transform-hover" style={{
-                  animation: 'fadeInUp 1s ease-out 0.5s both'
-                }}>
-                  <div className="card-body p-4">
-                    <div className="d-flex align-items-center mb-3">
-                      <div className="bg-success rounded-circle p-2 me-3">
-                        <CheckCircle className="text-white" size={16} />
+                {/* Enterprise Dashboard Mockup */}
+                <div className="card border-0 shadow-2xl rounded-4 overflow-hidden bg-white">
+                  <div className="card-header bg-gradient-dark text-white p-4">
+                    <div className="d-flex align-items-center justify-content-between">
+                      <div className="d-flex align-items-center">
+                        <Building2 className="me-2" size={20} />
+                        <span className="fw-bold">Enterprise Control Center</span>
                       </div>
-                      <div>
-                        <div className="fw-semibold">System Status</div>
-                        <div className="small text-muted">All systems operational</div>
+                      <div className="d-flex align-items-center">
+                        <div className="bg-success rounded-circle me-2" style={{ width: '8px', height: '8px' }}></div>
+                        <small className="text-success fw-medium">Live</small>
                       </div>
                     </div>
-                    
-                    <div className="row g-3">
+                  </div>
+                  <div className="card-body p-4">
+                    <div className="row g-3 mb-4">
                       <div className="col-6">
-                        <div className="bg-light rounded-3 p-3 text-center">
-                          <Database className="text-primary mb-2" size={24} />
-                          <div className="fw-bold h6 mb-1">43</div>
-                          <div className="small text-muted">Databases</div>
+                        <div className="bg-primary bg-opacity-10 rounded-3 p-3 text-center">
+                          <Database className="text-primary mb-2" size={28} />
+                          <div className="fw-bold h5 mb-1 text-primary">247</div>
+                          <div className="small text-muted fw-medium">Active Connections</div>
                         </div>
                       </div>
                       <div className="col-6">
-                        <div className="bg-light rounded-3 p-3 text-center">
-                          <Users className="text-success mb-2" size={24} />
-                          <div className="fw-bold h6 mb-1">3,000</div>
-                          <div className="small text-muted">Users</div>
+                        <div className="bg-success bg-opacity-10 rounded-3 p-3 text-center">
+                          <Users className="text-success mb-2" size={28} />
+                          <div className="fw-bold h5 mb-1 text-success">15,249</div>
+                          <div className="small text-muted fw-medium">Provisioned Users</div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="mb-3">
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span className="fw-medium text-dark">System Integration</span>
+                        <span className="badge bg-success">98.7% Complete</span>
+                      </div>
+                      <div className="progress" style={{ height: '8px' }}>
+                        <div className="progress-bar bg-gradient-success" style={{ width: '98.7%' }}></div>
+                      </div>
+                    </div>
+
+                    <div className="row g-2">
+                      <div className="col-4">
+                        <div className="small text-center p-2 bg-light rounded">
+                          <div className="fw-bold text-primary">ADP</div>
+                          <CheckCircle className="text-success" size={16} />
+                        </div>
+                      </div>
+                      <div className="col-4">
+                        <div className="small text-center p-2 bg-light rounded">
+                          <div className="fw-bold text-primary">Salesforce</div>
+                          <CheckCircle className="text-success" size={16} />
+                        </div>
+                      </div>
+                      <div className="col-4">
+                        <div className="small text-center p-2 bg-light rounded">
+                          <div className="fw-bold text-primary">Office 365</div>
+                          <CheckCircle className="text-success" size={16} />
                         </div>
                       </div>
                     </div>
@@ -264,8 +240,8 @@ export default function Home() {
 
                 {/* Floating Security Badge */}
                 <div className="position-absolute top-0 end-0 translate-middle">
-                  <div className="bg-success rounded-circle p-3 shadow-lg animate-pulse-slow">
-                    <Lock className="text-white" size={24} />
+                  <div className="bg-warning rounded-circle p-3 shadow-lg" style={{ animation: 'pulse 2s infinite' }}>
+                    <Shield className="text-dark" size={24} />
                   </div>
                 </div>
               </div>
@@ -274,120 +250,313 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-5">
+      {/* Value Proposition Section */}
+      <section className="py-6 bg-white">
         <div className="container py-5">
-          <div className="text-center mb-5">
-            <h2 className="display-5 fw-bold text-dark mb-3">
-              Powerful Features for Modern Teams
-            </h2>
-            <p className="lead text-muted">
-              Everything you need to manage database access securely and efficiently
-            </p>
+          <div className="row justify-content-center text-center mb-5">
+            <div className="col-lg-8">
+              <h2 className="display-4 fw-bold text-dark mb-4">
+                One Platform, Infinite Possibilities
+              </h2>
+              <p className="lead text-muted fs-4">
+                CAMS eliminates the complexity of managing employee access across disparate systems. 
+                Connect once, automate everything, and scale with confidence.
+              </p>
+            </div>
           </div>
 
-          <div className="row g-4">
-            {features.map((feature, index) => {
-              const IconComponent = feature.icon;
-              return (
-                <div key={index} className="col-lg-3 col-md-6">
-                  <div className="card border-0 rounded-4 shadow-sm h-100 feature-card position-relative overflow-hidden">
-                    <div className="card-body p-4 text-center">
-                      <div className={`rounded-3 p-3 bg-${feature.color} bg-opacity-10 d-inline-flex mb-3`}>
-                        <IconComponent className={`text-${feature.color}`} size={32} />
-                      </div>
-                      <h5 className="fw-bold text-dark mb-3">{feature.title}</h5>
-                      <p className="text-muted mb-0">{feature.description}</p>
-                    </div>
-                    <div className="position-absolute bottom-0 start-0 w-100 h-1" 
-                         style={{ background: `var(--bs-${feature.color})` }}></div>
-                  </div>
+          <div className="row g-5 align-items-center">
+            <div className="col-lg-4">
+              <div className="text-center">
+                <div className="bg-primary bg-opacity-10 rounded-circle p-4 d-inline-flex mb-4">
+                  <Network className="text-primary" size={48} />
                 </div>
-              );
-            })}
+                <h4 className="fw-bold text-dark mb-3">Universal Connectivity</h4>
+                <p className="text-muted">
+                  Connect to any database, API, or cloud service through our intelligent middleware layer. 
+                  Support for SQL Server, Oracle, PostgreSQL, MongoDB, REST APIs, and more.
+                </p>
+              </div>
+            </div>
+            <div className="col-lg-4">
+              <div className="text-center">
+                <div className="bg-success bg-opacity-10 rounded-circle p-4 d-inline-flex mb-4">
+                  <Workflow className="text-success" size={48} />
+                </div>
+                <h4 className="fw-bold text-dark mb-3">Intelligent Automation</h4>
+                <p className="text-muted">
+                  Automate employee onboarding, access provisioning, and role management. 
+                  Integrate with HR systems like ADP, Workday, and BambooHR for seamless workflows.
+                </p>
+              </div>
+            </div>
+            <div className="col-lg-4">
+              <div className="text-center">
+                <div className="bg-warning bg-opacity-10 rounded-circle p-4 d-inline-flex mb-4">
+                  <FileCheck className="text-warning" size={48} />
+                </div>
+                <h4 className="fw-bold text-dark mb-3">Enterprise Compliance</h4>
+                <p className="text-muted">
+                  Built-in compliance features for SOC 2, GDPR, HIPAA, and more. 
+                  Comprehensive audit trails, role-based permissions, and automated reporting.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Testimonials Section */}
-      <section className="py-5 bg-dark">
+      {/* Features Grid */}
+      <section className="py-6 bg-light">
         <div className="container py-5">
           <div className="text-center mb-5">
-            <h2 className="display-5 fw-bold text-white mb-3">
-              Trusted by Industry Leaders
+            <h2 className="display-4 fw-bold text-dark mb-4">
+              Enterprise-Grade Features
             </h2>
-            <p className="lead text-white opacity-75">
-              See what our customers are saying about CAMS
+            <p className="lead text-muted">
+              Everything your organization needs to manage access at scale
             </p>
           </div>
 
           <div className="row g-4">
-            {testimonials.map((testimonial, index) => (
-              <div key={index} className="col-lg-4">
-                <div className="card border-0 rounded-4 shadow-lg h-100 bg-white">
-                  <div className="card-body p-4">
-                    <div className="mb-3">
-                      {[...Array(testimonial.rating)].map((_, i) => (
-                        <Star key={i} className="text-warning" size={16} fill="currentColor" />
-                      ))}
-                    </div>
-                    <p className="text-muted mb-4 fst-italic">
-                      "{testimonial.quote}"
+            <div className="col-lg-4 col-md-6">
+              <div className="card border-0 rounded-4 shadow-sm h-100 p-4">
+                <div className="d-flex align-items-center mb-3">
+                  <div className="bg-primary bg-opacity-10 rounded-3 p-2 me-3">
+                    <Database className="text-primary" size={24} />
+                  </div>
+                  <h5 className="fw-bold mb-0">Multi-Database Support</h5>
+                </div>
+                <p className="text-muted mb-0">
+                  Native connectors for all major databases and cloud platforms. 
+                  No vendor lock-in, maximum flexibility.
+                </p>
+              </div>
+            </div>
+            
+            <div className="col-lg-4 col-md-6">
+              <div className="card border-0 rounded-4 shadow-sm h-100 p-4">
+                <div className="d-flex align-items-center mb-3">
+                  <div className="bg-success bg-opacity-10 rounded-3 p-2 me-3">
+                    <Shield className="text-success" size={24} />
+                  </div>
+                  <h5 className="fw-bold mb-0">Zero-Trust Security</h5>
+                </div>
+                <p className="text-muted mb-0">
+                  Advanced encryption, multi-factor authentication, and 
+                  granular access controls protect your sensitive data.
+                </p>
+              </div>
+            </div>
+            
+            <div className="col-lg-4 col-md-6">
+              <div className="card border-0 rounded-4 shadow-sm h-100 p-4">
+                <div className="d-flex align-items-center mb-3">
+                  <div className="bg-info bg-opacity-10 rounded-3 p-2 me-3">
+                    <Users className="text-info" size={24} />
+                  </div>
+                  <h5 className="fw-bold mb-0">Role-Based Access</h5>
+                </div>
+                <p className="text-muted mb-0">
+                  Sophisticated RBAC system with inheritance, delegation, 
+                  and time-based access controls.
+                </p>
+              </div>
+            </div>
+            
+            <div className="col-lg-4 col-md-6">
+              <div className="card border-0 rounded-4 shadow-sm h-100 p-4">
+                <div className="d-flex align-items-center mb-3">
+                  <div className="bg-warning bg-opacity-10 rounded-3 p-2 me-3">
+                    <BarChart3 className="text-warning" size={24} />
+                  </div>
+                  <h5 className="fw-bold mb-0">Real-Time Analytics</h5>
+                </div>
+                <p className="text-muted mb-0">
+                  Comprehensive dashboards with usage metrics, 
+                  security insights, and performance monitoring.
+                </p>
+              </div>
+            </div>
+            
+            <div className="col-lg-4 col-md-6">
+              <div className="card border-0 rounded-4 shadow-sm h-100 p-4">
+                <div className="d-flex align-items-center mb-3">
+                  <div className="bg-danger bg-opacity-10 rounded-3 p-2 me-3">
+                    <Code className="text-danger" size={24} />
+                  </div>
+                  <h5 className="fw-bold mb-0">API-First Design</h5>
+                </div>
+                <p className="text-muted mb-0">
+                  RESTful APIs and SDKs for seamless integration 
+                  with your existing tools and workflows.
+                </p>
+              </div>
+            </div>
+            
+            <div className="col-lg-4 col-md-6">
+              <div className="card border-0 rounded-4 shadow-sm h-100 p-4">
+                <div className="d-flex align-items-center mb-3">
+                  <div className="bg-secondary bg-opacity-10 rounded-3 p-2 me-3">
+                    <Cloud className="text-secondary" size={24} />
+                  </div>
+                  <h5 className="fw-bold mb-0">Cloud-Native</h5>
+                </div>
+                <p className="text-muted mb-0">
+                  Built for the cloud with auto-scaling, high availability, 
+                  and multi-region deployment options.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="py-6 bg-dark">
+        <div className="container py-5">
+          <div className="text-center mb-5">
+            <h2 className="display-4 fw-bold text-white mb-4">
+              Trusted by Global Enterprises
+            </h2>
+            <p className="lead text-white opacity-75">
+              See how industry leaders are transforming their access management with CAMS
+            </p>
+          </div>
+
+          <div className="row g-4">
+            <div className="col-lg-4">
+              <div className="card border-0 rounded-4 shadow-lg h-100">
+                <div className="card-body p-5">
+                  <div className="mb-4">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="text-warning me-1" size={18} fill="currentColor" />
+                    ))}
+                  </div>
+                  <blockquote className="mb-4">
+                    <p className="text-muted fst-italic">
+                      "CAMS reduced our employee onboarding time from 3 days to 30 minutes. 
+                      The ROI was immediate and substantial."
                     </p>
-                    <div className="d-flex align-items-center">
-                      <div className="bg-primary rounded-circle p-2 me-3">
-                        <Users className="text-white" size={16} />
-                      </div>
-                      <div>
-                        <div className="fw-semibold text-dark">{testimonial.author}</div>
-                        <div className="small text-muted">{testimonial.role}</div>
-                      </div>
+                  </blockquote>
+                  <div className="d-flex align-items-center">
+                    <div className="bg-primary rounded-circle p-2 me-3">
+                      <Building2 className="text-white" size={20} />
+                    </div>
+                    <div>
+                      <div className="fw-bold text-dark">Sarah Mitchell</div>
+                      <div className="small text-muted">CTO, Fortune 500 Financial Services</div>
                     </div>
                   </div>
                 </div>
               </div>
-            ))}
+            </div>
+            
+            <div className="col-lg-4">
+              <div className="card border-0 rounded-4 shadow-lg h-100">
+                <div className="card-body p-5">
+                  <div className="mb-4">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="text-warning me-1" size={18} fill="currentColor" />
+                    ))}
+                  </div>
+                  <blockquote className="mb-4">
+                    <p className="text-muted fst-italic">
+                      "The middleware approach is brilliant. One integration gives us access 
+                      to all our systems with enterprise-grade security."
+                    </p>
+                  </blockquote>
+                  <div className="d-flex align-items-center">
+                    <div className="bg-success rounded-circle p-2 me-3">
+                      <Building2 className="text-white" size={20} />
+                    </div>
+                    <div>
+                      <div className="fw-bold text-dark">Michael Chen</div>
+                      <div className="small text-muted">VP Engineering, Global Healthcare</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="col-lg-4">
+              <div className="card border-0 rounded-4 shadow-lg h-100">
+                <div className="card-body p-5">
+                  <div className="mb-4">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="text-warning me-1" size={18} fill="currentColor" />
+                    ))}
+                  </div>
+                  <blockquote className="mb-4">
+                    <p className="text-muted fst-italic">
+                      "CAMS enabled us to achieve SOC 2 compliance 6 months ahead of schedule. 
+                      The audit trail capabilities are exceptional."
+                    </p>
+                  </blockquote>
+                  <div className="d-flex align-items-center">
+                    <div className="bg-warning rounded-circle p-2 me-3">
+                      <Building2 className="text-white" size={20} />
+                    </div>
+                    <div>
+                      <div className="fw-bold text-dark">Dr. Jennifer Park</div>
+                      <div className="small text-muted">Chief Security Officer, Tech Unicorn</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-5 bg-gradient-warning">
+      {/* Enterprise CTA */}
+      <section className="py-6" style={{
+        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%)'
+      }}>
         <div className="container py-5 text-center">
           <div className="row justify-content-center">
             <div className="col-lg-8">
-              <h2 className="display-5 fw-bold text-dark mb-3">
-                Ready to Transform Your Access Management?
+              <h2 className="display-4 fw-bold text-white mb-4">
+                Ready to Transform Your Enterprise?
               </h2>
-              <p className="lead text-dark opacity-75 mb-4">
-                Join thousands of organizations already using CAMS to secure their database infrastructure.
+              <p className="lead text-white opacity-90 mb-5 fs-4">
+                Join hundreds of global enterprises already using CAMS to automate access management, 
+                ensure compliance, and scale securely.
               </p>
               
-              <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center">
+              <div className="d-flex flex-column flex-sm-row gap-4 justify-content-center mb-5">
                 {user ? (
                   <button 
-                    className="btn btn-dark btn-lg rounded-3 fw-semibold px-4 py-3 shadow"
+                    className="btn btn-dark btn-lg rounded-3 fw-bold px-5 py-3 shadow-lg d-flex align-items-center"
                     onClick={() => navigate('/applications')}
+                    style={{ fontSize: '1.1rem' }}
                   >
-                    <Settings className="me-2" size={20} />
+                    <Settings className="me-2" size={22} />
                     Manage Applications
-                    <ChevronRight className="ms-2" size={20} />
+                    <ChevronRight className="ms-2" size={22} />
                   </button>
                 ) : (
                   <button 
-                    className="btn btn-dark btn-lg rounded-3 fw-semibold px-4 py-3 shadow"
+                    className="btn btn-dark btn-lg rounded-3 fw-bold px-5 py-3 shadow-lg d-flex align-items-center"
                     onClick={() => navigate('/login')}
+                    style={{ fontSize: '1.1rem' }}
                   >
-                    <Layers className="me-2" size={20} />
-                    Start Free Trial
-                    <ChevronRight className="ms-2" size={20} />
+                    <Sparkles className="me-2" size={22} />
+                    Start Enterprise Trial
+                    <ChevronRight className="ms-2" size={22} />
                   </button>
                 )}
                 
-                <button className="btn btn-outline-dark btn-lg rounded-3 fw-semibold px-4 py-3">
-                  <Clock className="me-2" size={20} />
-                  Schedule Demo
+                <button className="btn btn-outline-dark btn-lg rounded-3 fw-bold px-5 py-3 d-flex align-items-center"
+                        style={{ fontSize: '1.1rem' }}>
+                  <Headphones className="me-2" size={22} />
+                  Talk to Sales
                 </button>
+              </div>
+
+              <div className="d-flex justify-content-center align-items-center text-white opacity-75">
+                <CheckCircle className="me-2" size={20} />
+                <span className="fw-medium">30-day free trial • No credit card required • Enterprise support included</span>
               </div>
             </div>
           </div>

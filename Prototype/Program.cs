@@ -13,8 +13,14 @@ using Prototype.Database.MySql;
 using Prototype.Database.PostgreSql;
 using Prototype.Database.MongoDb;
 using Prototype.Database.Redis;
+using Prototype.Database.Oracle;
+using Prototype.Database.MariaDb;
+using Prototype.Database.Sqlite;
+using Prototype.Database.Cassandra;
+using Prototype.Database.ElasticSearch;
 using Prototype.Database.Api;
 using Prototype.Database.File;
+using Prototype.Database.Cloud;
 using Prototype.Middleware;
 using Prototype.POCO;
 using Prototype.Services;
@@ -93,16 +99,30 @@ builder.Services.AddScoped<IDatabaseConnectionStrategy, MySqlDatabaseStrategy>()
 builder.Services.AddScoped<IDatabaseConnectionStrategy, PostgreSqlDatabaseStrategy>();
 builder.Services.AddScoped<IDatabaseConnectionStrategy, MongoDbDatabaseStrategy>();
 builder.Services.AddScoped<IDatabaseConnectionStrategy, RedisDatabaseStrategy>();
+builder.Services.AddScoped<IDatabaseConnectionStrategy, OracleDatabaseStrategy>();
+builder.Services.AddScoped<IDatabaseConnectionStrategy, MariaDbDatabaseStrategy>();
+builder.Services.AddScoped<IDatabaseConnectionStrategy, SqliteDatabaseStrategy>();
+builder.Services.AddScoped<IDatabaseConnectionStrategy, CassandraDatabaseStrategy>();
+builder.Services.AddScoped<IDatabaseConnectionStrategy, ElasticSearchDatabaseStrategy>();
 
 // Add API Connection Strategies
 builder.Services.AddScoped<IApiConnectionStrategy, RestApiConnectionStrategy>();
+builder.Services.AddScoped<IApiConnectionStrategy, GraphQLConnectionStrategy>();
+builder.Services.AddScoped<IApiConnectionStrategy, SoapApiConnectionStrategy>();
 
 // Add File Connection Strategies
 builder.Services.AddScoped<IFileConnectionStrategy, CsvFileConnectionStrategy>();
 builder.Services.AddScoped<IFileConnectionStrategy, JsonFileConnectionStrategy>();
 
+// Add Cloud Storage Connection Strategies
+builder.Services.AddScoped<IFileConnectionStrategy, AmazonS3ConnectionStrategy>();
+builder.Services.AddScoped<IFileConnectionStrategy, AzureBlobStorageConnectionStrategy>();
+builder.Services.AddScoped<IFileConnectionStrategy, GoogleCloudStorageConnectionStrategy>();
+
 // Add HttpClient for API connections
 builder.Services.AddHttpClient<RestApiConnectionStrategy>();
+builder.Services.AddHttpClient<GraphQLConnectionStrategy>();
+builder.Services.AddHttpClient<SoapApiConnectionStrategy>();
 
 // Add Database Connection Factory
 builder.Services.AddScoped<IDatabaseConnectionFactory, DatabaseConnectionFactory>();

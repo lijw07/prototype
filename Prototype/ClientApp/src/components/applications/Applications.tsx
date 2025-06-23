@@ -16,6 +16,7 @@ interface Application {
         // Additional fields based on authentication type
         authenticationDatabase?: string;
         awsAccessKeyId?: string;
+        awsRoleArn?: string;
         principal?: string;
         serviceName?: string;
         serviceRealm?: string;
@@ -177,6 +178,7 @@ const Applications: React.FC = () => {
             awsAccessKeyId: '',
             awsSecretAccessKey: '',
             awsSessionToken: '',
+            awsRoleArn: '',
             // Kerberos/GSSAPI fields
             principal: '',
             serviceName: '',
@@ -207,14 +209,35 @@ const Applications: React.FC = () => {
             delimiter: ',',
             encoding: 'UTF-8',
             hasHeader: true,
-            customProperties: ''
+            customProperties: '',
+            // Database instance field
+            instance: '',
+            // Azure Storage fields
+            azureStorageAccountName: '',
+            azureStorageAccountKey: '',
+            azureSasToken: '',
+            azureTenantId: '',
+            azureClientId: '',
+            azureClientSecret: '',
+            // Amazon S3 fields
+            s3BucketName: '',
+            awsRegion: '',
+            // Google Cloud Storage fields
+            gcpServiceAccountJson: '',
+            gcpAccessKeyId: '',
+            gcpSecretAccessKey: ''
         }
     });
 
     const [showPasswords, setShowPasswords] = useState({
         connection: false,
         awsSecret: false,
-        awsSession: false
+        awsSession: false,
+        password: false,
+        apiKey: false,
+        azureSecret: false,
+        azureKey: false,
+        gcpSecret: false
     });
 
     const fetchAllApplications = async () => {
@@ -324,6 +347,7 @@ const Applications: React.FC = () => {
                 awsAccessKeyId: '',
                 awsSecretAccessKey: '',
                 awsSessionToken: '',
+                awsRoleArn: '',
                 // Kerberos/GSSAPI fields
                 principal: '',
                 serviceName: '',
@@ -354,7 +378,23 @@ const Applications: React.FC = () => {
                 delimiter: ',',
                 encoding: 'UTF-8',
                 hasHeader: true,
-                customProperties: ''
+                customProperties: '',
+                // Database instance field
+                instance: '',
+                // Azure Storage fields
+                azureStorageAccountName: '',
+                azureStorageAccountKey: '',
+                azureSasToken: '',
+                azureTenantId: '',
+                azureClientId: '',
+                azureClientSecret: '',
+                // Amazon S3 fields
+                s3BucketName: '',
+                awsRegion: '',
+                // Google Cloud Storage fields
+                gcpServiceAccountJson: '',
+                gcpAccessKeyId: '',
+                gcpSecretAccessKey: ''
             }
         });
         setEditingApp(null);
@@ -396,6 +436,7 @@ const Applications: React.FC = () => {
                     awsAccessKeyId: editingApp.connection?.awsAccessKeyId || '',
                     awsSecretAccessKey: '', // Not returned for security
                     awsSessionToken: '', // Not returned for security
+                    awsRoleArn: editingApp.connection?.awsRoleArn || '',
                     // Kerberos/GSSAPI fields
                     principal: editingApp.connection?.principal || '',
                     serviceName: editingApp.connection?.serviceName || '',
@@ -426,7 +467,23 @@ const Applications: React.FC = () => {
                     delimiter: ',',
                     encoding: 'UTF-8',
                     hasHeader: true,
-                    customProperties: ''
+                    customProperties: '',
+                    // Database instance field
+                    instance: '',
+                    // Azure Storage fields
+                    azureStorageAccountName: '',
+                    azureStorageAccountKey: '',
+                    azureSasToken: '',
+                    azureTenantId: '',
+                    azureClientId: '',
+                    azureClientSecret: '',
+                    // Amazon S3 fields
+                    s3BucketName: '',
+                    awsRegion: '',
+                    // Google Cloud Storage fields
+                    gcpServiceAccountJson: '',
+                    gcpAccessKeyId: '',
+                    gcpSecretAccessKey: ''
                 }
             });
         } else {
@@ -446,6 +503,7 @@ const Applications: React.FC = () => {
                     awsAccessKeyId: '',
                     awsSecretAccessKey: '',
                     awsSessionToken: '',
+                    awsRoleArn: '',
                     // Kerberos/GSSAPI fields
                     principal: '',
                     serviceName: '',
@@ -476,7 +534,23 @@ const Applications: React.FC = () => {
                     delimiter: ',',
                     encoding: 'UTF-8',
                     hasHeader: true,
-                    customProperties: ''
+                    customProperties: '',
+                    // Database instance field
+                    instance: '',
+                    // Azure Storage fields
+                    azureStorageAccountName: '',
+                    azureStorageAccountKey: '',
+                    azureSasToken: '',
+                    azureTenantId: '',
+                    azureClientId: '',
+                    azureClientSecret: '',
+                    // Amazon S3 fields
+                    s3BucketName: '',
+                    awsRegion: '',
+                    // Google Cloud Storage fields
+                    gcpServiceAccountJson: '',
+                    gcpAccessKeyId: '',
+                    gcpSecretAccessKey: ''
                 }
             });
         }
@@ -1040,7 +1114,45 @@ const Applications: React.FC = () => {
                                                 value={applicationForm.dataSourceType}
                                                 onChange={(e) => {
                                                     // Reset authentication type and port when data source changes
-                                                    const newAuthType = 'UserPassword';
+                                                    const getDefaultAuthType = (type: string) => {
+                                                        switch (type) {
+                                                            case 'MicrosoftSqlServer':
+                                                            case 'MySql':
+                                                            case 'PostgreSql':
+                                                            case 'MongoDb':
+                                                            case 'Redis':
+                                                            case 'Oracle':
+                                                            case 'MariaDb':
+                                                            case 'Sqlite':
+                                                            case 'Cassandra':
+                                                            case 'ElasticSearch':
+                                                            case 'RabbitMQ':
+                                                            case 'ApacheKafka':
+                                                            case 'AzureServiceBus':
+                                                                return 'UserPassword';
+                                                            case 'RestApi':
+                                                            case 'GraphQL':
+                                                            case 'SoapApi':
+                                                            case 'ODataApi':
+                                                            case 'WebSocket':
+                                                            case 'CsvFile':
+                                                            case 'JsonFile':
+                                                            case 'XmlFile':
+                                                            case 'ExcelFile':
+                                                            case 'ParquetFile':
+                                                            case 'YamlFile':
+                                                            case 'TextFile':
+                                                                return 'NoAuth';
+                                                            case 'AzureBlobStorage':
+                                                                return 'AzureAccessKey';
+                                                            case 'AmazonS3':
+                                                                return 'AwsIam';
+                                                            case 'GoogleCloudStorage':
+                                                                return 'ServicePrincipal';
+                                                            default:
+                                                                return 'NoAuth';
+                                                        }
+                                                    };
                                                     const getDefaultPort = (type: string) => {
                                                         switch (type) {
                                                             case 'MicrosoftSqlServer': return '1433';
@@ -1064,6 +1176,7 @@ const Applications: React.FC = () => {
                                                             default: return '';
                                                         }
                                                     };
+                                                    const newAuthType = getDefaultAuthType(e.target.value);
                                                     const defaultPort = getDefaultPort(e.target.value);
                                                     setApplicationForm({
                                                         ...applicationForm, 
@@ -1286,7 +1399,7 @@ const Applications: React.FC = () => {
                                                 {/* Cloud storage options */}
                                                 {applicationForm.dataSourceType === 'AzureBlobStorage' && (
                                                     <>
-                                                        <option value="AccessKey">Access Key</option>
+                                                        <option value="AzureAccessKey">Access Key</option>
                                                         <option value="SharedAccessSignature">SAS Token</option>
                                                         <option value="ServicePrincipal">Service Principal</option>
                                                         <option value="AzureAdIntegrated">Azure AD Integrated</option>
@@ -1296,14 +1409,14 @@ const Applications: React.FC = () => {
                                                 {applicationForm.dataSourceType === 'AmazonS3' && (
                                                     <>
                                                         <option value="AwsIam">AWS IAM</option>
-                                                        <option value="AccessKey">Access Key</option>
+                                                        <option value="AwsAccessKey">AWS Access Key</option>
                                                     </>
                                                 )}
 
                                                 {applicationForm.dataSourceType === 'GoogleCloudStorage' && (
                                                     <>
                                                         <option value="ServicePrincipal">Service Account</option>
-                                                        <option value="AccessKey">Access Key</option>
+                                                        <option value="GcpAccessKey">HMAC Access Key</option>
                                                     </>
                                                 )}
 
@@ -1469,8 +1582,8 @@ const Applications: React.FC = () => {
                                             </div>
                                         )}
 
-                                        {/* AWS IAM fields */}
-                                        {applicationForm.connectionSource.authenticationType === 'AwsIam' && (
+                                        {/* AWS Access Key fields */}
+                                        {(['AwsAccessKey', 'AwsSessionToken'].includes(applicationForm.connectionSource.authenticationType)) && (
                                             <>
                                                 <div className="col-12">
                                                     <label className="form-label fw-semibold">AWS Access Key ID</label>
@@ -1543,6 +1656,73 @@ const Applications: React.FC = () => {
                                                             {showPasswords.awsSession ? <EyeOff size={16} /> : <Eye size={16} />}
                                                         </button>
                                                     </div>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {/* AWS IAM fields */}
+                                        {applicationForm.connectionSource.authenticationType === 'AwsIam' && (
+                                            <>
+                                                <div className="col-12">
+                                                    <label className="form-label fw-semibold">IAM Role ARN (Optional)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={applicationForm.connectionSource.awsRoleArn || ''}
+                                                        onChange={(e) => setApplicationForm({
+                                                            ...applicationForm,
+                                                            connectionSource: {...applicationForm.connectionSource, awsRoleArn: e.target.value}
+                                                        })}
+                                                        className="form-control rounded-3"
+                                                        placeholder="arn:aws:iam::123456789012:role/MyRole"
+                                                    />
+                                                    <div className="form-text">
+                                                        Leave empty to use default IAM role or instance profile
+                                                    </div>
+                                                </div>
+                                                <div className="col-12">
+                                                    <label className="form-label fw-semibold">AWS Region</label>
+                                                    <input
+                                                        type="text"
+                                                        value={applicationForm.connectionSource.awsRegion || ''}
+                                                        onChange={(e) => setApplicationForm({
+                                                            ...applicationForm,
+                                                            connectionSource: {...applicationForm.connectionSource, awsRegion: e.target.value}
+                                                        })}
+                                                        className="form-control rounded-3"
+                                                        placeholder="us-east-1"
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {/* Amazon S3 specific fields */}
+                                        {applicationForm.dataSourceType === 'AmazonS3' && (
+                                            <>
+                                                <div className="col-md-6">
+                                                    <label className="form-label fw-semibold">Bucket Name</label>
+                                                    <input
+                                                        type="text"
+                                                        value={applicationForm.connectionSource.s3BucketName || ''}
+                                                        onChange={(e) => setApplicationForm({
+                                                            ...applicationForm,
+                                                            connectionSource: {...applicationForm.connectionSource, s3BucketName: e.target.value}
+                                                        })}
+                                                        className="form-control rounded-3"
+                                                        placeholder="my-s3-bucket"
+                                                    />
+                                                </div>
+                                                <div className="col-md-6">
+                                                    <label className="form-label fw-semibold">Region</label>
+                                                    <input
+                                                        type="text"
+                                                        value={applicationForm.connectionSource.awsRegion || ''}
+                                                        onChange={(e) => setApplicationForm({
+                                                            ...applicationForm,
+                                                            connectionSource: {...applicationForm.connectionSource, awsRegion: e.target.value}
+                                                        })}
+                                                        className="form-control rounded-3"
+                                                        placeholder="us-east-1"
+                                                    />
                                                 </div>
                                             </>
                                         )}
@@ -1674,6 +1854,403 @@ const Applications: React.FC = () => {
                                                     />
                                                 </div>
                                             </>
+                                        )}
+
+                                        {/* Azure Storage fields */}
+                                        {applicationForm.dataSourceType === 'AzureBlobStorage' && ['AzureAccessKey', 'SharedAccessSignature'].includes(applicationForm.connectionSource.authenticationType) && (
+                                            <>
+                                                {applicationForm.connectionSource.authenticationType === 'AzureAccessKey' && (
+                                                    <>
+                                                        <div className="col-12">
+                                                            <label className="form-label fw-semibold">Storage Account Name</label>
+                                                            <input
+                                                                type="text"
+                                                                value={applicationForm.connectionSource.azureStorageAccountName || ''}
+                                                                onChange={(e) => setApplicationForm({
+                                                                    ...applicationForm,
+                                                                    connectionSource: {...applicationForm.connectionSource, azureStorageAccountName: e.target.value}
+                                                                })}
+                                                                className="form-control rounded-3"
+                                                                placeholder="mystorageaccount"
+                                                            />
+                                                        </div>
+                                                        <div className="col-12">
+                                                            <label className="form-label fw-semibold">Storage Account Key</label>
+                                                            <div className="position-relative">
+                                                                <input
+                                                                    type={showPasswords.azureKey ? "text" : "password"}
+                                                                    value={applicationForm.connectionSource.azureStorageAccountKey || ''}
+                                                                    onChange={(e) => setApplicationForm({
+                                                                        ...applicationForm,
+                                                                        connectionSource: {...applicationForm.connectionSource, azureStorageAccountKey: e.target.value}
+                                                                    })}
+                                                                    className="form-control rounded-3 pe-5"
+                                                                    placeholder="Storage account access key"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => togglePasswordVisibility('azureKey')}
+                                                                    className="btn btn-outline-secondary position-absolute top-50 end-0 translate-middle-y me-2 border-0 p-1"
+                                                                >
+                                                                    {showPasswords.azureKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                )}
+                                                {applicationForm.connectionSource.authenticationType === 'SharedAccessSignature' && (
+                                                    <div className="col-12">
+                                                        <label className="form-label fw-semibold">SAS Token</label>
+                                                        <div className="position-relative">
+                                                            <input
+                                                                type={showPasswords.password ? "text" : "password"}
+                                                                value={applicationForm.connectionSource.azureSasToken || ''}
+                                                                onChange={(e) => setApplicationForm({
+                                                                    ...applicationForm,
+                                                                    connectionSource: {...applicationForm.connectionSource, azureSasToken: e.target.value}
+                                                                })}
+                                                                className="form-control rounded-3 pe-5"
+                                                                placeholder="?sv=2021-06-08&ss=bfqt&srt=sco..."
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => togglePasswordVisibility('password')}
+                                                                className="btn btn-outline-secondary position-absolute top-50 end-0 translate-middle-y me-2 border-0 p-1"
+                                                            >
+                                                                {showPasswords.password ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+
+                                        {/* Azure Blob Storage Service Principal fields */}
+                                        {applicationForm.dataSourceType === 'AzureBlobStorage' && applicationForm.connectionSource.authenticationType === 'ServicePrincipal' && (
+                                            <>
+                                                <div className="col-12">
+                                                    <label className="form-label fw-semibold">Tenant ID</label>
+                                                    <input
+                                                        type="text"
+                                                        value={applicationForm.connectionSource.azureTenantId || ''}
+                                                        onChange={(e) => setApplicationForm({
+                                                            ...applicationForm,
+                                                            connectionSource: {...applicationForm.connectionSource, azureTenantId: e.target.value}
+                                                        })}
+                                                        className="form-control rounded-3"
+                                                        placeholder="00000000-0000-0000-0000-000000000000"
+                                                    />
+                                                </div>
+                                                <div className="col-12">
+                                                    <label className="form-label fw-semibold">Client ID</label>
+                                                    <input
+                                                        type="text"
+                                                        value={applicationForm.connectionSource.azureClientId || ''}
+                                                        onChange={(e) => setApplicationForm({
+                                                            ...applicationForm,
+                                                            connectionSource: {...applicationForm.connectionSource, azureClientId: e.target.value}
+                                                        })}
+                                                        className="form-control rounded-3"
+                                                        placeholder="00000000-0000-0000-0000-000000000000"
+                                                    />
+                                                </div>
+                                                <div className="col-12">
+                                                    <label className="form-label fw-semibold">Client Secret</label>
+                                                    <div className="position-relative">
+                                                        <input
+                                                            type={showPasswords.azureSecret ? "text" : "password"}
+                                                            value={applicationForm.connectionSource.azureClientSecret || ''}
+                                                            onChange={(e) => setApplicationForm({
+                                                                ...applicationForm,
+                                                                connectionSource: {...applicationForm.connectionSource, azureClientSecret: e.target.value}
+                                                            })}
+                                                            className="form-control rounded-3 pe-5"
+                                                            placeholder="Client secret value"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => togglePasswordVisibility('azureSecret')}
+                                                            className="btn btn-outline-secondary position-absolute top-50 end-0 translate-middle-y me-2 border-0 p-1"
+                                                        >
+                                                            {showPasswords.azureSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="col-12">
+                                                    <label className="form-label fw-semibold">Storage Account Name</label>
+                                                    <input
+                                                        type="text"
+                                                        value={applicationForm.connectionSource.azureStorageAccountName || ''}
+                                                        onChange={(e) => setApplicationForm({
+                                                            ...applicationForm,
+                                                            connectionSource: {...applicationForm.connectionSource, azureStorageAccountName: e.target.value}
+                                                        })}
+                                                        className="form-control rounded-3"
+                                                        placeholder="mystorageaccount"
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {/* Google Cloud Storage fields */}
+                                        {applicationForm.dataSourceType === 'GoogleCloudStorage' && (
+                                            <>
+                                                {applicationForm.connectionSource.authenticationType === 'ServicePrincipal' && (
+                                                    <div className="col-12">
+                                                        <label className="form-label fw-semibold">Service Account JSON</label>
+                                                        <textarea
+                                                            value={applicationForm.connectionSource.gcpServiceAccountJson || ''}
+                                                            onChange={(e) => setApplicationForm({
+                                                                ...applicationForm,
+                                                                connectionSource: {...applicationForm.connectionSource, gcpServiceAccountJson: e.target.value}
+                                                            })}
+                                                            className="form-control rounded-3"
+                                                            rows={4}
+                                                            placeholder='{"type": "service_account", "project_id": "my-project", ...}'
+                                                        />
+                                                        <div className="form-text">
+                                                            Paste the complete service account JSON key file content
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {applicationForm.connectionSource.authenticationType === 'GcpAccessKey' && (
+                                                    <>
+                                                        <div className="col-12">
+                                                            <label className="form-label fw-semibold">GCP Access Key ID</label>
+                                                            <input
+                                                                type="text"
+                                                                value={applicationForm.connectionSource.gcpAccessKeyId || ''}
+                                                                onChange={(e) => setApplicationForm({
+                                                                    ...applicationForm,
+                                                                    connectionSource: {...applicationForm.connectionSource, gcpAccessKeyId: e.target.value}
+                                                                })}
+                                                                className="form-control rounded-3"
+                                                                placeholder="GCP HMAC Access Key ID"
+                                                            />
+                                                        </div>
+                                                        <div className="col-12">
+                                                            <label className="form-label fw-semibold">GCP Secret Access Key</label>
+                                                            <div className="position-relative">
+                                                                <input
+                                                                    type={showPasswords.gcpSecret ? "text" : "password"}
+                                                                    value={applicationForm.connectionSource.gcpSecretAccessKey || ''}
+                                                                    onChange={(e) => setApplicationForm({
+                                                                        ...applicationForm,
+                                                                        connectionSource: {...applicationForm.connectionSource, gcpSecretAccessKey: e.target.value}
+                                                                    })}
+                                                                    className="form-control rounded-3 pe-5"
+                                                                    placeholder="GCP HMAC Secret Access Key"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => togglePasswordVisibility('gcpSecret')}
+                                                                    className="btn btn-outline-secondary position-absolute top-50 end-0 translate-middle-y me-2 border-0 p-1"
+                                                                >
+                                                                    {showPasswords.gcpSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </>
+                                        )}
+
+                                        {/* API Connection fields */}
+                                        {['RestApi', 'GraphQL', 'SoapApi', 'ODataApi', 'WebSocket'].includes(applicationForm.dataSourceType) && (
+                                            <>
+                                                <div className="col-12">
+                                                    <label className="form-label fw-semibold">API Endpoint URL</label>
+                                                    <input
+                                                        type="url"
+                                                        value={applicationForm.connectionSource.apiEndpoint || ''}
+                                                        onChange={(e) => setApplicationForm({
+                                                            ...applicationForm,
+                                                            connectionSource: {...applicationForm.connectionSource, apiEndpoint: e.target.value}
+                                                        })}
+                                                        className="form-control rounded-3"
+                                                        placeholder="https://api.example.com/v1/endpoint"
+                                                    />
+                                                </div>
+                                                {applicationForm.dataSourceType !== 'GraphQL' && (
+                                                    <div className="col-12">
+                                                        <label className="form-label fw-semibold">HTTP Method</label>
+                                                        <select
+                                                            value={applicationForm.connectionSource.httpMethod || 'GET'}
+                                                            onChange={(e) => setApplicationForm({
+                                                                ...applicationForm,
+                                                                connectionSource: {...applicationForm.connectionSource, httpMethod: e.target.value}
+                                                            })}
+                                                            className="form-select rounded-3"
+                                                        >
+                                                            <option value="GET">GET</option>
+                                                            <option value="POST">POST</option>
+                                                            <option value="PUT">PUT</option>
+                                                            <option value="DELETE">DELETE</option>
+                                                            <option value="PATCH">PATCH</option>
+                                                            <option value="HEAD">HEAD</option>
+                                                            <option value="OPTIONS">OPTIONS</option>
+                                                        </select>
+                                                    </div>
+                                                )}
+                                                {['ApiKey', 'BearerToken', 'JwtToken'].includes(applicationForm.connectionSource.authenticationType) && (
+                                                    <div className="col-12">
+                                                        <label className="form-label fw-semibold">
+                                                            {applicationForm.connectionSource.authenticationType === 'ApiKey' ? 'API Key' : 'Bearer Token'}
+                                                        </label>
+                                                        <div className="position-relative">
+                                                            <input
+                                                                type={showPasswords.apiKey ? "text" : "password"}
+                                                                value={applicationForm.connectionSource.apiKey || applicationForm.connectionSource.bearerToken || ''}
+                                                                onChange={(e) => {
+                                                                    const field = applicationForm.connectionSource.authenticationType === 'ApiKey' ? 'apiKey' : 'bearerToken';
+                                                                    setApplicationForm({
+                                                                        ...applicationForm,
+                                                                        connectionSource: {...applicationForm.connectionSource, [field]: e.target.value}
+                                                                    });
+                                                                }}
+                                                                className="form-control rounded-3 pe-5"
+                                                                placeholder={applicationForm.connectionSource.authenticationType === 'ApiKey' ? 'Your API key' : 'Bearer token or JWT'}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setShowPasswords(prev => ({ ...prev, apiKey: !prev.apiKey }))}
+                                                                className="btn btn-outline-secondary position-absolute top-50 end-0 translate-middle-y me-2 border-0 p-1"
+                                                            >
+                                                                {showPasswords.apiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <div className="col-12">
+                                                    <label className="form-label fw-semibold">Custom Headers (JSON format, optional)</label>
+                                                    <textarea
+                                                        value={applicationForm.connectionSource.headers || ''}
+                                                        onChange={(e) => setApplicationForm({
+                                                            ...applicationForm,
+                                                            connectionSource: {...applicationForm.connectionSource, headers: e.target.value}
+                                                        })}
+                                                        className="form-control rounded-3"
+                                                        rows={3}
+                                                        placeholder='{"Content-Type": "application/json", "X-Custom-Header": "value"}'
+                                                    />
+                                                </div>
+                                                {['POST', 'PUT', 'PATCH'].includes(applicationForm.connectionSource.httpMethod || '') && (
+                                                    <div className="col-12">
+                                                        <label className="form-label fw-semibold">Request Body (optional)</label>
+                                                        <textarea
+                                                            value={applicationForm.connectionSource.requestBody || ''}
+                                                            onChange={(e) => setApplicationForm({
+                                                                ...applicationForm,
+                                                                connectionSource: {...applicationForm.connectionSource, requestBody: e.target.value}
+                                                            })}
+                                                            className="form-control rounded-3"
+                                                            rows={4}
+                                                            placeholder={
+                                                                applicationForm.dataSourceType === 'GraphQL' 
+                                                                    ? '{"query": "{ users { id name } }"}' 
+                                                                    : '{"key": "value"}'
+                                                            }
+                                                        />
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+
+                                        {/* File Connection fields */}
+                                        {['CsvFile', 'JsonFile', 'XmlFile', 'ExcelFile', 'ParquetFile', 'YamlFile', 'TextFile', 'AmazonS3', 'AzureBlobStorage', 'GoogleCloudStorage'].includes(applicationForm.dataSourceType) && (
+                                            <>
+                                                <div className="col-12">
+                                                    <label className="form-label fw-semibold">
+                                                        {['AmazonS3', 'AzureBlobStorage', 'GoogleCloudStorage'].includes(applicationForm.dataSourceType) 
+                                                            ? 'File Path (bucket/container/object)' 
+                                                            : 'File Path'
+                                                        }
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={applicationForm.connectionSource.filePath || ''}
+                                                        onChange={(e) => setApplicationForm({
+                                                            ...applicationForm,
+                                                            connectionSource: {...applicationForm.connectionSource, filePath: e.target.value}
+                                                        })}
+                                                        className="form-control rounded-3"
+                                                        placeholder={
+                                                            applicationForm.dataSourceType === 'AmazonS3' ? 's3://my-bucket/path/to/file.csv' :
+                                                            applicationForm.dataSourceType === 'AzureBlobStorage' ? 'my-container/path/to/file.csv' :
+                                                            applicationForm.dataSourceType === 'GoogleCloudStorage' ? 'gs://my-bucket/path/to/file.csv' :
+                                                            '/path/to/local/file.csv'
+                                                        }
+                                                    />
+                                                </div>
+                                                {['CsvFile', 'TextFile'].includes(applicationForm.dataSourceType) && (
+                                                    <>
+                                                        <div className="col-md-6">
+                                                            <label className="form-label fw-semibold">Delimiter</label>
+                                                            <input
+                                                                type="text"
+                                                                value={applicationForm.connectionSource.delimiter || ','}
+                                                                onChange={(e) => setApplicationForm({
+                                                                    ...applicationForm,
+                                                                    connectionSource: {...applicationForm.connectionSource, delimiter: e.target.value}
+                                                                })}
+                                                                className="form-control rounded-3"
+                                                                placeholder=","
+                                                                maxLength={1}
+                                                            />
+                                                        </div>
+                                                        <div className="col-md-6">
+                                                            <label className="form-label fw-semibold">Encoding</label>
+                                                            <select
+                                                                value={applicationForm.connectionSource.encoding || 'utf-8'}
+                                                                onChange={(e) => setApplicationForm({
+                                                                    ...applicationForm,
+                                                                    connectionSource: {...applicationForm.connectionSource, encoding: e.target.value}
+                                                                })}
+                                                                className="form-select rounded-3"
+                                                            >
+                                                                <option value="utf-8">UTF-8</option>
+                                                                <option value="utf-16">UTF-16</option>
+                                                                <option value="ascii">ASCII</option>
+                                                                <option value="iso-8859-1">ISO-8859-1</option>
+                                                            </select>
+                                                        </div>
+                                                        <div className="col-12">
+                                                            <div className="form-check">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={applicationForm.connectionSource.hasHeader || false}
+                                                                    onChange={(e) => setApplicationForm({
+                                                                        ...applicationForm,
+                                                                        connectionSource: {...applicationForm.connectionSource, hasHeader: e.target.checked}
+                                                                    })}
+                                                                    className="form-check-input"
+                                                                    id="hasHeader"
+                                                                />
+                                                                <label className="form-check-label fw-semibold" htmlFor="hasHeader">
+                                                                    File has header row
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </>
+                                        )}
+
+                                        {/* Instance field for databases that support it */}
+                                        {['MicrosoftSqlServer', 'Oracle'].includes(applicationForm.dataSourceType) && (
+                                            <div className="col-12">
+                                                <label className="form-label fw-semibold">Instance (optional)</label>
+                                                <input
+                                                    type="text"
+                                                    value={applicationForm.connectionSource.instance || ''}
+                                                    onChange={(e) => setApplicationForm({
+                                                        ...applicationForm,
+                                                        connectionSource: {...applicationForm.connectionSource, instance: e.target.value}
+                                                    })}
+                                                    className="form-control rounded-3"
+                                                    placeholder={applicationForm.dataSourceType === 'MicrosoftSqlServer' ? 'SQLEXPRESS' : 'ORCL'}
+                                                />
+                                            </div>
                                         )}
                                         </div>
                                     )}

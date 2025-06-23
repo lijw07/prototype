@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { User, Settings, LogOut, ChevronDown, Mail } from 'lucide-react';
 import NavMenu from './nav/NavMenu';
 import { useAuth } from '../contexts/AuthContext';
+import WebsiteLayout from './website/WebsiteLayout';
 
 interface LayoutProps {
   children: ReactNode; // Typing children correctly
@@ -15,6 +16,12 @@ export default function Layout({ children }: LayoutProps) {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
+  // Define which routes should use the website layout (public pages)
+  const publicRoutes = ['/home', '/', '/about', '/contact', '/services', '/solutions', '/pricing'];
+  const shouldUseWebsiteLayout = publicRoutes.some(route => 
+    route === '/' ? location.pathname === '/' : location.pathname.startsWith(route)
+  );
+  
   // List of routes where login button should be hidden (but header still shows)
   const hideLoginButtonRoutes = ['/login', '/sign-up', '/verify', '/reset-password'];
   const shouldHideLoginButton = hideLoginButtonRoutes.includes(location.pathname);
@@ -22,108 +29,11 @@ export default function Layout({ children }: LayoutProps) {
   // List of routes where entire header and navigation should be hidden
   const hideHeaderRoutes = ['/verify-email'];
   const shouldHideHeader = hideHeaderRoutes.some(route => location.pathname.startsWith(route));
-  
-  // Check if we're on the home page to show minimal header
-  const isHomePage = location.pathname === '/home';
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
-
-  // Render minimal header for home page
-  const renderHomeHeader = () => (
-    <header className="position-absolute top-0 start-0 w-100 bg-transparent" style={{ zIndex: 1000 }}>
-      <nav className="container-fluid px-4 py-4">
-        <div className="d-flex justify-content-between align-items-center">
-          {/* Logo */}
-          <div className="d-flex align-items-center">
-            <div className="me-3">
-              <div className="rounded-3 bg-white shadow-sm p-2 d-flex align-items-center justify-content-center transition-all" 
-                   style={{ 
-                     width: '42px', 
-                     height: '42px',
-                     transition: 'all 0.3s ease'
-                   }}>
-                <span className="fw-bold text-dark fs-5">C</span>
-              </div>
-            </div>
-            <div>
-              <span className="fw-bold text-white fs-4 d-block lh-1">CAMS</span>
-              <small className="text-white opacity-75">Enterprise Access Management</small>
-            </div>
-          </div>
-
-          {/* Navigation buttons */}
-          <div className="d-flex align-items-center gap-3">
-            <button 
-              className="btn btn-outline-light btn-sm d-flex align-items-center fw-semibold px-3 py-2 border-2"
-              onClick={() => window.open('mailto:contact@cams.com', '_blank')}
-              style={{
-                borderColor: 'rgba(255,255,255,0.3)',
-                transition: 'all 0.3s ease'
-              }}
-              onMouseEnter={(e) => {
-                const target = e.target as HTMLButtonElement;
-                target.style.backgroundColor = 'rgba(255,255,255,0.1)';
-                target.style.borderColor = 'rgba(255,255,255,0.8)';
-              }}
-              onMouseLeave={(e) => {
-                const target = e.target as HTMLButtonElement;
-                target.style.backgroundColor = 'transparent';
-                target.style.borderColor = 'rgba(255,255,255,0.3)';
-              }}
-            >
-              <Mail size={16} className="me-2" />
-              Contact
-            </button>
-            {!isAuthenticated && (
-              <button 
-                className="btn btn-warning btn-sm fw-semibold px-4 py-2 border-0 shadow-sm"
-                onClick={() => navigate('/login')}
-                style={{
-                  transition: 'all 0.3s ease'
-                }}
-                onMouseEnter={(e) => {
-                  const target = e.target as HTMLButtonElement;
-                  target.style.transform = 'translateY(-1px)';
-                  target.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-                }}
-                onMouseLeave={(e) => {
-                  const target = e.target as HTMLButtonElement;
-                  target.style.transform = 'translateY(0)';
-                  target.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-                }}
-              >
-                Login
-              </button>
-            )}
-            {isAuthenticated && (
-              <button 
-                className="btn btn-warning btn-sm fw-semibold px-4 py-2 border-0 shadow-sm"
-                onClick={() => navigate('/dashboard')}
-                style={{
-                  transition: 'all 0.3s ease'
-                }}
-                onMouseEnter={(e) => {
-                  const target = e.target as HTMLButtonElement;
-                  target.style.transform = 'translateY(-1px)';
-                  target.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-                }}
-                onMouseLeave={(e) => {
-                  const target = e.target as HTMLButtonElement;
-                  target.style.transform = 'translateY(0)';
-                  target.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-                }}
-              >
-                Dashboard
-              </button>
-            )}
-          </div>
-        </div>
-      </nav>
-    </header>
-  );
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -139,13 +49,15 @@ export default function Layout({ children }: LayoutProps) {
     };
   }, []);
 
+  // If it's a public route, use the website layout
+  if (shouldUseWebsiteLayout) {
+    return <WebsiteLayout>{children}</WebsiteLayout>;
+  }
+
   return (
     <div className="d-flex flex-column vh-100">
-      {/* Home page gets special header */}
-      {isHomePage && renderHomeHeader()}
-      
-      {/* Regular header - Hidden on verification pages and home page */}
-      {!shouldHideHeader && !isHomePage && (
+      {/* Regular header - Hidden on verification pages */}
+      {!shouldHideHeader && (
         <header
           className="bg-white border-bottom d-flex justify-content-between align-items-center px-5 py-3 shadow-sm"
           style={{ minHeight: '80px' }}
@@ -227,17 +139,15 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Sidebar + Main */}
       <div className="d-flex flex-grow-1 overflow-hidden">
-        {isAuthenticated && !shouldHideHeader && !isHomePage && <NavMenu />}
+        {isAuthenticated && !shouldHideHeader && <NavMenu />}
         <main 
           className={`flex-grow-1 overflow-auto ${
-            isHomePage ? '' : 
             isAuthenticated && !shouldHideHeader ? 'p-4 bg-light' : 
             shouldHideHeader ? '' : ''
           }`}
           style={{ 
             minWidth: 0, 
-            width: isHomePage ? '100%' : 
-                   isAuthenticated && !shouldHideHeader ? 'calc(100% - 220px)' : '100%' 
+            width: isAuthenticated && !shouldHideHeader ? 'calc(100% - 220px)' : '100%' 
           }}
         >
           {children}

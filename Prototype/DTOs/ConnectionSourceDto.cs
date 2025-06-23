@@ -110,4 +110,25 @@ public class ConnectionSourceDto
     
     [StringLength(2000, ErrorMessage = "Custom properties cannot exceed 2000 characters")]
     public string? CustomProperties { get; set; }
+    
+    // Azure Storage specific fields
+    [StringLength(255, ErrorMessage = "Azure Storage Account Name cannot exceed 255 characters")]
+    public string? AzureStorageAccountName { get; set; }
+    
+    [StringLength(500, ErrorMessage = "Azure Storage Account Key cannot exceed 500 characters")]
+    public string? AzureStorageAccountKey { get; set; }
+    
+    [StringLength(1000, ErrorMessage = "Azure SAS Token cannot exceed 1000 characters")]
+    public string? AzureSasToken { get; set; }
+    
+    // Google Cloud Storage specific fields
+    [StringLength(5000, ErrorMessage = "GCP Service Account JSON cannot exceed 5000 characters")]
+    public string? GcpServiceAccountJson { get; set; }
+    
+    [StringLength(255, ErrorMessage = "GCP Access Key ID cannot exceed 255 characters")]
+    public string? GcpAccessKeyId { get; set; }
+    
+    [StringLength(500, ErrorMessage = "GCP Secret Access Key cannot exceed 500 characters")]
+    public string? GcpSecretAccessKey { get; set; }
+    
 }

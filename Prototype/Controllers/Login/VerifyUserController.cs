@@ -23,7 +23,6 @@ public class VerifyUserController : ControllerBase
     {
         try
         {
-            // Use RegisterNewUser for direct account activation from email verification
             var result = await _userAccountService.RegisterNewUser(token);
             
             if (!result.Success)
