@@ -454,24 +454,40 @@ public class UserAccountService : IUserAccountService
     {
         return await _transactionService.ExecuteInTransactionAsync(async () =>
         {
+            // First try to find in regular Users table
             var user = await GetUserByIdAsync(userId);
-            if (user == null)
+            if (user != null)
             {
+                // Remove user from database
+                _context.Users.Remove(user);
+                await _context.SaveChangesAsync();
+
                 return new LoginResponse
                 {
-                    Success = false,
-                    Message = "User not found"
+                    Success = true,
+                    Message = "User deleted successfully"
                 };
             }
 
-            // Remove user from database
-            _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
+            // If not found in Users table, try TemporaryUsers table
+            var tempUser = await _context.TemporaryUsers.FindAsync(userId);
+            if (tempUser != null)
+            {
+                // Remove temporary user from database
+                _context.TemporaryUsers.Remove(tempUser);
+                await _context.SaveChangesAsync();
+
+                return new LoginResponse
+                {
+                    Success = true,
+                    Message = "Temporary user deleted successfully"
+                };
+            }
 
             return new LoginResponse
             {
-                Success = true,
-                Message = "User deleted successfully"
+                Success = false,
+                Message = "User not found in either Users or TemporaryUsers tables"
             };
         });
     }

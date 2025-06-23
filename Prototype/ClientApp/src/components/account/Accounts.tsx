@@ -828,13 +828,9 @@ export default function Accounts() {
       
       let response;
       
-      if (deletingUser.isTemporary) {
-        console.log('Calling deleteTemporaryUser API');
-        response = await userApi.deleteTemporaryUser(deletingUser.userId);
-      } else {
-        console.log('Calling deleteUser API');
-        response = await userApi.deleteUser(deletingUser.userId);
-      }
+      // Use regular delete endpoint for all users since it now handles both Users and TemporaryUsers tables
+      console.log('Calling deleteUser API for user type:', deletingUser.isTemporary ? 'temporary' : 'regular');
+      response = await userApi.deleteUser(deletingUser.userId);
       
       console.log('Delete user response:', response);
       

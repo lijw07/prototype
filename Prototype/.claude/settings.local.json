@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(dotnet ef migrations add:*)",
+      "Bash(dotnet build)",
+      "Bash(dotnet ef database:*)",
+      "Bash(dotnet ef migrations:*)",
+      "Bash(dotnet run)",
+      "Bash(curl:*)",
+      "Bash(dotnet run:*)",
+      "Bash(docker compose logs:*)",
+      "Bash(docker compose:*)",
+      "Bash(rm:*)",
+      "Bash(npm run build:*)",
+      "Bash(dotnet clean:*)",
+      "Bash(dotnet build:*)",
+      "Bash(grep:*)",
+      "Bash(docker logs:*)",
+      "Bash(node:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker restart:*)",
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "Bash(./test-connections.sh:*)",
+      "Bash(sed:*)",
+      "Bash(mv:*)",
+      "Bash(cat:*)",
+      "Bash(lsof:*)",
+      "Bash(pkill:*)",
+      "Bash(docker system prune:*)"
+    ],
+    "deny": []
+  }
+}
