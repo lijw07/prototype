@@ -103,3 +103,4 @@ lcov-report/
 /Prototype/ClientApp/.env.production.local
 /Prototype/obj
 /CLAUDE.md
+env
