@@ -221,6 +221,60 @@ public class RoleSettingsController : BaseSettingsController
         });
     }
 
+    [HttpGet("{roleId}/deletion-constraints")]
+    public async Task<IActionResult> GetRoleDeletionConstraints(Guid roleId)
+    {
+        try
+        {
+            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            if (currentUser == null)
+                return Unauthorized(new { success = false, message = "User not authenticated" });
+
+            // Get role details
+            var role = await _context.UserRoles
+                .FirstOrDefaultAsync(r => r.UserRoleId == roleId);
+            if (role == null)
+                return NotFound(new { success = false, message = "Role not found" });
+
+            var roleName = role.Role;
+            
+            // Check if role is assigned to any users
+            var usersWithRole = await _context.Users
+                .Where(u => u.Role.ToLower() == roleName.ToLower())
+                .CountAsync();
+            
+            // Check if role is assigned to any temporary users (specifically for "User" role)
+            var tempUsersCount = await _context.TemporaryUsers.CountAsync();
+            var blockedByTempUsers = tempUsersCount > 0 && roleName.ToLower() == "user";
+            
+            var canDelete = usersWithRole == 0 && !blockedByTempUsers;
+            
+            string constraintMessage = "";
+            if (usersWithRole > 0)
+            {
+                constraintMessage = $"Cannot delete role '{roleName}' - it is assigned to {usersWithRole} user(s). Please reassign users to different roles before deletion.";
+            }
+            else if (blockedByTempUsers)
+            {
+                constraintMessage = $"Cannot delete 'User' role - there are {tempUsersCount} temporary user(s) that will be assigned this role upon activation.";
+            }
+            
+            return Ok(new { 
+                success = true, 
+                canDelete = canDelete,
+                usersCount = usersWithRole,
+                temporaryUsersCount = blockedByTempUsers ? tempUsersCount : 0,
+                constraintMessage = constraintMessage,
+                roleName = roleName
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking role deletion constraints for role {RoleId}", roleId);
+            return StatusCode(500, new { success = false, message = "Internal server error" });
+        }
+    }
+
     [HttpDelete("{roleId}")]
     public async Task<IActionResult> DeleteRole(Guid roleId)
     {
@@ -237,6 +291,27 @@ public class RoleSettingsController : BaseSettingsController
                 return new { success = false, message = "Role not found" };
 
             var roleName = roleToDelete.Role;
+            
+            // Check if role is assigned to any users before deletion
+            var usersWithRole = await _context.Users
+                .Where(u => u.Role.ToLower() == roleName.ToLower())
+                .CountAsync();
+            
+            if (usersWithRole > 0)
+            {
+                _logger.LogWarning("Cannot delete role '{RoleName}' - it is assigned to {UserCount} user(s)", roleName, usersWithRole);
+                return new { success = false, message = $"Cannot delete role '{roleName}' - it is assigned to {usersWithRole} user(s). Please reassign users to different roles before deletion." };
+            }
+            
+            // Check if role is assigned to any temporary users
+            var tempUsersCount = await _context.TemporaryUsers.CountAsync();
+            if (tempUsersCount > 0 && roleName.ToLower() == "user")
+            {
+                _logger.LogWarning("Cannot delete 'User' role - there are {TempUserCount} temporary user(s) that will be assigned this role upon activation", tempUsersCount);
+                return new { success = false, message = $"Cannot delete 'User' role - there are {tempUsersCount} temporary user(s) that will be assigned this role upon activation." };
+            }
+            
+            _logger.LogInformation("Role '{RoleName}' passed constraint checks - no users assigned", roleName);
             
             // Delete role directly in the controller's context (within transaction)
             _context.UserRoles.Remove(roleToDelete);

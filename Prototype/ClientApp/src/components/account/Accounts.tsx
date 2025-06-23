@@ -69,6 +69,15 @@ interface EditUserForm {
   isActive: boolean;
 }
 
+interface EditTemporaryUserForm {
+  temporaryUserId: string;
+  firstName: string;
+  lastName: string;
+  username: string;
+  email: string;
+  phoneNumber: string;
+}
+
 export default function Accounts() {
   const [users, setUsers] = useState<User[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -668,7 +677,11 @@ export default function Accounts() {
       errors.phoneNumber = 'Phone number cannot exceed 20 characters';
     }
 
-    if (!editUserForm.role.trim()) {
+    // Find the user being edited to check if it's temporary
+    const userBeingEdited = users.find(u => u.userId === editUserForm.userId);
+    
+    // Only validate role for regular users (temporary users don't have roles)
+    if (!userBeingEdited?.isTemporary && !editUserForm.role.trim()) {
       errors.role = 'Role is required';
     }
 
@@ -685,7 +698,24 @@ export default function Accounts() {
     setEditFormErrors({});
     
     try {
-      const response = await userApi.updateUser(editUserForm);
+      // Find the user being edited to check if it's temporary
+      const userBeingEdited = users.find(u => u.userId === editUserForm.userId);
+      let response;
+      
+      if (userBeingEdited?.isTemporary) {
+        // Update temporary user
+        response = await userApi.updateTemporaryUser({
+          temporaryUserId: editUserForm.userId,
+          firstName: editUserForm.firstName,
+          lastName: editUserForm.lastName,
+          username: editUserForm.username,
+          email: editUserForm.email,
+          phoneNumber: editUserForm.phoneNumber
+        });
+      } else {
+        // Update regular user
+        response = await userApi.updateUser(editUserForm);
+      }
       
       if (response && response.success) {
         setEditSubmitSuccess(true);
@@ -784,7 +814,28 @@ export default function Accounts() {
 
     try {
       console.log('Attempting to delete user:', deletingUser.userId);
-      const response = await userApi.deleteUser(deletingUser.userId);
+      console.log('User data:', deletingUser);
+      console.log('Is temporary:', deletingUser.isTemporary);
+      
+      // Test if we can access a working endpoint first
+      try {
+        console.log('Testing API connectivity...');
+        const testResponse = await userApi.getProfile();
+        console.log('API test successful:', testResponse.success);
+      } catch (testError) {
+        console.log('API test failed:', testError);
+      }
+      
+      let response;
+      
+      if (deletingUser.isTemporary) {
+        console.log('Calling deleteTemporaryUser API');
+        response = await userApi.deleteTemporaryUser(deletingUser.userId);
+      } else {
+        console.log('Calling deleteUser API');
+        response = await userApi.deleteUser(deletingUser.userId);
+      }
+      
       console.log('Delete user response:', response);
       
       if (response && response.success) {

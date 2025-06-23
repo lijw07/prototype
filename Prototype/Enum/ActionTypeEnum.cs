@@ -40,5 +40,7 @@ public enum ActionTypeEnum
     Register,
     RoleCreated,
     RoleUpdated,
-    RoleDeleted
+    RoleDeleted,
+    UserProvisioned,
+    ReportGenerated
 }

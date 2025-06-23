@@ -294,7 +294,24 @@ public class ApplicationSettingsController : BaseSettingsController
                 };
                 _context.UserActivityLogs.Add(activityLog);
 
-                // Only create application log if we're not deleting the application
+                // Create audit log for application deletion
+                var auditLog = new AuditLogModel
+                {
+                    AuditLogId = Guid.NewGuid(),
+                    UserId = currentUser.UserId,
+                    User = null, // Don't set navigation property to avoid tracking issues
+                    ActionType = ActionTypeEnum.ApplicationRemoved,
+                    Metadata = otherUsersUsingApp > 0 
+                        ? $"User {currentUser.Username} removed access to application: {applicationName}" 
+                        : $"User {currentUser.Username} permanently deleted application: {applicationName}",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.AuditLogs.Add(auditLog);
+                
+                _logger.LogInformation("Added audit log for application {ApplicationId} deletion by user {UserId}", appGuid, currentUser.UserId);
+
+                // Create application log only if we're not going to delete the application
+                // (If we're deleting the application, the audit log and activity log will suffice)
                 if (otherUsersUsingApp > 0)
                 {
                     var applicationLog = new ApplicationLogModel

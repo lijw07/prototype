@@ -432,4 +432,156 @@ public class UserSettingsController : BaseSettingsController
         }, "deleting user");
     }
 
+    [HttpPut("update-temporary")]
+    public async Task<IActionResult> UpdateTemporaryUser([FromBody] UpdateTemporaryUserRequestDto dto)
+    {
+        return await ExecuteWithErrorHandlingAsync<object>(async () =>
+        {
+            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            if (currentUser == null)
+                return new { success = false, message = "User not authenticated" };
+
+            var tempUser = await _context.TemporaryUsers.FindAsync(dto.TemporaryUserId);
+            if (tempUser == null)
+                return new { success = false, message = "Temporary user not found" };
+
+            // Store original values for audit logging
+            var originalFirstName = tempUser.FirstName;
+            var originalLastName = tempUser.LastName;
+            var originalEmail = tempUser.Email;
+            var originalUsername = tempUser.Username;
+            var originalPhoneNumber = tempUser.PhoneNumber;
+
+            // Update the temporary user
+            tempUser.FirstName = dto.FirstName;
+            tempUser.LastName = dto.LastName;
+            tempUser.Email = dto.Email;
+            tempUser.Username = dto.Username;
+            tempUser.PhoneNumber = dto.PhoneNumber ?? tempUser.PhoneNumber;
+
+            await _context.SaveChangesAsync();
+
+            // Create change details for audit log
+            var changeDetails = new List<string>();
+            if (originalFirstName != dto.FirstName)
+                changeDetails.Add($"First Name: {originalFirstName} → {dto.FirstName}");
+            if (originalLastName != dto.LastName)
+                changeDetails.Add($"Last Name: {originalLastName} → {dto.LastName}");
+            if (originalEmail != dto.Email)
+                changeDetails.Add($"Email: {originalEmail} → {dto.Email}");
+            if (originalUsername != dto.Username)
+                changeDetails.Add($"Username: {originalUsername} → {dto.Username}");
+            if (originalPhoneNumber != dto.PhoneNumber)
+                changeDetails.Add($"Phone: {originalPhoneNumber} → {dto.PhoneNumber}");
+
+            if (changeDetails.Any())
+            {
+                var metadata = $"Administrator updated temporary user: {dto.FirstName} {dto.LastName} (ID: {dto.TemporaryUserId}) - {string.Join(", ", changeDetails)}";
+                
+                // Create audit log for the administrator who made the change
+                var auditLog = new Models.AuditLogModel
+                {
+                    AuditLogId = Guid.NewGuid(),
+                    UserId = currentUser.UserId,
+                    User = null,
+                    ActionType = Enum.ActionTypeEnum.Update,
+                    Metadata = metadata,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                // Create user activity log for the administrator
+                var activityLog = new Models.UserActivityLogModel
+                {
+                    UserActivityLogId = Guid.NewGuid(),
+                    UserId = currentUser.UserId,
+                    User = null,
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                    DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString() ?? "Unknown",
+                    ActionType = Enum.ActionTypeEnum.Update,
+                    Description = $"Administrator modified temporary user: {dto.FirstName} {dto.LastName} (Username: {dto.Username})",
+                    Timestamp = DateTime.UtcNow
+                };
+
+                // Add logs to database context and save
+                _context.AuditLogs.Add(auditLog);
+                _context.UserActivityLogs.Add(activityLog);
+                await _context.SaveChangesAsync();
+            }
+
+            return new { success = true, message = "Temporary user updated successfully", user = new {
+                temporaryUserId = tempUser.TemporaryUserId,
+                firstName = tempUser.FirstName,
+                lastName = tempUser.LastName,
+                username = tempUser.Username,
+                email = tempUser.Email,
+                phoneNumber = tempUser.PhoneNumber,
+                createdAt = tempUser.CreatedAt
+            }};
+        }, "updating temporary user");
+    }
+
+    [HttpGet("temp-delete-test/{id}")]
+    public IActionResult TempDeleteTest(string id)
+    {
+        return Ok(new { message = "Route works", id = id });
+    }
+
+    [HttpDelete("delete-temporary/{temporaryUserId}")]
+    public async Task<IActionResult> DeleteTemporaryUser(Guid temporaryUserId)
+    {
+        return await ExecuteWithErrorHandlingAsync<object>(async () =>
+        {
+            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            if (currentUser == null)
+                return new { success = false, message = "User not authenticated" };
+
+            var tempUser = await _context.TemporaryUsers.FindAsync(temporaryUserId);
+            if (tempUser == null)
+            {
+                _logger.LogWarning("Attempted to delete temporary user {TemporaryUserId} but user was not found in TemporaryUsers table", temporaryUserId);
+                return new { success = false, message = $"Temporary user with ID {temporaryUserId} not found in TemporaryUsers table" };
+            }
+
+            // Store user details for audit logging before deletion
+            var deletedUserInfo = $"{tempUser.FirstName} {tempUser.LastName} (ID: {tempUser.TemporaryUserId}, Username: {tempUser.Username}, Email: {tempUser.Email})";
+
+            // Remove the temporary user
+            _context.TemporaryUsers.Remove(tempUser);
+            await _context.SaveChangesAsync();
+
+            // Create audit log for the administrator who deleted the temporary user
+            var metadata = $"Administrator deleted temporary user account: {deletedUserInfo}";
+            
+            var auditLog = new Models.AuditLogModel
+            {
+                AuditLogId = Guid.NewGuid(),
+                UserId = currentUser.UserId,
+                User = null,
+                ActionType = Enum.ActionTypeEnum.Delete,
+                Metadata = metadata,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            // Create user activity log for the administrator
+            var activityLog = new Models.UserActivityLogModel
+            {
+                UserActivityLogId = Guid.NewGuid(),
+                UserId = currentUser.UserId,
+                User = null,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString() ?? "Unknown",
+                ActionType = Enum.ActionTypeEnum.Delete,
+                Description = $"Administrator deleted temporary user account: {tempUser.FirstName} {tempUser.LastName} (Username: {tempUser.Username})",
+                Timestamp = DateTime.UtcNow
+            };
+
+            // Add logs to the database context and save
+            _context.AuditLogs.Add(auditLog);
+            _context.UserActivityLogs.Add(activityLog);
+            await _context.SaveChangesAsync();
+
+            return new { success = true, message = "Temporary user deleted successfully" };
+        }, "deleting temporary user");
+    }
+
 }
