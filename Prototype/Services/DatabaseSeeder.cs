@@ -47,11 +47,11 @@ public class DatabaseSeeder
     {
         // Check if admin user exists
         var existingAdmin = await _context.Users.FirstOrDefaultAsync(u => u.Username == "admin");
-        
+
         if (existingAdmin == null)
         {
             _logger.LogInformation("No admin user found. Creating default admin user...");
-            
+
             var defaultAdmin = new UserModel
             {
                 UserId = Guid.NewGuid(),
@@ -62,7 +62,7 @@ public class DatabaseSeeder
                 PasswordHash = _passwordService.HashPassword("Admin123!"),
                 PhoneNumber = "+1 (555) 000-0000",
                 IsActive = true,
-                Role = "Admin",
+                Role = "Platform Admin",
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
             };
@@ -124,6 +124,42 @@ public class DatabaseSeeder
             _context.Users.AddRange(sampleUsers);
             _logger.LogInformation("Added {Count} sample users for development.", sampleUsers.Length);
         }
+
+        //Add sample roles
+        var sampleRoles = new[]
+        {
+            new UserRoleModel
+            {
+                    UserRoleId = Guid.NewGuid(),
+                    Role = "Platform Admin",
+                    CreatedAt = DateTime.UtcNow.AddDays(-7),
+                    CreatedBy = "Seed"
+            },
+            new UserRoleModel
+            {
+                    UserRoleId = Guid.NewGuid(),
+                    Role = "Admin",
+                    CreatedAt = DateTime.UtcNow.AddDays(-7),
+                    CreatedBy = "Seed"
+            },
+            new UserRoleModel
+            {
+                    UserRoleId = Guid.NewGuid(),
+                    Role = "User",
+                    CreatedAt = DateTime.UtcNow.AddDays(-7),
+                    CreatedBy = "Seed"
+            },
+             new UserRoleModel
+            {
+                    UserRoleId = Guid.NewGuid(),
+                    Role = "Manager",
+                    CreatedAt = DateTime.UtcNow.AddDays(-7),
+                    CreatedBy = "Seed"
+            },
+        };
+            _context.UserRoles.AddRange(sampleRoles);
+            _logger.LogInformation("Added {Count} sample roles for development.", sampleRoles.Length);
+
 
         // Add sample applications
         var existingApps = await _context.Applications.CountAsync();
