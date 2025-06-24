@@ -1,11 +1,13 @@
+using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
 using Prototype.Common;
 using Prototype.DTOs;
 using Prototype.Enum;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
 
-public class ValidationService
+public class ValidationService : IValidationService
 {
     private readonly Regex _emailRegex = new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled);
     private readonly Regex _phoneRegex = new(@"^\+?[\d\s\-\(\)]{10,}$", RegexOptions.Compiled);
@@ -51,7 +53,7 @@ public class ValidationService
         else if (!_phoneRegex.IsMatch(request.PhoneNumber))
             errors.Add("Invalid phone number format");
 
-        return errors.Count == 0 ? Result.Success() : Result.Failure(errors);
+        return errors.Count == 0 ? Common.Result.Success() : Common.Result.Failure(errors);
     }
 
     public Result ValidateLoginRequest(LoginRequestDto request)
@@ -68,7 +70,7 @@ public class ValidationService
         else if (request.Password.Length < 8)
             errors.Add("Password must be at least 8 characters");
 
-        return errors.Count == 0 ? Result.Success() : Result.Failure(errors);
+        return errors.Count == 0 ? Common.Result.Success() : Common.Result.Failure(errors);
     }
 
     public Result ValidateApplicationRequest(ApplicationRequestDto request)
@@ -98,7 +100,7 @@ public class ValidationService
             errors.Add("Connection source is required");
         }
 
-        return errors.Count == 0 ? Result.Success() : Result.Failure(errors);
+        return errors.Count == 0 ? Common.Result.Success() : Common.Result.Failure(errors);
     }
 
     public Result ValidateConnectionSource(ConnectionSourceDto request)
@@ -124,7 +126,7 @@ public class ValidationService
         if (!string.IsNullOrWhiteSpace(request.Url) && !Uri.IsWellFormedUriString(request.Url, UriKind.Absolute))
             errors.Add("Invalid URL format");
 
-        return errors.Count == 0 ? Result.Success() : Result.Failure(errors);
+        return errors.Count == 0 ? Common.Result.Success() : Common.Result.Failure(errors);
     }
 
     private static void ValidateAuthenticationSpecificFields(ConnectionSourceDto request, List<string> errors)
@@ -181,5 +183,40 @@ public class ValidationService
             if (string.IsNullOrWhiteSpace(request.ServiceRealm))
                 errors.Add("Service Realm is required for GSSAPI Kerberos authentication");
         }
+    }
+
+    // Interface implementation for generic validation
+    public async Task<Prototype.Helpers.Result<T>> ValidateAsync<T>(T entity) where T : class
+    {
+        var errors = await GetValidationErrorsAsync(entity);
+        return errors.Any() 
+            ? Prototype.Helpers.Result<T>.Failure(errors) 
+            : Prototype.Helpers.Result<T>.Success(entity);
+    }
+
+    public async Task<Prototype.Helpers.Result<bool>> ValidatePropertyAsync<T>(T entity, string propertyName, object value) where T : class
+    {
+        var context = new ValidationContext(entity) { MemberName = propertyName };
+        var results = new List<ValidationResult>();
+        
+        var isValid = Validator.TryValidateProperty(value, context, results);
+        
+        if (isValid)
+        {
+            return Prototype.Helpers.Result<bool>.Success(true);
+        }
+        
+        var errors = results.Select(r => r.ErrorMessage ?? "Validation error").ToList();
+        return Prototype.Helpers.Result<bool>.Failure(errors);
+    }
+
+    public async Task<List<string>> GetValidationErrorsAsync<T>(T entity) where T : class
+    {
+        var context = new ValidationContext(entity);
+        var results = new List<ValidationResult>();
+        
+        Validator.TryValidateObject(entity, context, results, true);
+        
+        return results.Select(r => r.ErrorMessage ?? "Validation error").ToList();
     }
 }

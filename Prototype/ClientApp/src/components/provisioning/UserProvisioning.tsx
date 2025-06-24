@@ -294,25 +294,20 @@ export default function UserProvisioning() {
       // First, try to use the bulk provisioning API
       try {
         setMigrationProgress(10);
-        const bulkRequest = {
-          users: allMigrationData,
-          options: {
-            validateOnly: false,
-            skipDuplicates: true,
-            defaultRole: 'User'
-          },
-          source: 'bulk-import',
-          format: uploadFormat
-        };
+        
+        // Create FormData to send the file
+        const formData = new FormData();
+        formData.append('file', uploadedFile);
+        formData.append('ignoreErrors', 'false');
 
-        const bulkResponse = await userProvisioningApi.bulkProvisionUsers(bulkRequest);
+        const bulkResponse = await userProvisioningApi.bulkProvisionUsers(formData);
         setMigrationProgress(90);
 
         if (bulkResponse.success && bulkResponse.data) {
-          // Handle bulk response
-          successful = bulkResponse.data.successful || totalUsers;
-          failed = bulkResponse.data.failed || 0;
-          if (bulkResponse.data.errors) {
+          // Handle bulk response - map to expected format
+          successful = bulkResponse.data.processedRecords || 0;
+          failed = bulkResponse.data.failedRecords || 0;
+          if (bulkResponse.data.errors && Array.isArray(bulkResponse.data.errors)) {
             errors.push(...bulkResponse.data.errors);
           }
           setMigrationProgress(100);

@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  backend:
+    environment:
+      # Enable debugging
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Logging__LogLevel__Default=Debug
+      - Logging__LogLevel__Microsoft=Information
+      - Logging__LogLevel__Microsoft.Hosting.Lifetime=Information
+      # Configure for remote debugging
+      - VSTEST_HOST_DEBUG=1
+    command: ["dotnet", "watch", "run", "--urls", "http://0.0.0.0:8080", "--", "--debugger-agent=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:57404"]
+    ports:
+      - "8080:8080"
+      - "57404:57404"  # Debugger port

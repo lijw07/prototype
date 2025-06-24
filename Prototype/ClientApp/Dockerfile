@@ -19,9 +19,16 @@ RUN npm ci
 # === Dev Stage (for hot reload) ===
 FROM dev-deps AS dev
 COPY . .
-ENV CHOKIDAR_USEPOLLING=true
 ENV BROWSER=none
 ENV NODE_ENV=development
+ENV WDS_SOCKET_HOST=localhost
+ENV WDS_SOCKET_PORT=3000
+ENV WDS_SOCKET_PATH=/ws
+ENV FAST_REFRESH=true
+ENV CHOKIDAR_USE_POLLING=false
+ENV WATCHPACK_POLLING=false
+ENV DISABLE_ESLINT_PLUGIN=true
+ENV TSC_COMPILE_ON_ERROR=true
 CMD ["npm", "start"]
 
 # === Build Stage ===
