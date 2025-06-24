@@ -19,7 +19,7 @@ RUN npm ci
 # === Dev Stage (for hot reload) ===
 FROM dev-deps AS dev
 COPY . .
-ENV CHOKIDAR_USE_POLLING=true
+ENV CHOKIDAR_USEPOLLING=true
 ENV BROWSER=none
 ENV NODE_ENV=development
 CMD ["npm", "start"]

@@ -15,6 +15,7 @@ interface User {
   username: string;
   email: string;
   phoneNumber: string;
+  role: string;
 }
 
 interface LoginCredentials {

@@ -8,13 +8,14 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - CHOKIDAR_USE_POLLING=true
+      - WATCHPACK_POLLING=true
       - BROWSER=none
       - REACT_APP_API_URL=http://backend:8080
       - NODE_ENV=development
       - GENERATE_SOURCEMAP=true
+      - FAST_REFRESH=false
     volumes:
-      - ./Prototype/ClientApp:/app
+      - ./Prototype/ClientApp:/app:cached
       - /app/node_modules
       - frontend_cache:/app/.cache
     depends_on:
