@@ -16,8 +16,9 @@ import ApplicationLogs from './components/application-logs/ApplicationLogs';
 import Roles from './components/roles/Roles';
 import SecurityDashboard from './components/security/SecurityDashboard';
 import SystemHealthDashboard from './components/health/SystemHealthDashboard';
-import ExecutiveDashboard from './components/executive/ExecutiveDashboard';
+import AnalyticsOverview from './components/analytics/AnalyticsOverview';
 import UserProvisioning from './components/provisioning/UserProvisioning';
+import UserRequests from './components/user-requests/UserRequests';
 import ComplianceDashboard from './components/compliance/ComplianceDashboard';
 import Home from './components/home/Home';
 import About from './components/pages/About';
@@ -69,14 +70,19 @@ export default function App() {
               <SystemHealthDashboard />
             </ProtectedRoute>
           } />
-          <Route path="/executive-dashboard" element={
+          <Route path="/analytics-overview" element={
             <ProtectedRoute>
-              <ExecutiveDashboard />
+              <AnalyticsOverview />
             </ProtectedRoute>
           } />
           <Route path="/user-provisioning" element={
             <ProtectedRoute>
               <UserProvisioning />
+            </ProtectedRoute>
+          } />
+          <Route path="/user-requests" element={
+            <ProtectedRoute>
+              <UserRequests />
             </ProtectedRoute>
           } />
           <Route path="/compliance" element={

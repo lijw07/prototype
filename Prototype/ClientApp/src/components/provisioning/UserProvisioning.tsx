@@ -24,12 +24,10 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight,
-  Archive,
-  Save,
-  FolderOpen
+  ChevronsRight
 } from 'lucide-react';
 import { userProvisioningApi } from '../../services/api';
+import { progressService, ProgressUpdate, JobStart, JobComplete, JobError } from '../../services/signalr';
 
 interface ProvisioningOverview {
   summary: {
@@ -79,9 +77,9 @@ export default function UserProvisioning() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   
   // Bulk migration state
-  const [uploadFormat, setUploadFormat] = useState<'csv' | 'json' | 'xml'>('csv');
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [allMigrationData, setAllMigrationData] = useState<any[]>([]);
+  const [fileDataMap, setFileDataMap] = useState<Map<string, any[]>>(new Map());
   const [showPreview, setShowPreview] = useState(false);
   const [migrationProgress, setMigrationProgress] = useState<number>(0);
   const [migrationStatus, setMigrationStatus] = useState<'idle' | 'processing' | 'completed' | 'error'>('idle');
@@ -89,18 +87,22 @@ export default function UserProvisioning() {
     successful: number;
     failed: number;
     errors: string[];
+    processedFiles: number;
+    totalFiles: number;
   } | null>(null);
   
   // Pagination state for preview
   const [previewCurrentPage, setPreviewCurrentPage] = useState(1);
   const [previewPageSize, setPreviewPageSize] = useState(10);
   
-  // File save state
-  const [saveFile, setSaveFile] = useState(true);
-  const [savedFileName, setSavedFileName] = useState('');
-  const [saveDescription, setSaveDescription] = useState('');
-  const [savedFiles, setSavedFiles] = useState<any[]>([]);
-  const [showSavedFiles, setShowSavedFiles] = useState(false);
+  // Drag and drop state
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragError, setDragError] = useState<string | null>(null);
+  const [dragCounter, setDragCounter] = useState(0);
+  
+  // SignalR state
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [progressDetails, setProgressDetails] = useState<ProgressUpdate | null>(null);
 
   const fetchData = async () => {
     try {
@@ -128,19 +130,106 @@ export default function UserProvisioning() {
 
   useEffect(() => {
     fetchData();
-    loadSavedFiles();
-    loadCurrentSession();
     const interval = setInterval(fetchData, 5 * 60 * 1000); // Refresh every 5 minutes
     return () => clearInterval(interval);
   }, []);
 
-  // Auto-save session when critical state changes
+  // Prevent default drag behavior globally to remove browser drag image
   useEffect(() => {
-    if (uploadedFile && allMigrationData.length > 0) {
-      const timeoutId = setTimeout(saveCurrentSession, 500); // Save after 500ms delay
-      return () => clearTimeout(timeoutId);
-    }
-  }, [uploadedFile, allMigrationData, migrationStatus, migrationProgress, migrationResults]);
+    const handleDocumentDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    
+    const handleDocumentDrop = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    document.addEventListener('dragover', handleDocumentDragOver);
+    document.addEventListener('drop', handleDocumentDrop);
+
+    return () => {
+      document.removeEventListener('dragover', handleDocumentDragOver);
+      document.removeEventListener('drop', handleDocumentDrop);
+    };
+  }, []);
+
+  // SignalR event handlers
+  useEffect(() => {
+    const handleJobStarted = (jobStart: JobStart) => {
+      console.log('🎬 SignalR: Job started:', jobStart);
+      setCurrentJobId(jobStart.jobId);
+      setMigrationStatus('processing');
+      setMigrationProgress(10);
+    };
+
+    const handleProgressUpdate = (progress: ProgressUpdate) => {
+      console.log('📈 SignalR: Progress update:', progress);
+      setProgressDetails(progress);
+      setMigrationProgress(progress.progressPercentage);
+    };
+
+    const handleJobCompleted = (result: JobComplete) => {
+      console.log('🎉 SignalR: Job completed:', result);
+      
+      // Add a delay to ensure users see the progress bar working
+      setTimeout(() => {
+        setMigrationStatus(result.success ? 'completed' : 'error');
+        setMigrationProgress(100);
+        
+        if (result.success && result.data) {
+          setMigrationResults({
+            successful: result.data.processedRecords || 0,
+            failed: result.data.failedRecords || 0,
+            errors: result.data.errors || [],
+            processedFiles: result.data.processedFiles || 1,
+            totalFiles: result.data.totalFiles || 1
+          });
+        }
+        
+        setCurrentJobId(null);
+        setProgressDetails(null);
+      }, 1500); // Show progress for 1.5 seconds minimum
+    };
+
+    const handleJobError = (error: JobError) => {
+      console.log('❌ SignalR: Job error:', error);
+      setMigrationStatus('error');
+      setMigrationResults({
+        successful: 0,
+        failed: 1,
+        errors: [error.error],
+        processedFiles: 0,
+        totalFiles: 1
+      });
+      setCurrentJobId(null);
+      setProgressDetails(null);
+    };
+
+    // Set up event listeners
+    progressService.onJobStarted(handleJobStarted);
+    progressService.onProgressUpdate(handleProgressUpdate);
+    progressService.onJobCompleted(handleJobCompleted);
+    progressService.onJobError(handleJobError);
+
+    // Initialize SignalR connection on component mount
+    console.log('🔗 Initializing SignalR connection...');
+    progressService.ensureConnection().catch(error => {
+      console.error('❌ Failed to initialize SignalR connection:', error);
+    });
+
+    // Cleanup function
+    return () => {
+      progressService.offJobStarted(handleJobStarted);
+      progressService.offProgressUpdate(handleProgressUpdate);
+      progressService.offJobCompleted(handleJobCompleted);
+      progressService.offJobError(handleJobError);
+      
+      // Leave progress group if we have an active job
+      if (currentJobId) {
+        progressService.leaveProgressGroup(currentJobId);
+      }
+    };
+  }, [currentJobId]);
 
   const handleAutoProvision = async () => {
     try {
@@ -194,20 +283,157 @@ export default function UserProvisioning() {
 
   // Bulk migration helper functions
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setUploadedFile(file);
-      setSavedFileName(file.name.replace(/\.[^/.]+$/, "")); // Remove extension for default name
-      parseFileForPreview(file);
+    console.log('handleFileUpload called');
+    console.log('Event target:', event.target);
+    console.log('Files:', event.target.files);
+    const files = Array.from(event.target.files || []);
+    console.log('Files array:', files);
+    if (files.length > 0) {
+      console.log('Processing files...');
+      processFiles(files);
+    } else {
+      console.log('No files selected');
+    }
+    // Clear the input value so the same file can be selected again
+    event.target.value = '';
+  };
+
+  const processFiles = async (files: File[]) => {
+    console.log('Processing files:', files.map(f => f.name));
+    setDragError(null);
+    const supportedFormats = ['csv', 'json', 'xml', 'xlsx', 'xls'];
+    const validFiles: File[] = [];
+    const errors: string[] = [];
+    
+    // Validate all files first
+    for (const file of files) {
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+      console.log(`File: ${file.name}, Extension: ${fileExtension}`);
+      if (!supportedFormats.includes(fileExtension || '')) {
+        errors.push(`${file.name}: Unsupported format (${fileExtension?.toUpperCase()})`);
+      } else {
+        validFiles.push(file);
+      }
+    }
+    
+    console.log('Valid files:', validFiles.map(f => f.name));
+    console.log('Errors during validation:', errors);
+    
+    if (errors.length > 0) {
+      setDragError(`Some files have unsupported formats:\n${errors.join('\n')}`);
+    }
+    
+    if (validFiles.length === 0) {
+      console.log('No valid files to process');
+      return;
+    }
+    
+    setUploadedFiles(validFiles);
+    console.log('Set uploaded files state');
+    
+    // Process files for preview
+    const newFileDataMap = new Map<string, any[]>();
+    let allData: any[] = [];
+    
+    for (const file of validFiles) {
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+      
+      // For Excel files, we'll process them on the backend
+      if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+        console.log(`Skipping client-side parsing for Excel file: ${file.name}`);
+        newFileDataMap.set(file.name, []); // Empty data for Excel files
+        continue;
+      }
+      
+      // For text-based formats, parse for preview
+      try {
+        console.log(`Parsing file: ${file.name}`);
+        const fileData = await parseFile(file);
+        console.log(`Parsed ${fileData.length} records from ${file.name}:`, fileData.slice(0, 2));
+        newFileDataMap.set(file.name, fileData);
+        allData = [...allData, ...fileData];
+      } catch (error) {
+        console.error(`Error parsing file ${file.name}:`, error);
+        errors.push(`${file.name}: Failed to parse - ${error}`);
+      }
+    }
+    
+    console.log('All parsed data:', allData.length, 'records');
+    console.log('File data map:', Array.from(newFileDataMap.entries()));
+    
+    setFileDataMap(newFileDataMap);
+    setAllMigrationData(allData);
+    setPreviewCurrentPage(1);
+    setShowPreview(allData.length > 0);
+    
+    console.log('Updated state - showPreview:', allData.length > 0, 'allData length:', allData.length);
+    console.log('Sample data:', allData.slice(0, 3));
+    
+    if (errors.length > 0) {
+      setDragError(`Some files could not be processed:\n${errors.join('\n')}`);
     }
   };
 
-  const parseFileForPreview = async (file: File) => {
+  const processFile = (file: File) => {
+    processFiles([file]);
+  };
+
+  // Drag and drop handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+      setDragCounter(prev => prev + 1);
+      if (!isDragging) {
+        setIsDragging(true);
+        setDragError(null);
+      }
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setDragCounter(prev => {
+      const newCounter = prev - 1;
+      if (newCounter <= 0) {
+        setIsDragging(false);
+        return 0;
+      }
+      return newCounter;
+    });
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsDragging(false);
+    setDragCounter(0);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+
+    processFiles(files);
+  };
+
+  const parseFile = async (file: File): Promise<any[]> => {
     try {
       const text = await file.text();
       let parsedData: any[] = [];
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
 
-      switch (uploadFormat) {
+      switch (fileExtension) {
         case 'csv':
           parsedData = parseCSV(text);
           break;
@@ -220,17 +446,14 @@ export default function UserProvisioning() {
         case 'xml':
           parsedData = parseXML(text);
           break;
+        default:
+          throw new Error(`Unsupported format: ${fileExtension}`);
       }
 
-      setAllMigrationData(parsedData); // Store all data for migration
-      setPreviewCurrentPage(1); // Reset to first page
-      setShowPreview(true);
-      
-      // Save current session after successful parsing
-      setTimeout(saveCurrentSession, 100); // Small delay to ensure state is updated
+      return parsedData;
     } catch (error) {
       console.error('Error parsing file:', error);
-      alert(`Error parsing ${uploadFormat.toUpperCase()} file: ${error}. Please check the format and try again.`);
+      throw new Error(`Error parsing ${file.name}: ${error}. Please check the file format and try again.`);
     }
   };
 
@@ -280,287 +503,239 @@ export default function UserProvisioning() {
   };
 
   const processBulkMigration = async () => {
-    if (!uploadedFile || allMigrationData.length === 0) return;
+    if (uploadedFiles.length === 0 && allMigrationData.length === 0) return;
+
+    console.log('🚀 Starting bulk migration with SignalR tracking...');
+    setMigrationStatus('processing');
+    setMigrationProgress(0);
+    setMigrationResults(null);
+    setProgressDetails(null);
+
+    try {
+      // Process only the first file for now with SignalR progress tracking
+      if (uploadedFiles.length > 0) {
+        const file = uploadedFiles[0];
+        
+        // Show initial progress
+        setMigrationProgress(1);
+        
+        // First connect to SignalR before starting the upload
+        console.log('🔗 Connecting to SignalR...');
+        try {
+          await progressService.ensureConnection();
+          console.log('✅ SignalR connected successfully');
+          setMigrationProgress(5);
+        } catch (signalRError) {
+          console.error('❌ Failed to connect to SignalR:', signalRError);
+          // Continue without SignalR
+        }
+        
+        // Create FormData to send the file to the progress-enabled endpoint
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('ignoreErrors', 'false');
+
+        console.log('📁 Uploading file:', file.name, 'Size:', file.size, 'bytes');
+        setMigrationProgress(10);
+        
+        // Call the SignalR-enabled API endpoint (now returns JobId immediately)
+        const response = await userProvisioningApi.bulkProvisionWithProgress(formData);
+        console.log('📊 API Response:', response);
+
+        if (response.success && response.data && response.data.JobId) {
+          // Get the job ID from the immediate response
+          const jobId = response.data.JobId;
+          setCurrentJobId(jobId);
+          
+          console.log('🔗 Joining SignalR group for job:', jobId);
+          
+          try {
+            await progressService.joinProgressGroup(jobId);
+            console.log('✅ Successfully joined SignalR progress group for job:', jobId);
+            setMigrationProgress(15);
+            
+            // The progress updates will be handled by SignalR event handlers
+            // Backend will start processing in background and send progress updates
+            console.log('⏳ Waiting for SignalR progress updates from background processing...');
+            
+          } catch (signalRError) {
+            console.error('❌ Failed to join SignalR progress group:', signalRError);
+            // If SignalR fails, we can't get progress updates
+            setMigrationStatus('error');
+            setMigrationResults({
+              successful: 0,
+              failed: 1,
+              errors: ['Failed to connect to progress tracking'],
+              processedFiles: 0,
+              totalFiles: 1
+            });
+          }
+        } else {
+          throw new Error('Failed to start bulk upload with progress tracking');
+        }
+      } else {
+        throw new Error('No files to process');
+      }
+    } catch (error) {
+      console.error('❌ Error in bulk migration:', error);
+      setMigrationStatus('error');
+      setMigrationResults({
+        successful: 0,
+        failed: 1,
+        errors: [error instanceof Error ? error.message : 'Unknown error occurred'],
+        processedFiles: 0,
+        totalFiles: uploadedFiles.length
+      });
+    }
+  };
+
+  // Legacy function for fallback (keeping the original complex logic for reference)
+  const processBulkMigrationFallback = async () => {
+    if (uploadedFiles.length === 0 && allMigrationData.length === 0) return;
 
     setMigrationStatus('processing');
     setMigrationProgress(0);
 
     try {
-      const totalUsers = allMigrationData.length;
+      const totalFiles = uploadedFiles.length;
+      setMigrationProgress(10);
+
+      // Fallback: Process files individually with fake progress
       let successful = 0;
       let failed = 0;
       const errors: string[] = [];
+      let processedFiles = 0;
 
-      // First, try to use the bulk provisioning API
-      try {
-        setMigrationProgress(10);
+      for (let fileIndex = 0; fileIndex < uploadedFiles.length; fileIndex++) {
+        const file = uploadedFiles[fileIndex];
+        const fileProgress = (fileIndex / totalFiles) * 80 + 20; // Reserve 20% for initial setup
         
-        // Create FormData to send the file
-        const formData = new FormData();
-        formData.append('file', uploadedFile);
-        formData.append('ignoreErrors', 'false');
-
-        const bulkResponse = await userProvisioningApi.bulkProvisionUsers(formData);
-        setMigrationProgress(90);
-
-        if (bulkResponse.success && bulkResponse.data) {
-          // Handle bulk response - map to expected format
-          successful = bulkResponse.data.processedRecords || 0;
-          failed = bulkResponse.data.failedRecords || 0;
-          if (bulkResponse.data.errors && Array.isArray(bulkResponse.data.errors)) {
-            errors.push(...bulkResponse.data.errors);
-          }
-          setMigrationProgress(100);
-        } else {
-          throw new Error('Bulk API failed, falling back to individual processing');
-        }
-      } catch (bulkError) {
-        console.warn('Bulk API not available or failed, processing individually:', bulkError);
-        
-        // Fallback: Process users individually using registration API
-        for (let i = 0; i < totalUsers; i++) {
-          const user = allMigrationData[i];
+        try {
+          setMigrationProgress(fileProgress);
           
-          try {
-            // Validate required fields
-            if (!user.email || !user.firstName || !user.lastName) {
-              throw new Error(`Missing required fields: email, firstName, or lastName`);
+          // Create FormData to send the file
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('ignoreErrors', 'false');
+          formData.append('fileIndex', fileIndex.toString());
+          formData.append('totalFiles', totalFiles.toString());
+
+          const bulkResponse = await userProvisioningApi.bulkProvisionUsers(formData);
+          console.log('Bulk API Response:', bulkResponse);
+
+          if (bulkResponse.success && bulkResponse.data) {
+            // Handle bulk response - map to expected format
+            successful += bulkResponse.data.processedRecords || 0;
+            failed += bulkResponse.data.failedRecords || 0;
+            if (bulkResponse.data.errors && Array.isArray(bulkResponse.data.errors)) {
+              errors.push(...bulkResponse.data.errors.map((error: any) => 
+                typeof error === 'string' ? `${file.name}: ${error}` : `${file.name}: ${error.errorMessage || 'Unknown error'}`
+              ));
             }
+            processedFiles++;
+          } else {
+            throw new Error(`Bulk API failed for ${file.name}, falling back to individual processing`);
+          }
+        } catch (bulkError) {
+          console.warn(`Bulk API not available or failed for ${file.name}, processing individually:`, bulkError);
+          
+          // Fallback: Process users from this file individually
+          const fileData = fileDataMap.get(file.name) || [];
+          for (let i = 0; i < fileData.length; i++) {
+            const user = fileData[i];
+            
+            try {
+              // Validate required fields - handle both camelCase and PascalCase
+              const email = user.email || user.Email;
+              const firstName = user.firstName || user.FirstName;
+              const lastName = user.lastName || user.LastName;
+              
+              if (!email || !firstName || !lastName) {
+                console.log('User data:', user);
+                throw new Error(`Missing required fields: email, firstName, or lastName`);
+              }
 
-            // Map user data to registration format
-            const registrationData = {
-              firstName: user.firstName,
-              lastName: user.lastName,
-              username: user.username || user.email,
-              email: user.email,
-              phoneNumber: user.phone || user.phoneNumber || '',
-              password: user.password || 'TempPassword123!', // Default temp password
-              reEnterPassword: user.password || 'TempPassword123!',
-              role: user.role || 'User',
-              department: user.department || '',
-              isTemporary: true // Mark as temporary for bulk imports
-            };
+              // Map user data to registration format
+              const registrationData = {
+                firstName: firstName,
+                lastName: lastName,
+                username: user.username || user.Username || email,
+                email: email,
+                phoneNumber: user.phone || user.phoneNumber || user.Phone || user.PhoneNumber || '',
+                password: user.password || user.Password || 'TempPassword123!', // Default temp password
+                reEnterPassword: user.password || user.Password || 'TempPassword123!',
+                role: user.role || 'User',
+                department: user.department || '',
+                isTemporary: true // Mark as temporary for bulk imports
+              };
 
-            // Call the registration API
-            const response = await userProvisioningApi.autoProvisionUsers({
-              user: registrationData,
-              autoApprove: true
-            });
+              // Call the registration API
+              const response = await userProvisioningApi.autoProvisionUsers({
+                user: registrationData,
+                autoApprove: true
+              });
 
-            if (response.success) {
-              successful++;
-            } else {
+              if (response.success) {
+                successful++;
+              } else {
+                failed++;
+                errors.push(`${file.name} - Failed to create user ${user.email}: ${response.data?.message || 'Unknown error'}`);
+              }
+            } catch (error: any) {
               failed++;
-              errors.push(`Failed to create user ${user.email}: ${response.data?.message || 'Unknown error'}`);
+              errors.push(`${file.name} - Error processing user ${user.email}: ${error.message}`);
             }
-          } catch (error: any) {
-            failed++;
-            errors.push(`Error processing user ${user.email}: ${error.message}`);
+            
+            // Update progress for individual processing within file
+            const overallProgress = fileProgress + ((i + 1) / fileData.length) * (80 / totalFiles);
+            setMigrationProgress(overallProgress);
+            
+            // Small delay to prevent overwhelming the API
+            await new Promise(resolve => setTimeout(resolve, 50));
           }
           
-          // Update progress
-          setMigrationProgress(((i + 1) / totalUsers) * 100);
-          
-          // Small delay to prevent overwhelming the API
-          await new Promise(resolve => setTimeout(resolve, 50));
+          processedFiles++;
         }
+        
+        setMigrationProgress(((fileIndex + 1) / totalFiles) * 80 + 20);
       }
 
-      setMigrationResults({ successful, failed, errors });
+      setMigrationResults({ 
+        successful, 
+        failed, 
+        errors, 
+        processedFiles, 
+        totalFiles 
+      });
+      setMigrationProgress(100);
       setMigrationStatus('completed');
-      
-      // Save session after migration completion
-      setTimeout(saveCurrentSession, 100);
     } catch (error) {
       console.error('Migration failed:', error);
       setMigrationStatus('error');
       setMigrationResults({
         successful: 0,
         failed: allMigrationData.length,
-        errors: [`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`]
+        errors: [`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+        processedFiles: 0,
+        totalFiles: uploadedFiles.length
       });
-      setTimeout(saveCurrentSession, 100);
     }
   };
 
   const resetMigration = () => {
-    setUploadedFile(null);
+    setUploadedFiles([]);
     setAllMigrationData([]);
+    setFileDataMap(new Map());
     setShowPreview(false);
     setMigrationProgress(0);
     setMigrationStatus('idle');
     setMigrationResults(null);
     setPreviewCurrentPage(1);
-    setSavedFileName('');
-    setSaveDescription('');
-    clearCurrentSession(); // Clear the saved session when resetting
+    setIsDragging(false);
+    setDragError(null);
+    setDragCounter(0);
   };
 
-  const saveUploadedFile = async () => {
-    if (!uploadedFile || !savedFileName.trim()) return;
-
-    try {
-      // In a real implementation, this would save to a backend API
-      const fileData = {
-        id: Date.now().toString(),
-        name: savedFileName.trim(),
-        description: saveDescription.trim(),
-        originalFileName: uploadedFile.name,
-        format: uploadFormat,
-        size: uploadedFile.size,
-        recordCount: allMigrationData.length,
-        uploadDate: new Date().toISOString(),
-        data: allMigrationData
-      };
-
-      // For demo purposes, save to localStorage
-      const existingSavedFiles = JSON.parse(localStorage.getItem('savedMigrationFiles') || '[]');
-      existingSavedFiles.push(fileData);
-      localStorage.setItem('savedMigrationFiles', JSON.stringify(existingSavedFiles));
-      
-      setSavedFiles(existingSavedFiles);
-      alert(`File "${savedFileName}" saved successfully!`);
-    } catch (error) {
-      console.error('Error saving file:', error);
-      alert('Error saving file. Please try again.');
-    }
-  };
-
-  const loadSavedFiles = () => {
-    try {
-      const savedFilesData = JSON.parse(localStorage.getItem('savedMigrationFiles') || '[]');
-      setSavedFiles(savedFilesData);
-    } catch (error) {
-      console.error('Error loading saved files:', error);
-      setSavedFiles([]);
-    }
-  };
-
-  const loadSavedFile = (savedFile: any) => {
-    setAllMigrationData(savedFile.data);
-    setUploadFormat(savedFile.format);
-    setPreviewCurrentPage(1);
-    setShowPreview(true);
-    setSavedFileName(savedFile.name);
-    setSaveDescription(savedFile.description);
-    
-    // Create a mock file object for display
-    const mockFile = new File([''], savedFile.originalFileName, { type: 'text/plain' });
-    setUploadedFile(mockFile);
-    
-    alert(`Loaded "${savedFile.name}" with ${savedFile.recordCount} records`);
-  };
-
-  const deleteSavedFile = (fileId: string) => {
-    try {
-      const existingSavedFiles = JSON.parse(localStorage.getItem('savedMigrationFiles') || '[]');
-      const updatedFiles = existingSavedFiles.filter((file: any) => file.id !== fileId);
-      localStorage.setItem('savedMigrationFiles', JSON.stringify(updatedFiles));
-      setSavedFiles(updatedFiles);
-      alert('File deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting file:', error);
-      alert('Error deleting file. Please try again.');
-    }
-  };
-
-  const saveCurrentSession = () => {
-    try {
-      if (uploadedFile && allMigrationData.length > 0) {
-        const sessionData = {
-          uploadFormat,
-          fileName: uploadedFile.name,
-          fileSize: uploadedFile.size,
-          allMigrationData,
-          showPreview,
-          savedFileName,
-          saveDescription,
-          previewCurrentPage,
-          previewPageSize,
-          migrationStatus,
-          migrationProgress,
-          migrationResults,
-          timestamp: new Date().toISOString()
-        };
-        localStorage.setItem('currentMigrationSession', JSON.stringify(sessionData));
-        console.log('Session saved:', {
-          fileName: uploadedFile.name,
-          recordCount: allMigrationData.length,
-          status: migrationStatus
-        });
-      } else {
-        console.log('Session not saved - missing requirements:', {
-          hasFile: !!uploadedFile,
-          hasData: allMigrationData.length > 0
-        });
-      }
-    } catch (error) {
-      console.error('Error saving current session:', error);
-    }
-  };
-
-  const loadCurrentSession = () => {
-    try {
-      const sessionData = localStorage.getItem('currentMigrationSession');
-      console.log('Attempting to load session...', !!sessionData);
-      
-      if (sessionData) {
-        const session = JSON.parse(sessionData);
-        console.log('Session found:', {
-          fileName: session.fileName,
-          recordCount: session.allMigrationData?.length,
-          timestamp: session.timestamp
-        });
-        
-        // Check if session is less than 24 hours old
-        const sessionAge = new Date().getTime() - new Date(session.timestamp).getTime();
-        const twentyFourHours = 24 * 60 * 60 * 1000;
-        
-        console.log('Session age check:', {
-          ageHours: Math.round(sessionAge / (60 * 60 * 1000)),
-          isValid: sessionAge < twentyFourHours,
-          hasData: session.allMigrationData?.length > 0
-        });
-        
-        if (sessionAge < twentyFourHours && session.allMigrationData?.length > 0) {
-          // Restore session data
-          setUploadFormat(session.uploadFormat);
-          setAllMigrationData(session.allMigrationData);
-          setShowPreview(session.showPreview);
-          setSavedFileName(session.savedFileName || '');
-          setSaveDescription(session.saveDescription || '');
-          setPreviewCurrentPage(session.previewCurrentPage || 1);
-          setPreviewPageSize(session.previewPageSize || 10);
-          setMigrationStatus(session.migrationStatus || 'idle');
-          setMigrationProgress(session.migrationProgress || 0);
-          setMigrationResults(session.migrationResults || null);
-          
-          // Create a mock file object for display
-          if (session.fileName) {
-            const mockFile = new File([''], session.fileName, { type: 'text/plain' });
-            setUploadedFile(mockFile);
-          }
-          
-          // Show user that session was restored
-          console.log(`Session restored successfully: ${session.fileName} with ${session.allMigrationData.length} records`);
-        } else {
-          // Clear old session
-          clearCurrentSession();
-        }
-      }
-    } catch (error) {
-      console.error('Error loading current session:', error);
-      clearCurrentSession();
-    }
-  };
-
-  const clearCurrentSession = () => {
-    try {
-      localStorage.removeItem('currentMigrationSession');
-    } catch (error) {
-      console.error('Error clearing current session:', error);
-    }
-  };
 
   const downloadTemplate = (format: 'csv' | 'json' | 'xml') => {
     let content = '';
@@ -568,19 +743,23 @@ export default function UserProvisioning() {
     let mimeType = '';
 
     const sampleData = {
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john.doe@company.com',
-      username: 'jdoe',
-      role: 'User',
-      department: 'Engineering',
-      phone: '+1-555-0123'
+      UserId: '550e8400-e29b-41d4-a716-446655440000',
+      FirstName: 'John',
+      LastName: 'Doe',
+      Username: 'jdoe',
+      Email: 'john.doe@company.com',
+      PhoneNumber: '+1-555-0123',
+      Password: 'TempPassword123!',
+      IsActive: 'true',
+      Role: 'User',
+      CreatedAt: '2024-06-24T12:00:00Z',
+      UpdatedAt: '2024-06-24T12:00:00Z'
     };
 
     switch (format) {
       case 'csv':
-        content = 'firstName,lastName,email,username,role,department,phone\n';
-        content += `${sampleData.firstName},${sampleData.lastName},${sampleData.email},${sampleData.username},${sampleData.role},${sampleData.department},${sampleData.phone}`;
+        content = 'UserId,FirstName,LastName,Username,Email,PhoneNumber,Password,IsActive,Role,CreatedAt,UpdatedAt\n';
+        content += `${sampleData.UserId},${sampleData.FirstName},${sampleData.LastName},${sampleData.Username},${sampleData.Email},${sampleData.PhoneNumber},${sampleData.Password},${sampleData.IsActive},${sampleData.Role},${sampleData.CreatedAt},${sampleData.UpdatedAt}`;
         filename = 'user-import-template.csv';
         mimeType = 'text/csv';
         break;
@@ -593,13 +772,17 @@ export default function UserProvisioning() {
         content = `<?xml version="1.0" encoding="UTF-8"?>
 <users>
   <user>
-    <firstName>${sampleData.firstName}</firstName>
-    <lastName>${sampleData.lastName}</lastName>
-    <email>${sampleData.email}</email>
-    <username>${sampleData.username}</username>
-    <role>${sampleData.role}</role>
-    <department>${sampleData.department}</department>
-    <phone>${sampleData.phone}</phone>
+    <UserId>${sampleData.UserId}</UserId>
+    <FirstName>${sampleData.FirstName}</FirstName>
+    <LastName>${sampleData.LastName}</LastName>
+    <Username>${sampleData.Username}</Username>
+    <Email>${sampleData.Email}</Email>
+    <PhoneNumber>${sampleData.PhoneNumber}</PhoneNumber>
+    <Password>${sampleData.Password}</Password>
+    <IsActive>${sampleData.IsActive}</IsActive>
+    <Role>${sampleData.Role}</Role>
+    <CreatedAt>${sampleData.CreatedAt}</CreatedAt>
+    <UpdatedAt>${sampleData.UpdatedAt}</UpdatedAt>
   </user>
 </users>`;
         filename = 'user-import-template.xml';
@@ -650,19 +833,6 @@ export default function UserProvisioning() {
                 <p className="text-muted mb-0">
                   Automated user lifecycle management and access provisioning
                 </p>
-              </div>
-              <div className="text-end">
-                <button 
-                  onClick={fetchData}
-                  className="btn btn-outline-primary btn-sm d-flex align-items-center me-2"
-                  disabled={loading}
-                >
-                  <RefreshCw className={`me-2 ${loading ? 'rotating' : ''}`} size={16} />
-                  Refresh
-                </button>
-                <small className="text-muted d-block mt-1">
-                  Last updated: {lastUpdated.toLocaleTimeString()}
-                </small>
               </div>
             </div>
           </div>
@@ -717,28 +887,14 @@ export default function UserProvisioning() {
             {/* Overview Tab */}
             {activeTab === 'overview' && (
               <>
-                {/* Summary Cards */}
+                {/* Key Metrics Cards */}
                 <div className="row g-4 mb-4">
-                  <div className="col-lg-3 col-md-6">
-                    <div className="card border-0 rounded-4 shadow-sm h-100">
-                      <div className="card-body p-4 text-center">
-                        <Users className="text-primary mb-3" size={40} />
-                        <h2 className="fw-bold mb-1">{overview.summary.totalUsers}</h2>
-                        <h6 className="text-muted mb-2">Total Users</h6>
-                        <div className="d-flex align-items-center justify-content-center">
-                          {getTrendIcon(5)}
-                          <span className="small ms-1 text-success">5% growth</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="col-lg-3 col-md-6">
+                  <div className="col-lg-4 col-md-6">
                     <div className="card border-0 rounded-4 shadow-sm h-100">
                       <div className="card-body p-4 text-center">
                         <Clock className="text-warning mb-3" size={40} />
                         <h2 className="fw-bold mb-1">{overview.summary.pendingUsers}</h2>
-                        <h6 className="text-muted mb-2">Pending Users</h6>
+                        <h6 className="text-muted mb-2">Pending Requests</h6>
                         <div className="small text-warning">
                           Awaiting provisioning
                         </div>
@@ -746,24 +902,24 @@ export default function UserProvisioning() {
                     </div>
                   </div>
                   
-                  <div className="col-lg-3 col-md-6">
+                  <div className="col-lg-4 col-md-6">
                     <div className="card border-0 rounded-4 shadow-sm h-100">
                       <div className="card-body p-4 text-center">
                         <CheckCircle className="text-success mb-3" size={40} />
                         <h2 className="fw-bold mb-1">{overview.summary.recentlyProvisioned}</h2>
-                        <h6 className="text-muted mb-2">Recent Provisions</h6>
+                        <h6 className="text-muted mb-2">Recently Provisioned</h6>
                         <div className="small text-muted">Last 7 days</div>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="col-lg-3 col-md-6">
+                  <div className="col-lg-4 col-md-6">
                     <div className="card border-0 rounded-4 shadow-sm h-100">
                       <div className="card-body p-4 text-center">
                         <Target className="text-info mb-3" size={40} />
-                        <h2 className="fw-bold mb-1">{overview.summary.provisioningEfficiency}%</h2>
+                        <h2 className="fw-bold mb-1">{overview.efficiency.autoProvisioningRate}%</h2>
                         <h6 className="text-muted mb-2">Automation Rate</h6>
-                        <div className="small text-info">Efficiency score</div>
+                        <div className="small text-info">Auto-provisioning efficiency</div>
                       </div>
                     </div>
                   </div>
@@ -774,45 +930,42 @@ export default function UserProvisioning() {
                   <div className="col-lg-6">
                     <div className="card border-0 rounded-4 shadow-sm h-100">
                       <div className="card-body p-4">
-                        <div className="d-flex align-items-center mb-4">
-                          <Users className="text-primary me-3" size={24} />
-                          <h5 className="card-title fw-bold mb-0">User Metrics</h5>
+                        <div className="d-flex align-items-center justify-content-between mb-4">
+                          <div className="d-flex align-items-center">
+                            <Users className="text-primary me-3" size={24} />
+                            <h5 className="card-title fw-bold mb-0">User Overview</h5>
+                          </div>
+                          <div className="text-end">
+                            <div className="h4 fw-bold text-primary mb-0">{overview.summary.totalUsers}</div>
+                            <div className="small text-muted">Total Users</div>
+                          </div>
                         </div>
                         
                         <div className="row g-3">
                           <div className="col-6">
                             <div className="text-center p-3 bg-light rounded-3">
-                              <div className="h4 fw-bold text-primary mb-1">
+                              <div className="h5 fw-bold text-success mb-1">
                                 {overview.userMetrics.verified}
                               </div>
-                              <div className="small text-muted">Verified Users</div>
+                              <div className="small text-muted">Verified</div>
                             </div>
                           </div>
                           
                           <div className="col-6">
                             <div className="text-center p-3 bg-light rounded-3">
-                              <div className="h4 fw-bold text-success mb-1">
+                              <div className="h5 fw-bold text-info mb-1">
                                 {overview.userMetrics.accessGranted}
                               </div>
                               <div className="small text-muted">With Access</div>
                             </div>
                           </div>
                           
-                          <div className="col-6">
-                            <div className="text-center p-3 bg-light rounded-3">
-                              <div className="h4 fw-bold text-info mb-1">
+                          <div className="col-12">
+                            <div className="text-center p-3 bg-primary bg-opacity-10 rounded-3">
+                              <div className="h5 fw-bold text-primary mb-1">
                                 {overview.userMetrics.rolesAssigned}
                               </div>
                               <div className="small text-muted">Roles Assigned</div>
-                            </div>
-                          </div>
-                          
-                          <div className="col-6">
-                            <div className="text-center p-3 bg-light rounded-3">
-                              <div className="h4 fw-bold text-warning mb-1">
-                                {overview.userMetrics.pending}
-                              </div>
-                              <div className="small text-muted">Pending</div>
                             </div>
                           </div>
                         </div>
@@ -825,32 +978,25 @@ export default function UserProvisioning() {
                       <div className="card-body p-4">
                         <div className="d-flex align-items-center mb-4">
                           <TrendingUp className="text-primary me-3" size={24} />
-                          <h5 className="card-title fw-bold mb-0">Efficiency Metrics</h5>
+                          <h5 className="card-title fw-bold mb-0">Performance Metrics</h5>
                         </div>
                         
                         <div className="space-y-3">
-                          <div className="d-flex justify-content-between align-items-center py-2">
+                          <div className="d-flex justify-content-between align-items-center py-3 border-bottom">
                             <span className="fw-semibold">Avg Provisioning Time</span>
                             <span className="fw-bold text-primary">
                               {overview.efficiency.avgProvisioningTime}h
                             </span>
                           </div>
                           
-                          <div className="d-flex justify-content-between align-items-center py-2">
-                            <span className="fw-semibold">Auto-Provisioning Rate</span>
-                            <span className="fw-bold text-success">
-                              {overview.efficiency.autoProvisioningRate}%
-                            </span>
-                          </div>
-                          
-                          <div className="d-flex justify-content-between align-items-center py-2">
+                          <div className="d-flex justify-content-between align-items-center py-3 border-bottom">
                             <span className="fw-semibold">Pending Backlog</span>
                             <span className="fw-bold text-warning">
                               {overview.efficiency.pendingBacklog}
                             </span>
                           </div>
                           
-                          <div className="d-flex justify-content-between align-items-center py-2">
+                          <div className="d-flex justify-content-between align-items-center py-3">
                             <span className="fw-semibold">Weekly Throughput</span>
                             <span className="fw-bold text-info">
                               {overview.efficiency.throughput}
@@ -872,18 +1018,28 @@ export default function UserProvisioning() {
                     <div className="card-header bg-transparent border-0 p-4">
                       <div className="d-flex justify-content-between align-items-center">
                         <h5 className="fw-bold mb-0">Pending Provisioning Requests</h5>
-                        <button 
-                          onClick={handleAutoProvision}
-                          className="btn btn-primary btn-sm d-flex align-items-center"
-                        >
-                          <Zap className="me-2" size={16} />
-                          Auto-Provision Eligible
-                        </button>
+                        <div className="d-flex gap-2">
+                          <button 
+                            onClick={fetchData}
+                            className="btn btn-outline-secondary btn-sm d-flex align-items-center"
+                            disabled={loading}
+                          >
+                            <RefreshCw className={`me-2 ${loading ? 'rotating' : ''}`} size={16} />
+                            Refresh
+                          </button>
+                          <button 
+                            onClick={handleAutoProvision}
+                            className="btn btn-primary btn-sm d-flex align-items-center"
+                          >
+                            <Zap className="me-2" size={16} />
+                            Auto-Provision Eligible
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <div className="card-body p-0">
                       <div className="table-responsive">
-                        <table className="table table-hover mb-0">
+                        <table className="table mb-0">
                           <thead className="bg-light">
                             <tr>
                               <th className="border-0 px-4 py-3">User</th>
@@ -1058,428 +1214,357 @@ export default function UserProvisioning() {
                         )}
                       </div>
                       
-                      {/* Format Selection */}
-                      <div className="row g-4 mb-4">
-                        <div className="col-12">
-                          <h6 className="fw-semibold mb-3">Select Data Format</h6>
-                          <div className="row g-3">
-                            <div className="col-md-4">
-                              <div 
-                                className={`border rounded-3 p-3 text-center cursor-pointer ${uploadFormat === 'csv' ? 'border-primary bg-primary bg-opacity-10' : ''}`}
-                                onClick={() => setUploadFormat('csv')}
-                                style={{ cursor: 'pointer' }}
-                              >
-                                <FileSpreadsheet className={`mb-2 ${uploadFormat === 'csv' ? 'text-primary' : 'text-muted'}`} size={32} />
-                                <h6 className="fw-semibold mb-1">CSV Format</h6>
-                                <p className="small text-muted mb-0">Comma-separated values</p>
-                              </div>
-                            </div>
-                            <div className="col-md-4">
-                              <div 
-                                className={`border rounded-3 p-3 text-center cursor-pointer ${uploadFormat === 'json' ? 'border-primary bg-primary bg-opacity-10' : ''}`}
-                                onClick={() => setUploadFormat('json')}
-                                style={{ cursor: 'pointer' }}
-                              >
-                                <FileCode className={`mb-2 ${uploadFormat === 'json' ? 'text-primary' : 'text-muted'}`} size={32} />
-                                <h6 className="fw-semibold mb-1">JSON Format</h6>
-                                <p className="small text-muted mb-0">JavaScript Object Notation</p>
-                              </div>
-                            </div>
-                            <div className="col-md-4">
-                              <div 
-                                className={`border rounded-3 p-3 text-center cursor-pointer ${uploadFormat === 'xml' ? 'border-primary bg-primary bg-opacity-10' : ''}`}
-                                onClick={() => setUploadFormat('xml')}
-                                style={{ cursor: 'pointer' }}
-                              >
-                                <FileText className={`mb-2 ${uploadFormat === 'xml' ? 'text-primary' : 'text-muted'}`} size={32} />
-                                <h6 className="fw-semibold mb-1">XML Format</h6>
-                                <p className="small text-muted mb-0">Extensible Markup Language</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
 
-                      {/* Template Download */}
-                      <div className="row g-4 mb-4">
-                        <div className="col-12">
-                          <div className="alert alert-info">
-                            <Download className="me-2" size={16} />
-                            Download a sample template to understand the required format for your data migration.
-                          </div>
-                          <div className="d-flex gap-2 flex-wrap">
-                            <button 
-                              onClick={() => downloadTemplate('csv')}
-                              className="btn btn-outline-primary btn-sm"
-                            >
-                              <FileSpreadsheet size={16} className="me-2" />
-                              Download CSV Template
-                            </button>
-                            <button 
-                              onClick={() => downloadTemplate('json')}
-                              className="btn btn-outline-primary btn-sm"
-                            >
-                              <FileCode size={16} className="me-2" />
-                              Download JSON Template
-                            </button>
-                            <button 
-                              onClick={() => downloadTemplate('xml')}
-                              className="btn btn-outline-primary btn-sm"
-                            >
-                              <FileText size={16} className="me-2" />
-                              Download XML Template
-                            </button>
-                            <button 
-                              onClick={() => setShowSavedFiles(!showSavedFiles)}
-                              className="btn btn-outline-success btn-sm"
-                            >
-                              <Archive size={16} className="me-2" />
-                              Saved Files ({savedFiles.length})
-                            </button>
-                          </div>
-                        </div>
-                      </div>
 
-                      {/* Saved Files Section */}
-                      {showSavedFiles && (
-                        <div className="row g-4 mb-4">
-                          <div className="col-12">
-                            <div className="card border border-success">
-                              <div className="card-header bg-success bg-opacity-10">
-                                <div className="d-flex align-items-center justify-content-between">
-                                  <h6 className="fw-semibold mb-0">
-                                    <Archive className="me-2" size={16} />
-                                    Saved Migration Files
-                                  </h6>
-                                  <button 
-                                    onClick={() => setShowSavedFiles(false)}
-                                    className="btn btn-sm btn-outline-secondary"
-                                  >
-                                    <Eye size={14} />
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="card-body p-0">
-                                {savedFiles.length === 0 ? (
-                                  <div className="text-center p-4 text-muted">
-                                    <Archive size={48} className="mb-3 opacity-50" />
-                                    <p className="mb-0">No saved files yet. Upload and save files for easy reuse.</p>
-                                  </div>
-                                ) : (
-                                  <div className="table-responsive">
-                                    <table className="table table-hover mb-0">
-                                      <thead className="bg-light">
-                                        <tr>
-                                          <th className="border-0 px-4 py-3">Name</th>
-                                          <th className="border-0 px-4 py-3">Format</th>
-                                          <th className="border-0 px-4 py-3">Records</th>
-                                          <th className="border-0 px-4 py-3">Saved Date</th>
-                                          <th className="border-0 px-4 py-3">Actions</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {savedFiles.map((file) => (
-                                          <tr key={file.id}>
-                                            <td className="px-4 py-3">
-                                              <div>
-                                                <div className="fw-semibold">{file.name}</div>
-                                                {file.description && (
-                                                  <div className="small text-muted">{file.description}</div>
-                                                )}
-                                              </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                              <span className={`badge bg-primary bg-opacity-10 text-primary`}>
-                                                {file.format.toUpperCase()}
-                                              </span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                              <span className="fw-semibold">{file.recordCount}</span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                              <div className="small text-muted">
-                                                {new Date(file.uploadDate).toLocaleDateString()}
-                                              </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                              <div className="d-flex gap-1">
-                                                <button 
-                                                  onClick={() => loadSavedFile(file)}
-                                                  className="btn btn-sm btn-outline-primary"
-                                                  title="Load this file"
-                                                >
-                                                  <FolderOpen size={14} />
-                                                </button>
-                                                <button 
-                                                  onClick={() => {
-                                                    if (window.confirm(`Delete "${file.name}"?`)) {
-                                                      deleteSavedFile(file.id);
-                                                    }
-                                                  }}
-                                                  className="btn btn-sm btn-outline-danger"
-                                                  title="Delete this file"
-                                                >
-                                                  <Trash2 size={14} />
-                                                </button>
-                                              </div>
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
 
-                      {/* File Upload */}
+                      {/* Unified File Upload/Display Section */}
                       {migrationStatus === 'idle' && (
                         <div className="row g-4 mb-4">
                           <div className="col-12">
-                            <h6 className="fw-semibold mb-3">Upload Data File</h6>
-                            <div className="border border-dashed rounded-3 p-4 text-center">
-                              <Upload className="text-muted mb-3" size={48} />
-                              <h6 className="fw-semibold mb-2">
-                                Upload {uploadFormat.toUpperCase()} File
-                              </h6>
-                              <p className="text-muted mb-3">
-                                Select your {uploadFormat.toUpperCase()} file containing user data for bulk migration
-                              </p>
-                              <input
-                                type="file"
-                                accept={`.${uploadFormat}`}
-                                onChange={handleFileUpload}
-                                className="form-control d-none"
-                                id="fileUpload"
-                              />
-                              <label htmlFor="fileUpload" className="btn btn-primary">
-                                Choose {uploadFormat.toUpperCase()} File
-                              </label>
-                              {uploadedFile && (
-                                <div className="mt-3">
-                                  <p className="small text-success mb-0">
-                                    ✓ File uploaded: {uploadedFile.name}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* File Save Options */}
-                      {uploadedFile && allMigrationData.length > 0 && migrationStatus === 'idle' && (
-                        <div className="row g-4 mb-4">
-                          <div className="col-12">
-                            <div className="card border border-info">
-                              <div className="card-header bg-info bg-opacity-10">
-                                <div className="d-flex align-items-center">
-                                  <Save className="me-2" size={16} />
-                                  <h6 className="fw-semibold mb-0">Save File Options</h6>
-                                </div>
-                              </div>
-                              <div className="card-body p-4">
-                                <div className="form-check mb-3">
-                                  <input 
-                                    className="form-check-input" 
-                                    type="checkbox" 
-                                    id="saveFileCheck"
-                                    checked={saveFile}
-                                    onChange={(e) => setSaveFile(e.target.checked)}
+                            <h6 className="fw-semibold mb-3">
+                              {uploadedFiles.length > 0 ? `Uploaded Files (${uploadedFiles.length})` : 'Upload Data Files'}
+                            </h6>
+                            
+                            {uploadedFiles.length === 0 ? (
+                              /* Upload Area */
+                              <div 
+                                className={`drag-zone border border-dashed rounded-4 p-5 text-center position-relative ${
+                                  isDragging ? 'border-primary bg-primary bg-opacity-5 shadow-sm drag-active' : 'border-secondary'
+                                } ${dragError ? 'border-danger bg-danger bg-opacity-5' : ''}`}
+                                onDragEnter={handleDragEnter}
+                                onDragLeave={handleDragLeave}
+                                onDragOver={handleDragOver}
+                                onDrop={handleDrop}
+                                style={{ 
+                                  cursor: 'pointer',
+                                  minHeight: '220px',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  justifyContent: 'center',
+                                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                  borderWidth: '2px'
+                                }}
+                              >
+                                <div className="d-inline-flex align-items-center justify-content-center rounded-circle bg-secondary bg-opacity-10 mb-4" style={{ width: '80px', height: '80px' }}>
+                                  <Upload 
+                                    className={`${isDragging ? 'text-primary' : 'text-secondary'}`} 
+                                    size={32} 
                                   />
-                                  <label className="form-check-label fw-semibold" htmlFor="saveFileCheck">
-                                    Save this file for future use
-                                  </label>
-                                  <div className="small text-muted mt-1">
-                                    Saved files can be easily reloaded later without re-uploading
-                                  </div>
                                 </div>
+                                <h6 className={`fw-semibold mb-2 ${isDragging ? 'text-primary' : 'text-dark'}`}>
+                                  {isDragging 
+                                    ? 'Drop your files here' 
+                                    : 'Upload Data Files'
+                                  }
+                                </h6>
+                                <p className="text-muted mb-4 mx-3">
+                                  {isDragging 
+                                    ? 'Release to upload the files'
+                                    : 'Drag and drop multiple files here or click the button below to browse'
+                                  }
+                                </p>
+                                <input
+                                  type="file"
+                                  accept=".csv,.json,.xml,.xlsx,.xls"
+                                  onChange={handleFileUpload}
+                                  className="form-control d-none"
+                                  id="fileUploadInitial"
+                                  multiple
+                                />
+                                <button 
+                                  type="button"
+                                  className="btn btn-primary btn-lg px-4"
+                                  onClick={() => {
+                                    console.log('Button clicked - triggering file input');
+                                    const fileInput = document.getElementById('fileUploadInitial') as HTMLInputElement;
+                                    if (fileInput) {
+                                      fileInput.click();
+                                    }
+                                  }}
+                                >
+                                  <Upload className="me-2" size={18} />
+                                  Choose Files
+                                </button>
                                 
-                                {saveFile && (
-                                  <div className="row g-3">
-                                    <div className="col-md-6">
-                                      <label className="form-label fw-semibold">File Name <span className="text-danger">*</span></label>
-                                      <input
-                                        type="text"
-                                        className="form-control"
-                                        value={savedFileName}
-                                        onChange={(e) => setSavedFileName(e.target.value)}
-                                        placeholder="Enter a name for this file"
-                                        maxLength={50}
-                                      />
-                                      <div className="small text-muted mt-1">
-                                        {savedFileName.length}/50 characters
-                                      </div>
-                                    </div>
-                                    <div className="col-md-6">
-                                      <label className="form-label fw-semibold">Description (Optional)</label>
-                                      <textarea
-                                        className="form-control"
-                                        value={saveDescription}
-                                        onChange={(e) => setSaveDescription(e.target.value)}
-                                        placeholder="Optional description for this file"
-                                        rows={2}
-                                        maxLength={200}
-                                      />
-                                      <div className="small text-muted mt-1">
-                                        {saveDescription.length}/200 characters
-                                      </div>
-                                    </div>
-                                    <div className="col-12">
-                                      <button 
-                                        onClick={saveUploadedFile}
-                                        className="btn btn-info btn-sm"
-                                        disabled={!savedFileName.trim()}
-                                      >
-                                        <Save className="me-2" size={16} />
-                                        Save File ({allMigrationData.length} records)
-                                      </button>
+                                {/* Error message */}
+                                {dragError && (
+                                  <div className="mt-3">
+                                    <div className="alert alert-danger py-2 mb-0">
+                                      <AlertCircle className="me-2" size={16} />
+                                      {dragError}
                                     </div>
                                   </div>
                                 )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Preview Section */}
-                      {showPreview && allMigrationData.length > 0 && (
-                        <div className="row g-4 mb-4">
-                          <div className="col-12">
-                            <div className="card border border-primary">
-                              <div className="card-header bg-primary bg-opacity-10">
-                                <div className="d-flex align-items-center justify-content-between">
-                                  <div className="d-flex align-items-center">
-                                    <Eye className="me-2" size={16} />
-                                    <h6 className="fw-semibold mb-0">Data Preview</h6>
-                                  </div>
-                                  <div className="d-flex align-items-center gap-3">
-                                    <div className="d-flex align-items-center gap-2">
-                                      <label className="small fw-semibold mb-0">Rows per page:</label>
-                                      <select 
-                                        value={previewPageSize} 
-                                        onChange={(e) => {
-                                          setPreviewPageSize(Number(e.target.value));
-                                          setPreviewCurrentPage(1);
-                                        }}
-                                        className="form-select form-select-sm"
-                                        style={{ width: 'auto' }}
-                                      >
-                                        <option value={5}>5</option>
-                                        <option value={10}>10</option>
-                                        <option value={25}>25</option>
-                                        <option value={50}>50</option>
-                                        <option value={100}>100</option>
-                                      </select>
+                                
+                                {/* Drag overlay */}
+                                {isDragging && (
+                                  <div 
+                                    className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center rounded-4"
+                                    style={{ 
+                                      pointerEvents: 'none',
+                                      background: 'linear-gradient(135deg, rgba(13, 110, 253, 0.08) 0%, rgba(13, 110, 253, 0.12) 100%)',
+                                      border: '3px dashed var(--bs-primary)',
+                                      animation: 'pulse 2s infinite'
+                                    }}
+                                  >
+                                    <div className="text-center">
+                                      <div className="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary bg-opacity-10 mb-3" style={{ width: '80px', height: '80px' }}>
+                                        <Upload className="text-primary" size={32} />
+                                      </div>
+                                      <h5 className="text-primary fw-bold mb-1">Drop files here</h5>
+                                      <p className="text-primary mb-0 small">Release to upload multiple files</p>
                                     </div>
-                                    <button onClick={() => setShowPreview(false)} className="btn btn-sm btn-outline-secondary">
+                                  </div>
+                                )}
+                                
+                                {/* Supported formats info */}
+                                <div className="mt-3">
+                                  <small className="text-muted">
+                                    Supported formats: CSV, JSON, XML, XLSX, XLS
+                                  </small>
+                                </div>
+                              </div>
+                            ) : (
+                              /* Multiple Files Display Area */
+                              <div className="space-y-3">
+                                <div className="d-flex align-items-center justify-content-between mb-3">
+                                  <div className="d-flex align-items-center">
+                                    <Database className="me-2 text-primary" size={20} />
+                                    <span className="fw-semibold">Total Records: {allMigrationData.length}</span>
+                                  </div>
+                                  <div className="d-flex gap-2">
+                                    <button 
+                                      onClick={() => document.getElementById('fileUploadAdditional')?.click()}
+                                      className="btn btn-outline-primary btn-sm"
+                                      title="Add more files"
+                                    >
+                                      <Upload size={14} className="me-1" />
+                                      Add More
+                                    </button>
+                                    <button 
+                                      onClick={resetMigration} 
+                                      className="btn btn-outline-secondary btn-sm"
+                                      title="Remove all files"
+                                    >
                                       <Trash2 size={14} />
+                                      Remove All
                                     </button>
                                   </div>
                                 </div>
+                                
+                                {/* Files List */}
+                                {uploadedFiles.map((file, index) => {
+                                  const fileData = fileDataMap.get(file.name) || [];
+                                  const fileExtension = file.name.split('.').pop()?.toLowerCase();
+                                  
+                                  return (
+                                    <div key={index} className="card border-0 shadow-sm">
+                                      <div className="card-body p-3">
+                                        <div className="d-flex align-items-center justify-content-between">
+                                          <div className="d-flex align-items-center">
+                                            {fileExtension === 'xlsx' || fileExtension === 'xls' ? (
+                                              <FileSpreadsheet className="me-3 text-success" size={20} />
+                                            ) : fileExtension === 'json' ? (
+                                              <FileCode className="me-3 text-info" size={20} />
+                                            ) : fileExtension === 'xml' ? (
+                                              <FileText className="me-3 text-warning" size={20} />
+                                            ) : (
+                                              <FileSpreadsheet className="me-3 text-primary" size={20} />
+                                            )}
+                                            <div>
+                                              <h6 className="fw-semibold mb-0">{file.name}</h6>
+                                              <small className="text-muted">
+                                                {(file.size / 1024).toFixed(1)} KB • 
+                                                {fileExtension?.toUpperCase()} • 
+                                                {fileData.length > 0 ? `${fileData.length} records` : 'Server processing required'}
+                                              </small>
+                                            </div>
+                                          </div>
+                                          <button 
+                                            onClick={() => {
+                                              const newFiles = uploadedFiles.filter((_, i) => i !== index);
+                                              const newFileDataMap = new Map(fileDataMap);
+                                              newFileDataMap.delete(file.name);
+                                              setUploadedFiles(newFiles);
+                                              setFileDataMap(newFileDataMap);
+                                              
+                                              // Recalculate all migration data
+                                              const newAllData = Array.from(newFileDataMap.values()).flat();
+                                              setAllMigrationData(newAllData);
+                                              setShowPreview(newAllData.length > 0);
+                                            }}
+                                            className="btn btn-sm btn-outline-danger"
+                                            title="Remove this file"
+                                          >
+                                            <Trash2 size={14} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                                
+                                {/* Hidden file input for adding more files */}
+                                <input
+                                  type="file"
+                                  accept=".csv,.json,.xml,.xlsx,.xls"
+                                  onChange={handleFileUpload}
+                                  className="form-control d-none"
+                                  id="fileUploadAdditional"
+                                  multiple
+                                />
                               </div>
-                              <div className="card-body p-0">
-                                <div className="table-responsive">
-                                  <table className="table table-sm mb-0">
-                                    <thead className="bg-light">
-                                      <tr>
-                                        <th className="px-3 py-2 border-0" style={{ width: '60px' }}>#</th>
-                                        {Object.keys(allMigrationData[0] || {}).map((key) => (
-                                          <th key={key} className="px-3 py-2 border-0">
-                                            {key}
-                                          </th>
-                                        ))}
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {getPaginatedPreviewData().map((row, index) => {
-                                        const actualIndex = (previewCurrentPage - 1) * previewPageSize + index + 1;
-                                        return (
-                                          <tr key={index}>
-                                            <td className="px-3 py-2 text-muted">
-                                              {actualIndex}
-                                            </td>
-                                            {Object.values(row).map((value: any, idx) => (
-                                              <td key={idx} className="px-3 py-2">
-                                                {String(value)}
-                                              </td>
-                                            ))}
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
+                            )}
+                            
+                            {/* Migration Action Button - Show when files are uploaded */}
+                            {uploadedFiles.length > 0 && (
+                              <div className="text-center mt-4">
+                                <button 
+                                  onClick={processBulkMigration}
+                                  className="btn btn-success btn-lg px-5"
+                                  disabled={migrationStatus === 'processing'}
+                                >
+                                  <Upload className="me-2" size={18} />
+                                  Start Migration ({allMigrationData.length} records from {uploadedFiles.length} files)
+                                </button>
+                                <p className="text-muted small mt-2">
+                                  All files will be processed in sequence
+                                </p>
                               </div>
-                              <div className="card-footer bg-light">
-                                <div className="d-flex justify-content-between align-items-center">
-                                  <div className="d-flex align-items-center gap-4">
-                                    <p className="small text-muted mb-0">
-                                      Showing {getPreviewPaginationInfo().startRecord} to {getPreviewPaginationInfo().endRecord} of {getPreviewPaginationInfo().totalRecords} records
-                                    </p>
-                                    
-                                    {/* Pagination Controls */}
-                                    <div className="d-flex align-items-center gap-1">
-                                      <button
-                                        onClick={() => setPreviewCurrentPage(1)}
-                                        disabled={previewCurrentPage === 1}
-                                        className="btn btn-sm btn-outline-secondary"
-                                        title="First page"
-                                      >
-                                        <ChevronsLeft size={14} />
-                                      </button>
-                                      <button
-                                        onClick={() => setPreviewCurrentPage(previewCurrentPage - 1)}
-                                        disabled={previewCurrentPage === 1}
-                                        className="btn btn-sm btn-outline-secondary"
-                                        title="Previous page"
-                                      >
-                                        <ChevronLeft size={14} />
-                                      </button>
+                            )}
+                                
+                                {/* Combined Data Preview */}
+                                {console.log('Render check - showPreview:', showPreview, 'allMigrationData.length:', allMigrationData.length)}
+                                {showPreview && allMigrationData.length > 0 && (
+                                  <div className="mt-4">
+                                    <div className="card border-0 shadow-sm">
+                                      <div className="card-body p-4">
+                                      <div className="d-flex align-items-center justify-content-between mb-3">
+                                        <div className="d-flex align-items-center">
+                                          <Eye className="me-2 text-primary" size={20} />
+                                          <h6 className="fw-semibold mb-0">Data Preview</h6>
+                                        </div>
+                                        <div className="d-flex align-items-center gap-2">
+                                          <label className="small fw-semibold mb-0">Rows per page:</label>
+                                          <select 
+                                            value={previewPageSize} 
+                                            onChange={(e) => {
+                                              setPreviewPageSize(Number(e.target.value));
+                                              setPreviewCurrentPage(1);
+                                            }}
+                                            className="form-select form-select-sm"
+                                            style={{ width: 'auto' }}
+                                          >
+                                            <option value={5}>5</option>
+                                            <option value={10}>10</option>
+                                            <option value={25}>25</option>
+                                            <option value={50}>50</option>
+                                            <option value={100}>100</option>
+                                          </select>
+                                        </div>
+                                      </div>
                                       
-                                      <span className="small text-muted mx-2">
-                                        Page {previewCurrentPage} of {getTotalPreviewPages()}
-                                      </span>
+                                      <div className="border rounded-3 overflow-hidden mb-3">
+                                        <div className="table-responsive">
+                                          <table className="table table-sm mb-0">
+                                            <thead className="bg-light">
+                                              <tr>
+                                                <th className="px-3 py-2 border-0" style={{ width: '60px' }}>#</th>
+                                                {Object.keys(allMigrationData[0] || {}).map((key) => (
+                                                  <th key={key} className="px-3 py-2 border-0 fw-semibold">
+                                                    {key}
+                                                  </th>
+                                                ))}
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {getPaginatedPreviewData().map((row, index) => {
+                                                const actualIndex = (previewCurrentPage - 1) * previewPageSize + index + 1;
+                                                return (
+                                                  <tr key={index}>
+                                                    <td className="px-3 py-2 text-muted small">
+                                                      {actualIndex}
+                                                    </td>
+                                                    {Object.values(row).map((value: any, idx) => (
+                                                      <td key={idx} className="px-3 py-2 small">
+                                                        {String(value)}
+                                                      </td>
+                                                    ))}
+                                                  </tr>
+                                                );
+                                              })}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
                                       
-                                      <button
-                                        onClick={() => setPreviewCurrentPage(previewCurrentPage + 1)}
-                                        disabled={previewCurrentPage === getTotalPreviewPages()}
-                                        className="btn btn-sm btn-outline-secondary"
-                                        title="Next page"
-                                      >
-                                        <ChevronRight size={14} />
-                                      </button>
-                                      <button
-                                        onClick={() => setPreviewCurrentPage(getTotalPreviewPages())}
-                                        disabled={previewCurrentPage === getTotalPreviewPages()}
-                                        className="btn btn-sm btn-outline-secondary"
-                                        title="Last page"
-                                      >
-                                        <ChevronsRight size={14} />
-                                      </button>
+                                      <div className="d-flex justify-content-between align-items-center">
+                                        <div className="d-flex align-items-center gap-4">
+                                          <p className="small text-muted mb-0">
+                                            Showing {getPreviewPaginationInfo().startRecord} to {getPreviewPaginationInfo().endRecord} of {getPreviewPaginationInfo().totalRecords} records
+                                          </p>
+                                          
+                                          {/* Pagination Controls */}
+                                          <div className="d-flex align-items-center gap-1">
+                                            <button
+                                              onClick={() => setPreviewCurrentPage(1)}
+                                              disabled={previewCurrentPage === 1}
+                                              className="btn btn-sm btn-outline-secondary"
+                                              title="First page"
+                                            >
+                                              <ChevronsLeft size={14} />
+                                            </button>
+                                            <button
+                                              onClick={() => setPreviewCurrentPage(previewCurrentPage - 1)}
+                                              disabled={previewCurrentPage === 1}
+                                              className="btn btn-sm btn-outline-secondary"
+                                              title="Previous page"
+                                            >
+                                              <ChevronLeft size={14} />
+                                            </button>
+                                            
+                                            <span className="small text-muted mx-2">
+                                              Page {previewCurrentPage} of {getTotalPreviewPages()}
+                                            </span>
+                                            
+                                            <button
+                                              onClick={() => setPreviewCurrentPage(previewCurrentPage + 1)}
+                                              disabled={previewCurrentPage === getTotalPreviewPages()}
+                                              className="btn btn-sm btn-outline-secondary"
+                                              title="Next page"
+                                            >
+                                              <ChevronRight size={14} />
+                                            </button>
+                                            <button
+                                              onClick={() => setPreviewCurrentPage(getTotalPreviewPages())}
+                                              disabled={previewCurrentPage === getTotalPreviewPages()}
+                                              className="btn btn-sm btn-outline-secondary"
+                                              title="Last page"
+                                            >
+                                              <ChevronsRight size={14} />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      </div>
                                     </div>
                                   </div>
-                                  
-                                  <button 
-                                    onClick={processBulkMigration}
-                                    className="btn btn-success"
-                                    disabled={migrationStatus === 'processing'}
-                                  >
-                                    <Upload className="me-2" size={16} />
-                                    Start Migration ({allMigrationData.length} records)
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
+                                )}
                           </div>
                         </div>
                       )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
-                      {/* Migration Progress */}
+      {/* Migration Progress - Outside of tabs */}
+      {activeTab === 'bulk' && (
+        <div className="container-fluid py-0">
                       {migrationStatus === 'processing' && (
                         <div className="row g-4 mb-4">
                           <div className="col-12">
@@ -1495,9 +1580,49 @@ export default function UserProvisioning() {
                                     style={{ width: `${migrationProgress}%` }}
                                   ></div>
                                 </div>
-                                <p className="small text-muted mb-0">
-                                  Processing user data... {Math.round(migrationProgress)}% complete
-                                </p>
+                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                  <p className="small text-muted mb-0">
+                                    {progressDetails?.currentOperation || 'Processing user data...'} {Math.round(migrationProgress)}% complete
+                                  </p>
+                                  {progressDetails && (
+                                    <small className="text-muted">
+                                      {progressDetails.processedRecords}/{progressDetails.totalRecords} records
+                                    </small>
+                                  )}
+                                </div>
+                                {progressDetails && (
+                                  <div className="row g-3 mt-2">
+                                    <div className="col-md-3">
+                                      <div className="text-center">
+                                        <div className="h6 mb-1">{progressDetails.processedRecords}</div>
+                                        <small className="text-muted">Processed</small>
+                                      </div>
+                                    </div>
+                                    <div className="col-md-3">
+                                      <div className="text-center">
+                                        <div className="h6 mb-1">{progressDetails.totalRecords}</div>
+                                        <small className="text-muted">Total</small>
+                                      </div>
+                                    </div>
+                                    <div className="col-md-3">
+                                      <div className="text-center">
+                                        <div className="h6 mb-1">{progressDetails.processedFiles}</div>
+                                        <small className="text-muted">Files Done</small>
+                                      </div>
+                                    </div>
+                                    <div className="col-md-3">
+                                      <div className="text-center">
+                                        <div className="h6 mb-1">{progressDetails.totalFiles}</div>
+                                        <small className="text-muted">Total Files</small>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                                {currentJobId && (
+                                  <div className="mt-3">
+                                    <small className="text-muted">Job ID: {currentJobId}</small>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1516,6 +1641,16 @@ export default function UserProvisioning() {
                                 </h6>
                               </div>
                               <div className="card-body p-4">
+                                {/* File Processing Summary */}
+                                <div className="d-flex align-items-center justify-content-center mb-4">
+                                  <div className="text-center">
+                                    <h5 className="fw-bold text-primary mb-1">
+                                      {migrationResults.processedFiles || 0} / {migrationResults.totalFiles || 0}
+                                    </h5>
+                                    <p className="small text-muted mb-0">Files Processed</p>
+                                  </div>
+                                </div>
+                                
                                 <div className="row g-3 mb-3">
                                   <div className="col-md-6">
                                     <div className="text-center p-3 bg-success bg-opacity-10 rounded-3">
@@ -1564,14 +1699,8 @@ export default function UserProvisioning() {
                           </div>
                         </div>
                       )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+        </div>
+      )}
 
       <style>{`
         .rotating {
@@ -1583,8 +1712,81 @@ export default function UserProvisioning() {
           to { transform: rotate(360deg); }
         }
         
+        @keyframes pulse {
+          0%, 100% { 
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% { 
+            opacity: 0.8;
+            transform: scale(1.02);
+          }
+        }
+        
+        @keyframes dragEnter {
+          0% { 
+            transform: scale(1);
+            border-width: 2px;
+          }
+          100% { 
+            transform: scale(1.01);
+            border-width: 3px;
+          }
+        }
+        
+        .drag-active {
+          animation: dragEnter 0.2s ease-out forwards;
+        }
+        
         .space-y-3 > * + * {
           margin-top: 0.75rem;
+        }
+        
+        /* Disable default browser drag image */
+        * {
+          -webkit-user-drag: none;
+          -khtml-user-drag: none;
+          -moz-user-drag: none;
+          -o-user-drag: none;
+          user-drag: none;
+        }
+        
+        /* Enhanced drag zone styles */
+        .drag-zone {
+          position: relative;
+          overflow: hidden;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .drag-zone:hover {
+          border-color: var(--bs-primary) !important;
+          background-color: rgba(13, 110, 253, 0.02) !important;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 20px rgba(13, 110, 253, 0.15) !important;
+        }
+        
+        .drag-zone::before {
+          content: '';
+          position: absolute;
+          top: -2px;
+          left: -2px;
+          right: -2px;
+          bottom: -2px;
+          background: linear-gradient(45deg, transparent 30%, rgba(13, 110, 253, 0.1) 50%, transparent 70%);
+          opacity: 0;
+          transition: opacity 0.3s ease;
+          pointer-events: none;
+          border-radius: inherit;
+        }
+        
+        .drag-zone.drag-active::before {
+          opacity: 1;
+          animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
         }
       `}</style>
     </div>

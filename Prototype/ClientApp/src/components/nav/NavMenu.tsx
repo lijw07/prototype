@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink as RouterLink, useLocation } from 'react-router-dom';
-import { Home, Users, Database, Shield, Activity, FileText, Key, Monitor, Briefcase, UserPlus, Award } from 'lucide-react';
+import { Home, Users, Database, Shield, Activity, FileText, Key, Monitor, Briefcase, UserPlus, Award, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import './NavMenu.css';
 
@@ -14,8 +14,9 @@ const navItems: NavItem[] = [
   { path: '/dashboard', label: 'Dashboard', icon: Home },
   { path: '/security-dashboard', label: 'Security Dashboard', icon: Shield },
   { path: '/system-health', label: 'System Health', icon: Monitor },
-  { path: '/executive-dashboard', label: 'Executive Dashboard', icon: Briefcase },
+  { path: '/analytics-overview', label: 'Analytics Overview', icon: Briefcase },
   { path: '/user-provisioning', label: 'User Provisioning', icon: UserPlus },
+  { path: '/user-requests', label: 'User Requests', icon: Settings },
   { path: '/compliance', label: 'Compliance', icon: Award },
   { path: '/accounts', label: 'Accounts', icon: Users },
   { path: '/applications', label: 'Applications', icon: Database },

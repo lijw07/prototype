@@ -138,8 +138,8 @@ namespace Prototype.Services.BulkUpload.Mappers
                 };
 
                 _context.UserApplications.Add(userApplication);
-                await _context.SaveChangesAsync();
-
+                // Note: SaveChanges will be called by the service after all rows are processed
+                
                 return Result<bool>.Success(true);
             }
             catch (Exception ex)

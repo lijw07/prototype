@@ -62,7 +62,7 @@ var dbName = Environment.GetEnvironmentVariable("DB_NAME") ?? "PrototypeDb";
 var dbUser = Environment.GetEnvironmentVariable("DB_USER") ?? "sa";
 var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "YourStrong!Passw0rd";
 
-var connectionString = $"Server={dbHost},{dbPort};Database={dbName};User={dbUser};Password={dbPassword};TrustServerCertificate=True;MultipleActiveResultSets=True";
+var connectionString = $"Server={dbHost},{dbPort};Database={dbName};User={dbUser};Password={dbPassword};TrustServerCertificate=True;MultipleActiveResultSets=False;Connection Timeout=60";
 
 builder.Services.AddDbContext<SentinelContext>(options =>
     options.UseSqlServer(connectionString));
@@ -92,8 +92,8 @@ builder.Services.AddScoped<DatabaseSeeder>();
 // Register Bulk Upload Services
 builder.Services.AddScoped<IBulkUploadService, BulkUploadService>();
 builder.Services.AddScoped<ITableDetectionService, TableDetectionService>();
-builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<ITableMappingService, TableMappingService>();
+builder.Services.AddScoped<IProgressService, ProgressService>();
 
 // Register Table Mappers
 builder.Services.AddScoped<UserTableMapper>();
@@ -106,6 +106,9 @@ builder.Services.AddHttpContextAccessor();
 
 // Add Memory Cache
 builder.Services.AddMemoryCache();
+
+// Add SignalR
+builder.Services.AddSignalR();
 
 // SQL Server connection strategies are now self-contained in SqlServerDatabaseStrategy
 
@@ -282,7 +285,11 @@ if (app.Environment.IsDevelopment())
     app.Use(async (context, next) =>
     {
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-        logger.LogInformation("Request: {Method} {Path}", context.Request.Method, context.Request.Path);
+        // Skip logging for webpack dev server WebSocket requests
+        if (!context.Request.Path.StartsWithSegments("/ws"))
+        {
+            logger.LogInformation("Request: {Method} {Path}", context.Request.Method, context.Request.Path);
+        }
         await next();
     });
 }
@@ -311,5 +318,8 @@ app.MapGet("/health", () => Results.Ok("Healthy!"));
 app.MapGet("/test-bulk", () => Results.Ok("Bulk upload route test working!"));
 
 app.MapControllers();
+
+// Map SignalR Hub
+app.MapHub<Prototype.Hubs.ProgressHub>("/progressHub");
 
 app.Run();

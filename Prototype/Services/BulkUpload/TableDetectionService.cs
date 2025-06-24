@@ -31,17 +31,24 @@ namespace Prototype.Services.BulkUpload
                 var headers = ExtractHeaders(fileData, fileExtension);
                 if (headers == null || !headers.Any())
                 {
+                    _logger.LogWarning("No headers found in file with extension: {Extension}", fileExtension);
                     return null;
                 }
 
+                _logger.LogInformation("Extracted headers: {Headers}", string.Join(", ", headers));
+
                 var normalizedHeaders = headers.Select(h => NormalizeColumnName(h)).ToList();
+                _logger.LogInformation("Normalized headers: {Headers}", string.Join(", ", normalizedHeaders));
+                
                 DetectedTableInfo? bestMatch = null;
                 double highestScore = 0;
 
                 foreach (var supportedTable in _supportedTables)
                 {
                     var score = CalculateMatchScore(normalizedHeaders, supportedTable.Value);
-                    if (score > highestScore && score >= 0.6) // 60% threshold
+                    _logger.LogInformation("Table {TableName} score: {Score}", supportedTable.Key, score);
+                    
+                    if (score > highestScore && score >= 0.3) // 30% threshold for debugging
                     {
                         highestScore = score;
                         bestMatch = new DetectedTableInfo
@@ -54,6 +61,7 @@ namespace Prototype.Services.BulkUpload
                     }
                 }
 
+                _logger.LogInformation("Best match: {TableType} with score: {Score}", bestMatch?.TableType ?? "None", highestScore);
                 return bestMatch;
             }
             catch (Exception ex)
@@ -83,18 +91,23 @@ namespace Prototype.Services.BulkUpload
                     DisplayName = "Users",
                     Description = "User accounts for the system",
                     SupportsUpdate = true,
-                    PrimaryKeyColumn = "Username",
-                    RequiredColumns = new List<string> { "Username", "Email", "FirstName", "LastName" },
+                    PrimaryKeyColumn = "UserId",
+                    RequiredColumns = new List<string> { "FirstName", "LastName", "Email" },
                     Columns = new List<TableColumnInfo>
                     {
-                        new() { ColumnName = "Username", DataType = "string", IsRequired = true, IsUnique = true, MaxLength = 50 },
-                        new() { ColumnName = "Email", DataType = "string", IsRequired = true, IsUnique = true, MaxLength = 100 },
+                        new() { ColumnName = "UserId", DataType = "guid", IsRequired = false, IsUnique = true, Description = "Auto-generated if not provided" },
                         new() { ColumnName = "FirstName", DataType = "string", IsRequired = true, MaxLength = 50 },
                         new() { ColumnName = "LastName", DataType = "string", IsRequired = true, MaxLength = 50 },
-                        new() { ColumnName = "PhoneNumber", DataType = "string", IsRequired = false, MaxLength = 20 },
-                        new() { ColumnName = "Role", DataType = "string", IsRequired = false, DefaultValue = "User", AllowedValues = new List<string> { "Admin", "User", "ReadOnly" } },
+                        new() { ColumnName = "Username", DataType = "string", IsRequired = true, IsUnique = true, MaxLength = 100 },
+                        new() { ColumnName = "PasswordHash", DataType = "string", IsRequired = false, MaxLength = 255, Description = "System managed - use Password field instead" },
+                        new() { ColumnName = "Password", DataType = "string", IsRequired = true, MaxLength = 255, Description = "Plain text password (will be hashed into PasswordHash)" },
+                        new() { ColumnName = "Email", DataType = "string", IsRequired = true, IsUnique = true, MaxLength = 255 },
+                        new() { ColumnName = "PhoneNumber", DataType = "string", IsRequired = true, MaxLength = 20 },
                         new() { ColumnName = "IsActive", DataType = "boolean", IsRequired = false, DefaultValue = "true" },
-                        new() { ColumnName = "Department", DataType = "string", IsRequired = false, MaxLength = 100 }
+                        new() { ColumnName = "Role", DataType = "string", IsRequired = false, DefaultValue = "User", MaxLength = 50 },
+                        new() { ColumnName = "LastLogin", DataType = "datetime", IsRequired = false, Description = "System managed" },
+                        new() { ColumnName = "CreatedAt", DataType = "datetime", IsRequired = false, Description = "Auto-generated if not provided" },
+                        new() { ColumnName = "UpdatedAt", DataType = "datetime", IsRequired = false, Description = "Auto-generated if not provided" }
                     }
                 },
                 ["Applications"] = new SupportedTableInfo
@@ -103,51 +116,55 @@ namespace Prototype.Services.BulkUpload
                     DisplayName = "Applications",
                     Description = "Applications managed by the system",
                     SupportsUpdate = true,
-                    PrimaryKeyColumn = "ApplicationName",
-                    RequiredColumns = new List<string> { "ApplicationName", "ApplicationDescription" },
+                    PrimaryKeyColumn = "ApplicationId",
+                    RequiredColumns = new List<string> { "ApplicationName", "ApplicationDataSourceType" },
                     Columns = new List<TableColumnInfo>
                     {
+                        new() { ColumnName = "ApplicationId", DataType = "guid", IsRequired = false, IsUnique = true, Description = "Auto-generated if not provided" },
                         new() { ColumnName = "ApplicationName", DataType = "string", IsRequired = true, IsUnique = true, MaxLength = 100 },
-                        new() { ColumnName = "ApplicationDescription", DataType = "string", IsRequired = true, MaxLength = 500 },
-                        new() { ColumnName = "ApplicationDataSourceType", DataType = "string", IsRequired = false, DefaultValue = "Database", AllowedValues = new List<string> { "Database", "API", "File", "Cloud" } },
-                        new() { ColumnName = "IsActive", DataType = "boolean", IsRequired = false, DefaultValue = "true" },
-                        new() { ColumnName = "Owner", DataType = "string", IsRequired = false, MaxLength = 100 },
-                        new() { ColumnName = "Category", DataType = "string", IsRequired = false, MaxLength = 50 }
+                        new() { ColumnName = "ApplicationDescription", DataType = "string", IsRequired = false, MaxLength = 500 },
+                        new() { ColumnName = "ApplicationDataSourceType", DataType = "enum", IsRequired = true, Description = "Data source type enum value", AllowedValues = new List<string> { "MicrosoftSqlServer", "MySql", "PostgreSql", "MongoDb", "Redis", "Oracle", "MariaDb", "Sqlite", "Cassandra", "ElasticSearch", "RestApi", "GraphQL", "SoapApi", "ODataApi", "WebSocket", "CsvFile", "JsonFile", "XmlFile", "ExcelFile", "ParquetFile", "YamlFile", "TextFile", "AzureBlobStorage", "AmazonS3", "GoogleCloudStorage", "RabbitMQ", "ApacheKafka", "AzureServiceBus" } },
+                        new() { ColumnName = "CreatedAt", DataType = "datetime", IsRequired = false, Description = "Auto-generated if not provided" },
+                        new() { ColumnName = "UpdatedAt", DataType = "datetime", IsRequired = false, Description = "Auto-generated if not provided" }
                     }
                 },
                 ["UserApplications"] = new SupportedTableInfo
                 {
                     TableName = "UserApplications",
                     DisplayName = "User Application Assignments",
-                    Description = "Assigns users to applications with specific permissions",
+                    Description = "Assigns users to applications with specific connections",
                     SupportsUpdate = false,
-                    PrimaryKeyColumn = "",
-                    RequiredColumns = new List<string> { "Username", "ApplicationName" },
+                    PrimaryKeyColumn = "UserApplicationId",
+                    RequiredColumns = new List<string> { "UserId", "ApplicationId", "ApplicationConnectionId" },
                     Columns = new List<TableColumnInfo>
                     {
-                        new() { ColumnName = "Username", DataType = "string", IsRequired = true, MaxLength = 50 },
-                        new() { ColumnName = "ApplicationName", DataType = "string", IsRequired = true, MaxLength = 100 },
-                        new() { ColumnName = "PermissionLevel", DataType = "string", IsRequired = false, DefaultValue = "Read", AllowedValues = new List<string> { "Read", "Write", "Admin" } },
-                        new() { ColumnName = "ExpirationDate", DataType = "datetime", IsRequired = false },
-                        new() { ColumnName = "Notes", DataType = "string", IsRequired = false, MaxLength = 500 }
+                        new() { ColumnName = "UserApplicationId", DataType = "guid", IsRequired = false, IsUnique = true, Description = "Auto-generated if not provided" },
+                        new() { ColumnName = "UserId", DataType = "guid", IsRequired = true, Description = "User ID (GUID)" },
+                        new() { ColumnName = "ApplicationId", DataType = "guid", IsRequired = true, Description = "Application ID (GUID)" },
+                        new() { ColumnName = "ApplicationConnectionId", DataType = "guid", IsRequired = true, Description = "Application Connection ID (GUID)" },
+                        new() { ColumnName = "CreatedAt", DataType = "datetime", IsRequired = false, Description = "Auto-generated if not provided" }
                     }
                 },
                 ["TemporaryUsers"] = new SupportedTableInfo
                 {
                     TableName = "TemporaryUsers",
                     DisplayName = "Temporary Users",
-                    Description = "Temporary users pending approval",
+                    Description = "Temporary users pending verification",
                     SupportsUpdate = true,
-                    PrimaryKeyColumn = "Email",
+                    PrimaryKeyColumn = "TemporaryUserId",
                     RequiredColumns = new List<string> { "FirstName", "LastName", "Email" },
                     Columns = new List<TableColumnInfo>
                     {
-                        new() { ColumnName = "FirstName", DataType = "string", IsRequired = true, MaxLength = 50 },
-                        new() { ColumnName = "LastName", DataType = "string", IsRequired = true, MaxLength = 50 },
-                        new() { ColumnName = "Email", DataType = "string", IsRequired = true, IsUnique = true, MaxLength = 100 },
-                        new() { ColumnName = "RequestedApplications", DataType = "string", IsRequired = false, MaxLength = 500, Description = "Comma-separated application names" },
-                        new() { ColumnName = "Justification", DataType = "string", IsRequired = false, MaxLength = 1000 },
-                        new() { ColumnName = "RequestedBy", DataType = "string", IsRequired = false, MaxLength = 50 }
+                        new() { ColumnName = "TemporaryUserId", DataType = "guid", IsRequired = false, IsUnique = true, Description = "Auto-generated if not provided" },
+                        new() { ColumnName = "FirstName", DataType = "string", IsRequired = true, MaxLength = 255 },
+                        new() { ColumnName = "LastName", DataType = "string", IsRequired = true, MaxLength = 255 },
+                        new() { ColumnName = "Email", DataType = "string", IsRequired = true, IsUnique = true, MaxLength = 255 },
+                        new() { ColumnName = "Username", DataType = "string", IsRequired = true, IsUnique = true, MaxLength = 255 },
+                        new() { ColumnName = "PasswordHash", DataType = "string", IsRequired = false, MaxLength = 255, Description = "System managed - use Password field instead" },
+                        new() { ColumnName = "Password", DataType = "string", IsRequired = true, MaxLength = 255, Description = "Plain text password (will be hashed into PasswordHash)" },
+                        new() { ColumnName = "PhoneNumber", DataType = "string", IsRequired = true, MaxLength = 255 },
+                        new() { ColumnName = "CreatedAt", DataType = "datetime", IsRequired = false, Description = "Auto-generated if not provided" },
+                        new() { ColumnName = "Token", DataType = "string", IsRequired = false, MaxLength = 255, Description = "System managed verification token" }
                     }
                 }
             };
@@ -158,6 +175,8 @@ namespace Prototype.Services.BulkUpload
             return fileExtension.ToLower() switch
             {
                 ".csv" => ExtractCsvHeaders(fileData),
+                ".json" => ExtractJsonHeaders(fileData),
+                ".xml" => ExtractXmlHeaders(fileData),
                 ".xlsx" or ".xls" => ExtractExcelHeaders(fileData),
                 _ => null
             };
@@ -198,10 +217,67 @@ namespace Prototype.Services.BulkUpload
             return headers;
         }
 
+        private List<string> ExtractJsonHeaders(byte[] fileData)
+        {
+            try
+            {
+                var json = Encoding.UTF8.GetString(fileData);
+                var jsonDoc = System.Text.Json.JsonDocument.Parse(json);
+                
+                if (jsonDoc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array && 
+                    jsonDoc.RootElement.GetArrayLength() > 0)
+                {
+                    var firstElement = jsonDoc.RootElement[0];
+                    if (firstElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    {
+                        return firstElement.EnumerateObject()
+                            .Select(prop => prop.Name)
+                            .ToList();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error extracting JSON headers");
+            }
+            
+            return new List<string>();
+        }
+
+        private List<string> ExtractXmlHeaders(byte[] fileData)
+        {
+            try
+            {
+                var xml = Encoding.UTF8.GetString(fileData);
+                var doc = System.Xml.Linq.XDocument.Parse(xml);
+                
+                var root = doc.Root;
+                if (root != null && root.Elements().Any())
+                {
+                    var firstElement = root.Elements().First();
+                    return firstElement.Elements()
+                        .Select(e => e.Name.LocalName)
+                        .Distinct()
+                        .ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error extracting XML headers");
+            }
+            
+            return new List<string>();
+        }
+
         private double CalculateMatchScore(List<string> fileHeaders, SupportedTableInfo tableInfo)
         {
             var tableColumns = tableInfo.Columns.Select(c => NormalizeColumnName(c.ColumnName)).ToList();
             var requiredColumns = tableInfo.RequiredColumns.Select(c => NormalizeColumnName(c)).ToList();
+
+            _logger.LogInformation("Calculating score for table {TableName}", tableInfo.TableName);
+            _logger.LogInformation("File headers: {FileHeaders}", string.Join(", ", fileHeaders));
+            _logger.LogInformation("Table columns: {TableColumns}", string.Join(", ", tableColumns));
+            _logger.LogInformation("Required columns: {RequiredColumns}", string.Join(", ", requiredColumns));
 
             int matchedColumns = 0;
             int matchedRequired = 0;
@@ -211,29 +287,40 @@ namespace Prototype.Services.BulkUpload
                 if (tableColumns.Contains(header))
                 {
                     matchedColumns++;
+                    _logger.LogInformation("Matched column: {Header}", header);
                     if (requiredColumns.Contains(header))
                     {
                         matchedRequired++;
+                        _logger.LogInformation("Matched required column: {Header}", header);
                     }
                 }
             }
 
-            // Must have all required columns
+            _logger.LogInformation("Matched {MatchedColumns}/{TotalColumns} columns, {MatchedRequired}/{TotalRequired} required", 
+                matchedColumns, tableColumns.Count, matchedRequired, requiredColumns.Count);
+
+            // Calculate base score based on matched columns
+            double score = matchedColumns > 0 ? (double)matchedColumns / tableColumns.Count : 0;
+            
+            // Apply penalty if missing required columns (but don't make it 0)
             if (matchedRequired < requiredColumns.Count)
             {
-                return 0;
+                double requiredRatio = (double)matchedRequired / requiredColumns.Count;
+                score *= requiredRatio; // Reduce score proportionally
+                _logger.LogInformation("Applied required column penalty: {RequiredRatio}", requiredRatio);
             }
-
-            // Calculate score based on matched columns
-            double score = (double)matchedColumns / tableColumns.Count;
             
             // Bonus for having exact number of columns
             if (fileHeaders.Count == tableColumns.Count)
             {
                 score += 0.1;
+                _logger.LogInformation("Applied exact column count bonus");
             }
 
-            return Math.Min(score, 1.0);
+            var finalScore = Math.Min(score, 1.0);
+            _logger.LogInformation("Final score for {TableName}: {Score}", tableInfo.TableName, finalScore);
+            
+            return finalScore;
         }
 
         private Dictionary<string, string> CreateColumnMappings(List<string> fileHeaders, SupportedTableInfo tableInfo)

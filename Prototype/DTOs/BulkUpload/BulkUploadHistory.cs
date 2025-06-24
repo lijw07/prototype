@@ -11,7 +11,5 @@ namespace Prototype.DTOs.BulkUpload
         public DateTime UploadedAt { get; set; }
         public string UploadedBy { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
-        public bool HasSavedFile { get; set; }
-        public Guid? SavedFileId { get; set; }
     }
 }

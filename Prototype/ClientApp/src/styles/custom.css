@@ -47,18 +47,12 @@ body {
 
 /* Enhanced Card Styles */
 .card {
-  transition: var(--transition);
   border: 1px solid var(--gray-200);
-}
-
-.card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Disable hover effect for login cards */
-.login-card,
-.login-card:hover {
+.login-card {
   transform: none !important;
 }
 
@@ -70,9 +64,10 @@ body {
 .btn {
   font-weight: 600;
   border-radius: var(--border-radius-lg);
-  transition: var(--transition);
   border: none;
   padding: 0.75rem 1.5rem;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition);
 }
 
 .btn:hover {
@@ -87,6 +82,7 @@ body {
 .btn-primary:hover {
   background: linear-gradient(135deg, var(--primary-dark) 0%, #084298 100%);
 }
+
 
 .btn-success {
   background: linear-gradient(135deg, var(--success-color) 0%, #146c43 100%);
@@ -113,7 +109,6 @@ body {
 .form-control:focus {
   border-color: var(--primary-color);
   box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
-  transform: scale(1.02);
 }
 
 .form-select {
@@ -135,10 +130,6 @@ body {
   padding: 0.75rem 1.5rem;
 }
 
-.nav-pills .nav-link:hover {
-  background-color: var(--gray-100);
-  transform: translateY(-1px);
-}
 
 .nav-pills .nav-link.active {
   background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
@@ -163,12 +154,11 @@ body {
 }
 
 .table tbody tr {
-  transition: var(--transition);
+  border-bottom: 1px solid var(--gray-200);
 }
 
-.table tbody tr:hover {
-  background-color: var(--gray-100);
-  transform: scale(1.01);
+.table tbody tr:nth-child(even) {
+  background-color: rgba(248, 249, 250, 0.5);
 }
 
 /* Badge Enhancements */
@@ -307,15 +297,10 @@ header, .navbar, nav {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Dashboard Card Hover Effects */
+/* Dashboard Card Static Effects */
 .dashboard-card {
-  transition: var(--transition);
-  cursor: pointer;
-}
-
-.dashboard-card:hover {
-  transform: translateY(-5px) scale(1.02);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--gray-200);
 }
 
 /* Icon Enhancements */
@@ -404,9 +389,6 @@ header, .navbar, nav {
   border-radius: var(--border-radius);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--gray-500);
-}
 
 
 /* Compact user cards */

@@ -94,7 +94,7 @@ namespace Prototype.Services.BulkUpload.Mappers
             return result;
         }
 
-        public async Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId)
+        public Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId)
         {
             try
             {
@@ -112,14 +112,14 @@ namespace Prototype.Services.BulkUpload.Mappers
                 };
 
                 _context.TemporaryUsers.Add(tempUser);
-                await _context.SaveChangesAsync();
-
-                return Result<bool>.Success(true);
+                // Note: SaveChanges will be called by the service after all rows are processed
+                
+                return Task.FromResult(Result<bool>.Success(true));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error saving temporary user row");
-                return Result<bool>.Failure($"Error saving temporary user: {ex.Message}");
+                return Task.FromResult(Result<bool>.Failure($"Error saving temporary user: {ex.Message}"));
             }
         }
 

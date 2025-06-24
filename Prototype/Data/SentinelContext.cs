@@ -19,8 +19,8 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
     public DbSet<UserModel> Users { get; set; }
     public DbSet<UserRoleModel> UserRoles { get; set; }
     public DbSet<UserRecoveryRequestModel> UserRecoveryRequests { get; set; }
+    public DbSet<UserRequestModel> UserRequests { get; set; }
     public DbSet<BulkUploadHistoryModel> BulkUploadHistories { get; set; }
-    public DbSet<UploadedFileModel> UploadedFiles { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -116,6 +116,30 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
         modelBuilder.Entity<UserRecoveryRequestModel>()
             .Property(urr => urr.IsUsed)
             .HasDefaultValue(false);
+
+        #endregion
+        
+        #region UserRequestModel
+
+        modelBuilder.Entity<UserRequestModel>()
+            .Property(ur => ur.Status)
+            .HasConversion(
+                urs => urs.ToString(),
+                urs => (UserRequestStatusEnum)System.Enum.Parse(typeof(UserRequestStatusEnum), urs)
+            );
+
+        modelBuilder.Entity<UserRequestModel>()
+            .Property(ur => ur.Priority)
+            .HasConversion(
+                urp => urp.ToString(),
+                urp => (RequestPriorityEnum)System.Enum.Parse(typeof(RequestPriorityEnum), urp)
+            );
+
+        modelBuilder.Entity<UserRequestModel>()
+            .HasOne(ur => ur.User)
+            .WithMany()
+            .HasForeignKey(ur => ur.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         #endregion
     }

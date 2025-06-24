@@ -5,7 +5,6 @@ using Prototype.Data;
 using Prototype.DTOs.BulkUpload;
 using Prototype.Helpers;
 using Prototype.Models;
-using Prototype.Services;
 
 namespace Prototype.Services.BulkUpload.Mappers
 {
@@ -60,7 +59,7 @@ namespace Prototype.Services.BulkUpload.Mappers
                     result.Errors.Add($"Row {rowNumber}: Username cannot exceed 50 characters");
 
                 if (!string.IsNullOrWhiteSpace(role) && !IsValidRole(role))
-                    result.Errors.Add($"Row {rowNumber}: Invalid role. Must be Admin, User, or ReadOnly");
+                    result.Errors.Add($"Row {rowNumber}: Invalid role. Must be Admin, User, or PlatformAdmin");
 
                 // Check for duplicates
                 if (!string.IsNullOrWhiteSpace(username))
@@ -91,7 +90,7 @@ namespace Prototype.Services.BulkUpload.Mappers
             return result;
         }
 
-        public async Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId)
+        public Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId)
         {
             try
             {
@@ -115,14 +114,14 @@ namespace Prototype.Services.BulkUpload.Mappers
                 };
 
                 _context.Users.Add(user);
-                await _context.SaveChangesAsync();
-
-                return Result<bool>.Success(true);
+                // Note: SaveChanges will be called by the service after all rows are processed
+                
+                return Task.FromResult(Result<bool>.Success(true));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error saving user row");
-                return Result<bool>.Failure($"Error saving user: {ex.Message}");
+                return Task.FromResult(Result<bool>.Failure($"Error saving user: {ex.Message}"));
             }
         }
 
@@ -135,7 +134,7 @@ namespace Prototype.Services.BulkUpload.Mappers
                 new() { ColumnName = "FirstName", DataType = "string", IsRequired = true, MaxLength = 50, Description = "User's first name" },
                 new() { ColumnName = "LastName", DataType = "string", IsRequired = true, MaxLength = 50, Description = "User's last name" },
                 new() { ColumnName = "PhoneNumber", DataType = "string", IsRequired = false, MaxLength = 20, Description = "User's phone number" },
-                new() { ColumnName = "Role", DataType = "string", IsRequired = false, DefaultValue = "User", Description = "User role: Admin, User, or ReadOnly" },
+                new() { ColumnName = "Role", DataType = "string", IsRequired = false, DefaultValue = "User", Description = "User role: Admin, User, or PlatformAdmin" },
                 new() { ColumnName = "IsActive", DataType = "boolean", IsRequired = false, DefaultValue = "true", Description = "Whether the user is active" },
                 new() { ColumnName = "Department", DataType = "string", IsRequired = false, MaxLength = 100, Description = "User's department" }
             };
@@ -200,7 +199,7 @@ namespace Prototype.Services.BulkUpload.Mappers
 
         private bool IsValidRole(string role)
         {
-            var validRoles = new[] { "Admin", "User", "ReadOnly" };
+            var validRoles = new[] { "Admin", "User", "PlatformAdmin" };
             return validRoles.Contains(role, StringComparer.OrdinalIgnoreCase);
         }
 

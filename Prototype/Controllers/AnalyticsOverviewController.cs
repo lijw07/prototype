@@ -8,18 +8,18 @@ using Prototype.Utility;
 namespace Prototype.Controllers;
 
 [Authorize]
-[Route("api/executive-dashboard")]
+[Route("api/analytics-overview")]
 [ApiController]
-public class ExecutiveDashboardController : ControllerBase
+public class AnalyticsOverviewController : ControllerBase
 {
     private readonly SentinelContext _context;
     private readonly IAuthenticatedUserAccessor _userAccessor;
-    private readonly ILogger<ExecutiveDashboardController> _logger;
+    private readonly ILogger<AnalyticsOverviewController> _logger;
 
-    public ExecutiveDashboardController(
+    public AnalyticsOverviewController(
         SentinelContext context,
         IAuthenticatedUserAccessor userAccessor,
-        ILogger<ExecutiveDashboardController> logger)
+        ILogger<AnalyticsOverviewController> logger)
     {
         _context = context;
         _userAccessor = userAccessor;
@@ -27,7 +27,7 @@ public class ExecutiveDashboardController : ControllerBase
     }
 
     [HttpGet("overview")]
-    public async Task<IActionResult> GetExecutiveOverview()
+    public async Task<IActionResult> GetOverview()
     {
         try
         {
@@ -35,13 +35,13 @@ public class ExecutiveDashboardController : ControllerBase
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
-            var executiveData = await CollectExecutiveMetrics();
+            var analyticsData = await CollectAnalyticsMetrics();
             
-            return Ok(new { success = true, data = executiveData });
+            return Ok(new { success = true, data = analyticsData });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving executive overview");
+            _logger.LogError(ex, "Error retrieving analytics overview");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -86,7 +86,7 @@ public class ExecutiveDashboardController : ControllerBase
         }
     }
 
-    private async Task<object> CollectExecutiveMetrics()
+    private async Task<object> CollectAnalyticsMetrics()
     {
         var now = DateTime.UtcNow;
         var last30Days = now.AddDays(-30);
@@ -95,7 +95,7 @@ public class ExecutiveDashboardController : ControllerBase
 
         // User Growth Metrics
         var totalUsers = await _context.Users.CountAsync();
-        var verifiedUsers = await _context.Users.CountAsync(); // All users in Users table are verified
+        var verifiedUsers = await _context.Users.CountAsync();
         var unverifiedUsers = await _context.TemporaryUsers.CountAsync();
         var newUsersLast30Days = await _context.Users
             .Where(u => u.CreatedAt >= last30Days)

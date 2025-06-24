@@ -35,13 +35,8 @@ namespace Prototype.Models
 
         public string? ErrorDetails { get; set; }
 
-        public Guid? SavedFileId { get; set; }
-
         // Navigation properties
         [ForeignKey("UserId")]
         public virtual UserModel User { get; set; } = null!;
-
-        [ForeignKey("SavedFileId")]
-        public virtual UploadedFileModel? SavedFile { get; set; }
     }
 }

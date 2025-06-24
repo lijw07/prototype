@@ -4,6 +4,7 @@
   "private": true,
   "proxy": "http://backend:8080",
   "dependencies": {
+    "@microsoft/signalr": "^8.0.7",
     "@tailwindcss/vite": "^4.1.10",
     "bootstrap": "^5.3.7",
     "lucide-react": "^0.517.0",

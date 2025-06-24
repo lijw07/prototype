@@ -288,7 +288,6 @@ export const systemHealthApi = {
 };
 
 // Executive Dashboard API
-// Executive Dashboard API
 export const executiveDashboardApi = {
   getExecutiveOverview: () =>
     api.get<{ success: boolean; data: any }>('/api/executive-dashboard/overview'),
@@ -298,6 +297,18 @@ export const executiveDashboardApi = {
     
   getGrowthTrends: (months: number = 6) =>
     api.get<{ success: boolean; data: any }>(`/api/executive-dashboard/growth-trends?months=${months}`),
+};
+
+// Analytics Overview API
+export const analyticsOverviewApi = {
+  getOverview: () =>
+    api.get<{ success: boolean; data: any }>('/api/analytics-overview/overview'),
+    
+  getBusinessMetrics: () =>
+    api.get<{ success: boolean; data: any }>('/api/analytics-overview/business-metrics'),
+    
+  getGrowthTrends: (months: number = 6) =>
+    api.get<{ success: boolean; data: any }>(`/api/analytics-overview/growth-trends?months=${months}`),
 };
 
 // User Provisioning API
@@ -313,6 +324,24 @@ export const userProvisioningApi = {
     
   bulkProvisionUsers: (formData: FormData) =>
     fetch(`${getApiBaseUrl()}/api/BulkUpload/upload`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
+      },
+      body: formData
+    }).then(response => response.json()),
+    
+  bulkProvisionMultipleFiles: (formData: FormData) =>
+    fetch(`${getApiBaseUrl()}/api/BulkUpload/upload-multiple`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
+      },
+      body: formData
+    }).then(response => response.json()),
+    
+  bulkProvisionWithProgress: (formData: FormData) =>
+    fetch(`${getApiBaseUrl()}/api/BulkUpload/upload-with-progress`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
@@ -340,6 +369,27 @@ export const complianceApi = {
     
   generateCustomReport: (request: any) =>
     api.post<{ success: boolean; data: any }>('/api/compliance/generate-report', request),
+};
+
+// User Requests API
+export const userRequestsApi = {
+  getUserRequests: () =>
+    api.get<{ success: boolean; data: any[] }>('/api/user-requests'),
+    
+  createRequest: (request: any) =>
+    api.post<{ success: boolean; data: any }>('/api/user-requests', request),
+    
+  getRequestById: (id: string) =>
+    api.get<{ success: boolean; data: any }>(`/api/user-requests/${id}`),
+    
+  updateRequestStatus: (id: string, status: string, comments?: string) =>
+    api.put<{ success: boolean; data: any }>(`/api/user-requests/${id}/status`, { status, comments }),
+    
+  getAvailableTools: () =>
+    api.get<{ success: boolean; data: any[] }>('/api/user-requests/available-tools'),
+    
+  cancelRequest: (id: string) =>
+    api.delete<{ success: boolean; data: any }>(`/api/user-requests/${id}`),
 };
 
 export default api;
