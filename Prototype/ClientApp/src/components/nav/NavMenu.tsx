@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink as RouterLink, useLocation } from 'react-router-dom';
 import { Home, Users, Database, Shield, Activity, FileText, Key, Monitor, Briefcase, UserPlus, Award, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { MigrationStatusIndicator } from '../migration/MigrationStatusIndicator';
 import './NavMenu.css';
 
 interface NavItem {
@@ -136,6 +137,11 @@ export default function NavMenu() {
               );
             }
         })}
+
+        {/* Migration Status Indicator */}
+        <div className="mt-3">
+          <MigrationStatusIndicator compact />
+        </div>
       </div>
       <div className="mt-auto p-3 border-top">
         <small className="text-muted">CAMS v1.0</small>

@@ -70,6 +70,10 @@ class ProgressService {
     });
   }
 
+  generateJobId(): string {
+    return `job_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+  }
+
   async ensureConnection(): Promise<void> {
     if (!this.connection) {
       this.initializeConnection();

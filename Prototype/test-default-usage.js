@@ -1,5 +1,3 @@
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
-
 // Test script to create roles and application connections
 const testSetup = async () => {
     // First login

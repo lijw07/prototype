@@ -193,8 +193,8 @@ namespace Prototype.Controllers.BulkUpload
                     });
                 }
 
-                // Generate job ID for progress tracking
-                var jobId = _progressService.GenerateJobId();
+                // Use provided job ID or generate a new one for progress tracking
+                var jobId = !string.IsNullOrEmpty(request.JobId) ? request.JobId : _progressService.GenerateJobId();
 
                 // Read file data immediately
                 var fileData = await ReadFileDataAsync(request.File);
@@ -233,7 +233,7 @@ namespace Prototype.Controllers.BulkUpload
                     {
                         Success = false,
                         Message = uploadResult.ErrorMessage,
-                        Data = null
+                        Data = new { JobId = jobId, Result = uploadResult.Data }
                     });
                 }
 

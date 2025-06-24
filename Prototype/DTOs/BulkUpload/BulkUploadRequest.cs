@@ -14,6 +14,9 @@ namespace Prototype.DTOs.BulkUpload
         // Additional properties for multiple file support
         public int? FileIndex { get; set; }
         public int? TotalFiles { get; set; }
+        
+        // Job ID for SignalR progress tracking (optional, will be generated if not provided)
+        public string? JobId { get; set; }
     }
 
     public class MultipleBulkUploadRequest

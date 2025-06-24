@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { userProvisioningApi } from '../../services/api';
 import { progressService, ProgressUpdate, JobStart, JobComplete, JobError } from '../../services/signalr';
+import { useMigration } from '../../context/MigrationContext';
 
 interface ProvisioningOverview {
   summary: {
@@ -69,27 +70,27 @@ interface PendingRequest {
   priority: string;
 }
 
+type MigrationStatus = 'idle' | 'processing' | 'completed' | 'error';
+
 export default function UserProvisioning() {
+  const { migrationState, updateMigrationState, clearMigrationState } = useMigration();
+  
   const [overview, setOverview] = useState<ProvisioningOverview | null>(null);
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   
-  // Bulk migration state
+  // Bulk migration state - now managed by context but keeping local state for UI
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [allMigrationData, setAllMigrationData] = useState<any[]>([]);
   const [fileDataMap, setFileDataMap] = useState<Map<string, any[]>>(new Map());
   const [showPreview, setShowPreview] = useState(false);
-  const [migrationProgress, setMigrationProgress] = useState<number>(0);
-  const [migrationStatus, setMigrationStatus] = useState<'idle' | 'processing' | 'completed' | 'error'>('idle');
-  const [migrationResults, setMigrationResults] = useState<{
-    successful: number;
-    failed: number;
-    errors: string[];
-    processedFiles: number;
-    totalFiles: number;
-  } | null>(null);
+  
+  // Use context state for migration status and results
+  const migrationProgress = migrationState?.progress || 0;
+  const migrationStatus = migrationState?.status || 'idle';
+  const migrationResults = migrationState?.results;
   
   // Pagination state for preview
   const [previewCurrentPage, setPreviewCurrentPage] = useState(1);
@@ -103,6 +104,7 @@ export default function UserProvisioning() {
   // SignalR state
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [progressDetails, setProgressDetails] = useState<ProgressUpdate | null>(null);
+  const [isRestoringSession, setIsRestoringSession] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -134,6 +136,85 @@ export default function UserProvisioning() {
     return () => clearInterval(interval);
   }, []);
 
+  // Restore migration state and reconnect to SignalR if migration is in progress
+  useEffect(() => {
+    if (migrationState?.status === 'processing' && migrationState.jobId) {
+      console.log('🔄 Restoring migration session for job:', migrationState.jobId);
+      setCurrentJobId(migrationState.jobId);
+      setIsRestoringSession(true);
+      
+      // Automatically switch to bulk tab to show the migration progress
+      setActiveTab('bulk');
+      
+      // Set a timeout for session restoration
+      const restorationTimeout = setTimeout(() => {
+        console.log('⏰ Session restoration timeout - assuming job completed offline');
+        setIsRestoringSession(false);
+        updateMigrationState({
+          status: 'completed',
+          progress: 100,
+          results: migrationState.results || {
+            successful: 0,
+            failed: 0,
+            errors: ['Migration status unknown. Please check the database for results.'],
+            processedFiles: 1,
+            totalFiles: 1
+          },
+          endTime: new Date().toISOString()
+        });
+      }, 10000); // 10 second timeout
+      
+      // Reconnect to SignalR progress group
+      progressService.ensureConnection()
+        .then(() => progressService.joinProgressGroup(migrationState.jobId!))
+        .then(() => {
+          console.log('✅ Reconnected to SignalR progress group for job:', migrationState.jobId);
+          clearTimeout(restorationTimeout);
+          setIsRestoringSession(false);
+        })
+        .catch(error => {
+          console.error('❌ Failed to reconnect to SignalR:', error);
+          console.log('🔄 Job may have completed while offline. Checking for completion...');
+          
+          // If reconnection fails, the job likely completed while we were offline
+          // Check if we can determine the final state or mark as completed
+          const timeElapsed = migrationState.startTime ? 
+            (Date.now() - new Date(migrationState.startTime).getTime()) / 1000 : 0;
+          
+          if (timeElapsed > 300) { // More than 5 minutes, likely completed
+            console.log('🏁 Job appears to have completed while offline');
+            updateMigrationState({
+              status: 'completed',
+              progress: 100,
+              results: migrationState.results || {
+                successful: 0,
+                failed: 0,
+                errors: ['Migration completed while page was offline. Please check the database for results.'],
+                processedFiles: 1,
+                totalFiles: 1
+              },
+              endTime: new Date().toISOString()
+            });
+          } else {
+            // Recent job that failed to reconnect - likely an actual error
+            console.log('❌ Recent job failed to reconnect');
+          }
+          
+          setIsRestoringSession(false);
+        });
+    } else if (migrationState?.status === 'completed' || migrationState?.status === 'error') {
+      // Also switch to bulk tab to show the completed/error results
+      setActiveTab('bulk');
+    }
+  }, [migrationState]);
+
+  // Debug: Log migration state changes
+  useEffect(() => {
+    if (migrationState) {
+      console.log('📊 Migration state:', migrationStatus, `${migrationProgress}%`);
+    }
+  }, [migrationStatus, migrationProgress]);
+
   // Prevent default drag behavior globally to remove browser drag image
   useEffect(() => {
     const handleDocumentDragOver = (e: DragEvent) => {
@@ -158,14 +239,19 @@ export default function UserProvisioning() {
     const handleJobStarted = (jobStart: JobStart) => {
       console.log('🎬 SignalR: Job started:', jobStart);
       setCurrentJobId(jobStart.jobId);
-      setMigrationStatus('processing');
-      setMigrationProgress(10);
+      updateMigrationState({
+        status: 'processing',
+        progress: 10,
+        jobId: jobStart.jobId
+      });
     };
 
     const handleProgressUpdate = (progress: ProgressUpdate) => {
       console.log('📈 SignalR: Progress update:', progress);
       setProgressDetails(progress);
-      setMigrationProgress(progress.progressPercentage);
+      updateMigrationState({
+        progress: progress.progressPercentage
+      });
     };
 
     const handleJobCompleted = (result: JobComplete) => {
@@ -173,18 +259,19 @@ export default function UserProvisioning() {
       
       // Add a delay to ensure users see the progress bar working
       setTimeout(() => {
-        setMigrationStatus(result.success ? 'completed' : 'error');
-        setMigrationProgress(100);
-        
-        if (result.success && result.data) {
-          setMigrationResults({
-            successful: result.data.processedRecords || 0,
-            failed: result.data.failedRecords || 0,
-            errors: result.data.errors || [],
-            processedFiles: result.data.processedFiles || 1,
-            totalFiles: result.data.totalFiles || 1
-          });
-        }
+        const results = result.success && result.data ? {
+          successful: result.data.processedRecords || 0,
+          failed: result.data.failedRecords || 0,
+          errors: result.data.errors || [],
+          processedFiles: result.data.processedFiles || 1,
+          totalFiles: result.data.totalFiles || 1
+        } : null;
+
+        updateMigrationState({
+          status: result.success ? 'completed' : 'error',
+          progress: 100,
+          results
+        });
         
         setCurrentJobId(null);
         setProgressDetails(null);
@@ -193,14 +280,46 @@ export default function UserProvisioning() {
 
     const handleJobError = (error: JobError) => {
       console.log('❌ SignalR: Job error:', error);
-      setMigrationStatus('error');
-      setMigrationResults({
-        successful: 0,
-        failed: 1,
-        errors: [error.error],
-        processedFiles: 0,
-        totalFiles: 1
-      });
+      
+      // If this is a "Load failed" error during session restoration, don't overwrite existing results
+      if (error.error === "Load failed" && isRestoringSession) {
+        console.log('🔄 Ignoring "Load failed" error during session restoration - job likely completed offline');
+        setIsRestoringSession(false);
+        
+        // Mark as completed if we have progress > 50%, otherwise mark as error
+        const currentProgress = migrationState?.progress || 0;
+        if (currentProgress > 50) {
+          updateMigrationState({
+            status: 'completed',
+            progress: 100,
+            endTime: new Date().toISOString()
+          });
+        } else {
+          updateMigrationState({
+            status: 'error',
+            results: {
+              successful: 0,
+              failed: 1,
+              errors: ['Migration was interrupted. Please try again.'],
+              processedFiles: 0,
+              totalFiles: 1
+            }
+          });
+        }
+      } else {
+        // Handle genuine errors
+        updateMigrationState({
+          status: 'error',
+          results: {
+            successful: 0,
+            failed: 1,
+            errors: [error.error],
+            processedFiles: 0,
+            totalFiles: 1
+          }
+        });
+      }
+      
       setCurrentJobId(null);
       setProgressDetails(null);
     };
@@ -506,9 +625,12 @@ export default function UserProvisioning() {
     if (uploadedFiles.length === 0 && allMigrationData.length === 0) return;
 
     console.log('🚀 Starting bulk migration with SignalR tracking...');
-    setMigrationStatus('processing');
-    setMigrationProgress(0);
-    setMigrationResults(null);
+    updateMigrationState({
+      status: 'processing',
+      progress: 0,
+      results: null,
+      startTime: new Date().toISOString()
+    });
     setProgressDetails(null);
 
     try {
@@ -517,74 +639,76 @@ export default function UserProvisioning() {
         const file = uploadedFiles[0];
         
         // Show initial progress
-        setMigrationProgress(1);
+        updateMigrationState({ progress: 1 });
         
         // First connect to SignalR before starting the upload
         console.log('🔗 Connecting to SignalR...');
         try {
           await progressService.ensureConnection();
           console.log('✅ SignalR connected successfully');
-          setMigrationProgress(5);
+          updateMigrationState({ progress: 5 });
         } catch (signalRError) {
           console.error('❌ Failed to connect to SignalR:', signalRError);
           // Continue without SignalR
+        }
+        
+        // Pre-generate job ID and join SignalR group before API call
+        const jobId = progressService.generateJobId();
+        setCurrentJobId(jobId);
+        console.log('🔗 Pre-joining SignalR group for job:', jobId);
+        
+        try {
+          await progressService.joinProgressGroup(jobId);
+          console.log('✅ Successfully pre-joined SignalR progress group for job:', jobId);
+          updateMigrationState({ progress: 10, jobId });
+        } catch (signalRError) {
+          console.error('❌ Failed to pre-join SignalR progress group:', signalRError);
         }
         
         // Create FormData to send the file to the progress-enabled endpoint
         const formData = new FormData();
         formData.append('file', file);
         formData.append('ignoreErrors', 'false');
+        formData.append('jobId', jobId); // Send the pre-generated job ID
 
         console.log('📁 Uploading file:', file.name, 'Size:', file.size, 'bytes');
-        setMigrationProgress(10);
+        updateMigrationState({ progress: 15 });
         
-        // Call the SignalR-enabled API endpoint (now returns JobId immediately)
+        // Call the SignalR-enabled API endpoint with pre-generated job ID
         const response = await userProvisioningApi.bulkProvisionWithProgress(formData);
         console.log('📊 API Response:', response);
 
-        if (response.success && response.data && response.data.JobId) {
-          // Get the job ID from the immediate response
-          const jobId = response.data.JobId;
-          setCurrentJobId(jobId);
-          
-          console.log('🔗 Joining SignalR group for job:', jobId);
-          
-          try {
-            await progressService.joinProgressGroup(jobId);
-            console.log('✅ Successfully joined SignalR progress group for job:', jobId);
-            setMigrationProgress(15);
-            
-            // The progress updates will be handled by SignalR event handlers
-            // Backend will start processing in background and send progress updates
-            console.log('⏳ Waiting for SignalR progress updates from background processing...');
-            
-          } catch (signalRError) {
-            console.error('❌ Failed to join SignalR progress group:', signalRError);
-            // If SignalR fails, we can't get progress updates
-            setMigrationStatus('error');
-            setMigrationResults({
+        if (response.success && response.data) {
+          // Success case - progress updates will come via SignalR
+          console.log('✅ Upload started successfully, waiting for SignalR updates...');
+        } else {
+          // Error case - show error immediately
+          console.error('❌ Upload failed:', response.message);
+          updateMigrationState({
+            status: 'error',
+            results: {
               successful: 0,
               failed: 1,
-              errors: ['Failed to connect to progress tracking'],
+              errors: [response.message || 'Upload failed'],
               processedFiles: 0,
               totalFiles: 1
-            });
-          }
-        } else {
-          throw new Error('Failed to start bulk upload with progress tracking');
+            }
+          });
         }
       } else {
         throw new Error('No files to process');
       }
     } catch (error) {
       console.error('❌ Error in bulk migration:', error);
-      setMigrationStatus('error');
-      setMigrationResults({
-        successful: 0,
-        failed: 1,
-        errors: [error instanceof Error ? error.message : 'Unknown error occurred'],
-        processedFiles: 0,
-        totalFiles: uploadedFiles.length
+      updateMigrationState({
+        status: 'error',
+        results: {
+          successful: 0,
+          failed: 1,
+          errors: [error instanceof Error ? error.message : 'Unknown error occurred'],
+          processedFiles: 0,
+          totalFiles: uploadedFiles.length
+        }
       });
     }
   };
@@ -593,12 +717,15 @@ export default function UserProvisioning() {
   const processBulkMigrationFallback = async () => {
     if (uploadedFiles.length === 0 && allMigrationData.length === 0) return;
 
-    setMigrationStatus('processing');
-    setMigrationProgress(0);
+    updateMigrationState({
+      status: 'processing',
+      progress: 0,
+      results: null
+    });
 
     try {
       const totalFiles = uploadedFiles.length;
-      setMigrationProgress(10);
+      updateMigrationState({ progress: 10 });
 
       // Fallback: Process files individually with fake progress
       let successful = 0;
@@ -611,7 +738,7 @@ export default function UserProvisioning() {
         const fileProgress = (fileIndex / totalFiles) * 80 + 20; // Reserve 20% for initial setup
         
         try {
-          setMigrationProgress(fileProgress);
+          updateMigrationState({ progress: fileProgress });
           
           // Create FormData to send the file
           const formData = new FormData();
@@ -688,7 +815,7 @@ export default function UserProvisioning() {
             
             // Update progress for individual processing within file
             const overallProgress = fileProgress + ((i + 1) / fileData.length) * (80 / totalFiles);
-            setMigrationProgress(overallProgress);
+            updateMigrationState({ progress: overallProgress });
             
             // Small delay to prevent overwhelming the API
             await new Promise(resolve => setTimeout(resolve, 50));
@@ -697,27 +824,31 @@ export default function UserProvisioning() {
           processedFiles++;
         }
         
-        setMigrationProgress(((fileIndex + 1) / totalFiles) * 80 + 20);
+        updateMigrationState({ progress: ((fileIndex + 1) / totalFiles) * 80 + 20 });
       }
 
-      setMigrationResults({ 
-        successful, 
-        failed, 
-        errors, 
-        processedFiles, 
-        totalFiles 
+      updateMigrationState({
+        status: 'completed',
+        progress: 100,
+        results: { 
+          successful, 
+          failed, 
+          errors, 
+          processedFiles, 
+          totalFiles 
+        }
       });
-      setMigrationProgress(100);
-      setMigrationStatus('completed');
     } catch (error) {
       console.error('Migration failed:', error);
-      setMigrationStatus('error');
-      setMigrationResults({
-        successful: 0,
-        failed: allMigrationData.length,
-        errors: [`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
-        processedFiles: 0,
-        totalFiles: uploadedFiles.length
+      updateMigrationState({
+        status: 'error',
+        results: {
+          successful: 0,
+          failed: allMigrationData.length,
+          errors: [`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+          processedFiles: 0,
+          totalFiles: uploadedFiles.length
+        }
       });
     }
   };
@@ -727,9 +858,7 @@ export default function UserProvisioning() {
     setAllMigrationData([]);
     setFileDataMap(new Map());
     setShowPreview(false);
-    setMigrationProgress(0);
-    setMigrationStatus('idle');
-    setMigrationResults(null);
+    clearMigrationState(); // Clear from context and localStorage
     setPreviewCurrentPage(1);
     setIsDragging(false);
     setDragError(null);
@@ -1226,7 +1355,6 @@ export default function UserProvisioning() {
                             </h6>
                             
                             {uploadedFiles.length === 0 ? (
-                              /* Upload Area */
                               <div 
                                 className={`drag-zone border border-dashed rounded-4 p-5 text-center position-relative ${
                                   isDragging ? 'border-primary bg-primary bg-opacity-5 shadow-sm drag-active' : 'border-secondary'
@@ -1422,7 +1550,7 @@ export default function UserProvisioning() {
                                 <button 
                                   onClick={processBulkMigration}
                                   className="btn btn-success btn-lg px-5"
-                                  disabled={migrationStatus === 'processing'}
+                                  disabled={(migrationStatus as MigrationStatus) === 'processing'}
                                 >
                                   <Upload className="me-2" size={18} />
                                   Start Migration ({allMigrationData.length} records from {uploadedFiles.length} files)
@@ -1433,9 +1561,7 @@ export default function UserProvisioning() {
                               </div>
                             )}
                                 
-                                {/* Combined Data Preview */}
-                                {console.log('Render check - showPreview:', showPreview, 'allMigrationData.length:', allMigrationData.length)}
-                                {showPreview && allMigrationData.length > 0 && (
+                            {showPreview && allMigrationData.length > 0 && (
                                   <div className="mt-4">
                                     <div className="card border-0 shadow-sm">
                                       <div className="card-body p-4">
@@ -1570,6 +1696,12 @@ export default function UserProvisioning() {
                           <div className="col-12">
                             <div className="card border border-warning">
                               <div className="card-body p-4">
+                                {isRestoringSession && (
+                                  <div className="alert alert-info mb-3">
+                                    <RefreshCw className="me-2 rotating" size={14} />
+                                    <small>Restoring migration session...</small>
+                                  </div>
+                                )}
                                 <h6 className="fw-semibold mb-3">
                                   <RefreshCw className="me-2 rotating" size={16} />
                                   Migration in Progress...
