@@ -22,7 +22,7 @@ public class DatabaseSeeder
     {
         try
         {
-            _logger.LogInformation("Starting database seeding...");
+            _logger.LogDebug("Starting database seeding...");
 
             // Seed default admin user if no users exist
             await SeedDefaultAdminUser();
@@ -34,7 +34,7 @@ public class DatabaseSeeder
             }
 
             await _context.SaveChangesAsync();
-            _logger.LogInformation("Database seeding completed successfully.");
+            _logger.LogDebug("Database seeding completed successfully.");
         }
         catch (Exception ex)
         {

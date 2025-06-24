@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { MigrationProvider } from './context/MigrationContext';
+import { NotificationProvider } from './context/NotificationContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Accounts from './components/account/Accounts';
@@ -46,7 +47,8 @@ export default function App() {
   return (
     <AuthProvider>
       <MigrationProvider>
-        <Layout>
+        <NotificationProvider>
+          <Layout>
         <Routes>
           {/* Public routes */}
           <Route path="/home" element={<Home />} />
@@ -137,7 +139,8 @@ export default function App() {
           <Route path="/" element={<ConditionalRedirect />} />
           <Route path="*" element={<ConditionalRedirect />} />
         </Routes>
-        </Layout>
+          </Layout>
+        </NotificationProvider>
       </MigrationProvider>
     </AuthProvider>
   );

@@ -814,6 +814,17 @@ namespace Prototype.Services.BulkUpload
                 _logger.LogInformation("ProcessBulkDataWithProgressAsync completed for job {JobId}. Processed: {ProcessedRecords}, Failed: {FailedRecords}", 
                     jobId, response.ProcessedRecords, response.FailedRecords);
 
+                // Notify job completion
+                await _progressService.NotifyJobCompleted(jobId, new JobCompleteDto
+                {
+                    JobId = jobId,
+                    Success = true,
+                    Message = "Migration completed successfully",
+                    Data = response,
+                    CompletedAt = DateTime.UtcNow,
+                    TotalDuration = stopwatch.Elapsed
+                });
+
                 return Result<BulkUploadResponse>.Success(response);
             }
             catch (Exception ex)
@@ -822,6 +833,17 @@ namespace Prototype.Services.BulkUpload
                 _logger.LogError(ex, "Error in ProcessBulkDataWithProgressAsync for job {JobId}", jobId);
                 
                 await _progressService.NotifyError(jobId, $"Processing error: {ex.Message}");
+                
+                // Notify job completion with error
+                await _progressService.NotifyJobCompleted(jobId, new JobCompleteDto
+                {
+                    JobId = jobId,
+                    Success = false,
+                    Message = $"Migration failed: {ex.Message}",
+                    Data = null,
+                    CompletedAt = DateTime.UtcNow,
+                    TotalDuration = stopwatch.Elapsed
+                });
                 
                 return Result<BulkUploadResponse>.Failure($"Error processing bulk data: {ex.Message}");
             }

@@ -6,6 +6,10 @@ interface MigrationContextType {
   updateMigrationState: (state: Partial<MigrationState>) => void;
   clearMigrationState: () => void;
   isAnyMigrationInProgress: () => boolean;
+  shouldNavigateToBulkTab: boolean;
+  setShouldNavigateToBulkTab: (should: boolean) => void;
+  isOnBulkTab: boolean;
+  setIsOnBulkTab: (isOn: boolean) => void;
 }
 
 const MigrationContext = createContext<MigrationContextType | undefined>(undefined);
@@ -24,6 +28,8 @@ interface MigrationProviderProps {
 
 export const MigrationProvider: React.FC<MigrationProviderProps> = ({ children }) => {
   const [migrationState, setMigrationState] = useState<MigrationState | null>(null);
+  const [shouldNavigateToBulkTab, setShouldNavigateToBulkTab] = useState(false);
+  const [isOnBulkTab, setIsOnBulkTab] = useState(false);
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -65,7 +71,11 @@ export const MigrationProvider: React.FC<MigrationProviderProps> = ({ children }
     migrationState,
     updateMigrationState,
     clearMigrationState,
-    isAnyMigrationInProgress
+    isAnyMigrationInProgress,
+    shouldNavigateToBulkTab,
+    setShouldNavigateToBulkTab,
+    isOnBulkTab,
+    setIsOnBulkTab
   };
 
   return (

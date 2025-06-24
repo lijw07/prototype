@@ -4,6 +4,7 @@ import { User, Settings, LogOut, ChevronDown, Mail } from 'lucide-react';
 import NavMenu from './nav/NavMenu';
 import { useAuth } from '../contexts/AuthContext';
 import WebsiteLayout from './website/WebsiteLayout';
+import { NotificationDropdown } from './common/NotificationDropdown';
 
 interface LayoutProps {
   children: ReactNode; // Typing children correctly
@@ -14,7 +15,9 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
   
   // Define which routes should use the website layout (public pages)
   const publicRoutes = ['/home', '/', '/about', '/contact', '/services', '/solutions', '/pricing'];
@@ -35,11 +38,14 @@ export default function Layout({ children }: LayoutProps) {
     navigate('/login');
   };
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowUserDropdown(false);
+      }
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotificationDropdown(false);
       }
     };
 
@@ -75,7 +81,16 @@ export default function Layout({ children }: LayoutProps) {
         </div>
         <div>
           {isAuthenticated ? (
-            <div className="position-relative" ref={dropdownRef}>
+            <div className="d-flex align-items-center gap-2">
+              {/* Notification Dropdown */}
+              <div ref={notificationRef}>
+                <NotificationDropdown 
+                  isOpen={showNotificationDropdown}
+                  onToggle={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                />
+              </div>
+              
+              <div className="position-relative" ref={dropdownRef}>
               <button
                 className="btn btn-link p-0 border-0 d-flex align-items-center text-decoration-none"
                 onClick={() => setShowUserDropdown(!showUserDropdown)}
@@ -124,6 +139,7 @@ export default function Layout({ children }: LayoutProps) {
                   </div>
                 </div>
               )}
+              </div>
             </div>
           ) : !shouldHideLoginButton ? (
             <button 
@@ -153,6 +169,7 @@ export default function Layout({ children }: LayoutProps) {
           {children}
         </main>
       </div>
+      
     </div>
   );
 }

@@ -416,8 +416,7 @@ export default function UserProvisioning() {
         updateMigrationState({
           status: result.success ? 'completed' : 'error',
           progress: 100,
-          results,
-          endTime: new Date().toISOString()
+          results
         });
         
         // Update notification
@@ -1038,8 +1037,7 @@ export default function UserProvisioning() {
           errors, 
           processedFiles, 
           totalFiles 
-        },
-        endTime: new Date().toISOString()
+        }
       });
     } catch (error) {
       console.error('Migration failed:', error);
@@ -1962,29 +1960,17 @@ export default function UserProvisioning() {
                                 {/* Completion Summary */}
                                 {migrationStatus === 'completed' && migrationState?.endTime && (
                                   <div className="mb-4">
-                                    <div className="alert alert-success d-flex align-items-center mb-0" role="alert">
-                                      <CheckCircle className="me-2" size={20} />
-                                      <div className="flex-grow-1">
-                                        <div className="fw-semibold">Migration Completed Successfully</div>
-                                        <small className="text-muted">
-                                          Finished at {new Date(migrationState.endTime).toLocaleString()}
-                                        </small>
-                                      </div>
+                                    <div className="progress" style={{ height: '12px' }}>
+                                      <div
+                                        className="progress-bar bg-success"
+                                        style={{ width: '100%' }}
+                                      />
                                     </div>
-                                  </div>
-                                )}
-
-                                {/* Error Summary */}
-                                {migrationStatus === 'error' && (
-                                  <div className="mb-4">
-                                    <div className="alert alert-danger d-flex align-items-center mb-0" role="alert">
-                                      <AlertCircle className="me-2" size={20} />
-                                      <div className="flex-grow-1">
-                                        <div className="fw-semibold">Migration Failed</div>
-                                        <small className="text-muted">
-                                          Please check the error details below and try again
-                                        </small>
-                                      </div>
+                                    <div className="d-flex justify-content-between mt-2">
+                                      <small className="text-success fw-semibold">Migration Completed</small>
+                                      <small className="text-muted">
+                                        Finished: {new Date(migrationState.endTime).toLocaleTimeString()}
+                                      </small>
                                     </div>
                                   </div>
                                 )}

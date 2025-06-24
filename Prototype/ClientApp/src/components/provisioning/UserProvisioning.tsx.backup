@@ -174,6 +174,10 @@ export default function UserProvisioning() {
         setIsRestoringSession(false);
         
         // Update notification to show we're monitoring again
+        updateNotification({
+          description: 'Reconnected to migration progress...',
+          progress: migrationState?.progress || 0
+        });
         
         // If successful, clear the interval
         clearInterval(interval);
@@ -206,6 +210,12 @@ export default function UserProvisioning() {
               endTime: new Date().toISOString()
             });
             
+            updateNotification({
+              status: 'completed',
+              progress: 100,
+              description: 'Migration completed (connection issues during monitoring)',
+              results: migrationState?.results || undefined
+            });
           } else {
             // If it's too soon, mark as error
             updateMigrationState({
@@ -219,6 +229,17 @@ export default function UserProvisioning() {
               }
             });
             
+            updateNotification({
+              status: 'error',
+              description: 'Lost connection to migration progress',
+              results: {
+                successful: 0,
+                failed: 1,
+                errors: ['Lost connection to migration progress. Please check the database manually.'],
+                processedFiles: 0,
+                totalFiles: 1
+              }
+            });
           }
         }
       }
@@ -266,6 +287,19 @@ export default function UserProvisioning() {
       }
       
       // Show notification for ongoing migration
+      showNotification({
+        status: 'processing',
+        progress: migrationState.progress || 0,
+        title: 'Bulk Migration',
+        description: 'Restoring migration session...',
+        details: progressDetails ? {
+          processedRecords: progressDetails.processedRecords,
+          totalRecords: progressDetails.totalRecords,
+          processedFiles: progressDetails.processedFiles,
+          totalFiles: progressDetails.totalFiles,
+          currentOperation: progressDetails.currentOperation
+        } : undefined
+      });
       
       // Set a longer timeout for session restoration (backend might still be processing)
       const restorationTimeout = setTimeout(() => {
@@ -279,6 +313,12 @@ export default function UserProvisioning() {
         });
         
         // Update notification to show monitoring state
+        updateNotification({
+          status: 'processing',
+          progress: Math.min((migrationState.progress || 0) + 5, 95),
+          description: 'Migration in progress (monitoring backend)...',
+          title: 'Bulk Migration'
+        });
         
         // Set up periodic checking
         startPeriodicStatusCheck(migrationState.jobId!);
@@ -309,14 +349,34 @@ export default function UserProvisioning() {
           });
           
           // Update notification to show monitoring state
+          updateNotification({
+            status: 'processing',
+            progress: Math.min((migrationState.progress || 0) + 5, 95),
+            description: 'Migration in progress (reconnecting to monitor)...',
+            title: 'Bulk Migration'
+          });
           
           // Start periodic checking immediately
           startPeriodicStatusCheck(migrationState.jobId!);
         });
     } else if (migrationState?.status === 'completed') {
       // Show completion notification
+      showNotification({
+        status: 'completed',
+        progress: 100,
+        title: 'Bulk Migration',
+        description: 'Migration completed successfully',
+        results: migrationState.results || undefined
+      });
     } else if (migrationState?.status === 'error') {
       // Show error notification
+      showNotification({
+        status: 'error',
+        progress: migrationState.progress || 0,
+        title: 'Bulk Migration',
+        description: 'Migration failed',
+        results: migrationState.results || undefined
+      });
     }
   }, [migrationState]);
 
@@ -388,6 +448,12 @@ export default function UserProvisioning() {
       });
       
       // Show notification
+      showNotification({
+        status: 'processing',
+        progress: 10,
+        title: 'Bulk Migration',
+        description: 'Processing user data...'
+      });
     };
 
     const handleProgressUpdate = (progress: ProgressUpdate) => {
@@ -398,6 +464,16 @@ export default function UserProvisioning() {
       });
       
       // Update notification
+      updateNotification({
+        progress: progress.progressPercentage,
+        details: {
+          processedRecords: progress.processedRecords,
+          totalRecords: progress.totalRecords,
+          processedFiles: progress.processedFiles,
+          totalFiles: progress.totalFiles,
+          currentOperation: progress.currentOperation
+        }
+      });
     };
 
     const handleJobCompleted = (result: JobComplete) => {
@@ -416,11 +492,16 @@ export default function UserProvisioning() {
         updateMigrationState({
           status: result.success ? 'completed' : 'error',
           progress: 100,
-          results,
-          endTime: new Date().toISOString()
+          results
         });
         
         // Update notification
+        updateNotification({
+          status: result.success ? 'completed' : 'error',
+          progress: 100,
+          description: result.success ? 'Migration completed successfully' : 'Migration failed',
+          results: results || undefined
+        });
         
         setCurrentJobId(null);
         setProgressDetails(null);
@@ -447,6 +528,12 @@ export default function UserProvisioning() {
             progress: Math.min((migrationState?.progress || 0) + 5, 95)
           });
           
+          updateNotification({
+            status: 'processing',
+            progress: Math.min((migrationState?.progress || 0) + 5, 95),
+            description: 'Migration in progress (backend processing)...',
+            title: 'Bulk Migration'
+          });
           
           // Start periodic checking to reconnect
           if (currentJobId) {
@@ -464,6 +551,12 @@ export default function UserProvisioning() {
             progress: Math.min((migrationState?.progress || 0) + 5, 95)
           });
           
+          updateNotification({
+            status: 'processing',
+            progress: Math.min((migrationState?.progress || 0) + 5, 95),
+            description: 'Migration in progress (reconnecting)...',
+            title: 'Bulk Migration'
+          });
           
           // Start periodic checking to reconnect
           if (currentJobId) {
@@ -489,6 +582,11 @@ export default function UserProvisioning() {
         });
         
         // Update notification
+        updateNotification({
+          status: 'error',
+          description: 'Migration failed',
+          results: errorResults
+        });
         
         setCurrentJobId(null);
         setProgressDetails(null);
@@ -810,6 +908,12 @@ export default function UserProvisioning() {
     setProgressDetails(null);
     
     // Show initial notification
+    showNotification({
+      status: 'processing',
+      progress: 0,
+      title: 'Bulk Migration',
+      description: 'Starting migration...'
+    });
 
     try {
       // Process only the first file for now with SignalR progress tracking
@@ -892,6 +996,12 @@ export default function UserProvisioning() {
         });
         
         // Update notification to show connection issue
+        updateNotification({
+          status: 'processing',
+          progress: Math.max(migrationState?.progress || 0, 20),
+          description: 'Migration initiated (monitoring for progress)...',
+          title: 'Bulk Migration'
+        });
         
         // Start periodic checking to monitor the job
         if (currentJobId) {
@@ -1038,8 +1148,7 @@ export default function UserProvisioning() {
           errors, 
           processedFiles, 
           totalFiles 
-        },
-        endTime: new Date().toISOString()
+        }
       });
     } catch (error) {
       console.error('Migration failed:', error);
@@ -1077,6 +1186,9 @@ export default function UserProvisioning() {
     }
     
     // Hide notification
+    hideNotification();
+    
+    console.log('🔄 Migration state reset');
   };
 
 
@@ -1962,29 +2074,17 @@ export default function UserProvisioning() {
                                 {/* Completion Summary */}
                                 {migrationStatus === 'completed' && migrationState?.endTime && (
                                   <div className="mb-4">
-                                    <div className="alert alert-success d-flex align-items-center mb-0" role="alert">
-                                      <CheckCircle className="me-2" size={20} />
-                                      <div className="flex-grow-1">
-                                        <div className="fw-semibold">Migration Completed Successfully</div>
-                                        <small className="text-muted">
-                                          Finished at {new Date(migrationState.endTime).toLocaleString()}
-                                        </small>
-                                      </div>
+                                    <div className="progress" style={{ height: '12px' }}>
+                                      <div
+                                        className="progress-bar bg-success"
+                                        style={{ width: '100%' }}
+                                      />
                                     </div>
-                                  </div>
-                                )}
-
-                                {/* Error Summary */}
-                                {migrationStatus === 'error' && (
-                                  <div className="mb-4">
-                                    <div className="alert alert-danger d-flex align-items-center mb-0" role="alert">
-                                      <AlertCircle className="me-2" size={20} />
-                                      <div className="flex-grow-1">
-                                        <div className="fw-semibold">Migration Failed</div>
-                                        <small className="text-muted">
-                                          Please check the error details below and try again
-                                        </small>
-                                      </div>
+                                    <div className="d-flex justify-content-between mt-2">
+                                      <small className="text-success fw-semibold">Migration Completed</small>
+                                      <small className="text-muted">
+                                        Finished: {new Date(migrationState.endTime).toLocaleTimeString()}
+                                      </small>
                                     </div>
                                   </div>
                                 )}

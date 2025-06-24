@@ -202,7 +202,7 @@ using (var scope = app.Services.CreateScope())
     {
         try
         {
-            logger.LogInformation("Database initialization attempt {Attempt} of {MaxAttempts}...", i + 1, maxRetries);
+            logger.LogDebug("Database initialization attempt {Attempt} of {MaxAttempts}...", i + 1, maxRetries);
             
             // First ensure the database exists by creating it if necessary
             try
@@ -216,7 +216,7 @@ using (var scope = app.Services.CreateScope())
                     {
                         command.CommandText = $"IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '{dbName}') CREATE DATABASE [{dbName}]";
                         await command.ExecuteNonQueryAsync();
-                        logger.LogInformation("Database existence check completed.");
+                        logger.LogDebug("Database existence check completed.");
                     }
                 }
             }
@@ -230,7 +230,7 @@ using (var scope = app.Services.CreateScope())
             try
             {
                 await context.Database.MigrateAsync();
-                logger.LogInformation("Database migrations applied successfully.");
+                logger.LogDebug("Database migrations applied successfully.");
             }
             catch (Exception migrationEx)
             {
@@ -248,7 +248,7 @@ using (var scope = app.Services.CreateScope())
             var canConnect = await context.Database.CanConnectAsync();
             if (canConnect)
             {
-                logger.LogInformation("Database connection verified successfully.");
+                logger.LogDebug("Database connection verified successfully.");
                 
                 // Seed database with initial data
                 var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
@@ -280,6 +280,8 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Add request logging for debugging (should be absolute first)
+// Commented out to reduce console noise - uncomment if needed for debugging
+/*
 if (app.Environment.IsDevelopment())
 {
     app.Use(async (context, next) =>
@@ -293,6 +295,7 @@ if (app.Environment.IsDevelopment())
         await next();
     });
 }
+*/
 
 // Global exception handling (should be first)
 app.UseMiddleware<GlobalExceptionMiddleware>();
