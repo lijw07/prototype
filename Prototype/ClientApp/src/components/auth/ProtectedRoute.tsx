@@ -1,30 +1,35 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface ProtectedRouteProps {
+  allowedRoles?: string[];  // optional: if omitted, allow all authenticated
   children: React.ReactNode;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
-  const location = useLocation();
+export default function ProtectedRoute({ allowedRoles, children }: ProtectedRouteProps) {
+  const { user, isAuthenticated, loading } = useAuth();
 
-  // Show loading spinner while checking authentication
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      <div className="min-vh-100 d-flex align-items-center justify-content-center">
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
       </div>
     );
   }
 
-  // Redirect to login if not authenticated
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    // Not logged in
+    return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
-};
+  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+    // Role not authorized
+    return <Navigate to="/dashboard" replace />;
+  }
 
-export default ProtectedRoute;
+  // Authorized
+  return <>{children}</>;
+}
