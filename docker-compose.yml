@@ -8,17 +8,16 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - CHOKIDAR_USE_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
       - BROWSER=none
       - REACT_APP_API_URL=http://127.0.0.1:8080
       - NODE_ENV=development
       - GENERATE_SOURCEMAP=true
-      - FAST_REFRESH=false
       - WDS_SOCKET_HOST=localhost
       - WDS_SOCKET_PORT=3000
       - WDS_SOCKET_PATH=/ws
-      - FAST_REFRESH=true
+      - FAST_REFRESH=false
       - DANGEROUSLY_DISABLE_HOST_CHECK=true
       - DISABLE_ESLINT_PLUGIN=true
       - TSC_COMPILE_ON_ERROR=true

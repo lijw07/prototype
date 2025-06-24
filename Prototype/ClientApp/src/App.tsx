@@ -55,48 +55,48 @@ export default function App() {
           
           {/* Protected routes */}
           <Route path="/dashboard" element={
-            <ProtectedRoute  allowedRoles={['User, Admin,Platform Admin']}>
+            <ProtectedRoute  allowedRoles={['User', 'Admin', 'Platform Admin']}>
               <Dashboard />
             </ProtectedRoute>
           } />
           <Route path="/security-dashboard" element={
-            <ProtectedRoute allowedRoles={['User, Admin,Platform Admin']}>
+            <ProtectedRoute allowedRoles={['User', 'Admin', 'Platform Admin']}>
               <SecurityDashboard />
             </ProtectedRoute>
           } />
          
           <Route path="/executive-dashboard" element={
-            <ProtectedRoute allowedRoles={['User, Admin,Platform Admin']}>
+            <ProtectedRoute allowedRoles={['User', 'Admin', 'Platform Admin']}>
               <ExecutiveDashboard />
             </ProtectedRoute>
           } />
           <Route path="/user-provisioning" element={
-            <ProtectedRoute allowedRoles={['User, Admin,Platform Admin']}>
+            <ProtectedRoute allowedRoles={['User', 'Admin', 'Platform Admin']}>
               <UserProvisioning />
             </ProtectedRoute>
           } />
           <Route path="/compliance" element={
-            <ProtectedRoute allowedRoles={['User, Admin,Platform Admin']}>
+            <ProtectedRoute allowedRoles={['User', 'Admin', 'Platform Admin']}>
               <ComplianceDashboard />
             </ProtectedRoute>
           } />
           <Route path="/accounts" element={
-            <ProtectedRoute allowedRoles={['User, Admin,Platform Admin']}>
+            <ProtectedRoute allowedRoles={['User', 'Admin', 'Platform Admin']}>
               <Accounts />
             </ProtectedRoute>
           } />
           <Route path="/settings" element={
-            <ProtectedRoute allowedRoles={['User, Admin,Platform Admin']}>
+            <ProtectedRoute allowedRoles={['User', 'Admin', 'Platform Admin']}>
               <Settings />
             </ProtectedRoute>
           } />  
           <Route path="/applications" element={
-            <ProtectedRoute allowedRoles={['User, Admin,Platform Admin']}>
+            <ProtectedRoute allowedRoles={['User', 'Admin', 'Platform Admin']}>
               <Applications />
             </ProtectedRoute>
           } />
           <Route path="/audit-logs" element={
-            <ProtectedRoute allowedRoles={['User, Admin,Platform Admin']}>
+            <ProtectedRoute allowedRoles={['User', 'Admin', 'Platform Admin']}>
               <AuditLogs />
             </ProtectedRoute>
           } />
@@ -116,7 +116,7 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="/system-health" element={
-            <ProtectedRoute allowedRoles={['User, Admin,Platform Admin']}>
+            <ProtectedRoute allowedRoles={['Platform Admin']}>
               <SystemHealthDashboard />
             </ProtectedRoute>
           } />

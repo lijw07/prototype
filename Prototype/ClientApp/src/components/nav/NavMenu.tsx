@@ -87,8 +87,13 @@ export default function NavMenu() {
 
         {navSections.map((section) => {
           const isOpen = openSections[section.title] ?? false; // default closed if not in state
+          const visibleItems = section.items.filter(item => item.allowedRoles.includes(user?.role ?? ''));
 
-          return (
+            if (visibleItems.length === 0) {
+              return null; // hide this entire section/tab group
+            } else 
+            {
+                        return (
             <div key={section.title} className="mb-2">
               <button
                 type="button"
@@ -129,10 +134,10 @@ export default function NavMenu() {
               </ul>
             )}
             </div>
-          );
+              );
+            }
         })}
       </div>
-
       <div className="mt-auto p-3 border-top">
         <small className="text-muted">CAMS v1.0</small>
       </div>
