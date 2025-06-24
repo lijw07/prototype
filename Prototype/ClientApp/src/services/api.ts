@@ -311,8 +311,14 @@ export const userProvisioningApi = {
   autoProvisionUsers: (request: any) =>
     api.post<{ success: boolean; data: any }>('/api/user-provisioning/auto-provision', request),
     
-  bulkProvisionUsers: (request: any) =>
-    api.post<{ success: boolean; data: any }>('/api/user-provisioning/bulk-provision', request),
+  bulkProvisionUsers: (formData: FormData) =>
+    fetch(`${getApiBaseUrl()}/api/BulkUpload/upload`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
+      },
+      body: formData
+    }).then(response => response.json()),
     
   getProvisioningTemplates: () =>
     api.get<{ success: boolean; data: any }>('/api/user-provisioning/provisioning-templates'),

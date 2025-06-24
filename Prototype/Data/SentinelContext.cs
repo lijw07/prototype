@@ -19,6 +19,8 @@ public class SentinelContext(DbContextOptions<SentinelContext> options) : DbCont
     public DbSet<UserModel> Users { get; set; }
     public DbSet<UserRoleModel> UserRoles { get; set; }
     public DbSet<UserRecoveryRequestModel> UserRecoveryRequests { get; set; }
+    public DbSet<BulkUploadHistoryModel> BulkUploadHistories { get; set; }
+    public DbSet<UploadedFileModel> UploadedFiles { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

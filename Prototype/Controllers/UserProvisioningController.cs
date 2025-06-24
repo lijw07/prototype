@@ -103,6 +103,7 @@ public class UserProvisioningController : ControllerBase
         }
     }
 
+
     private async Task<object> CollectProvisioningMetrics()
     {
         var now = DateTime.UtcNow;
@@ -375,6 +376,7 @@ public class UserProvisioningController : ControllerBase
         };
         _context.AuditLogs.Add(auditLog);
     }
+
 }
 
 // Request models
@@ -390,3 +392,4 @@ public class AutoProvisionCriteria
     public string? RolePattern { get; set; }
     public int? MaxDaysWaiting { get; set; }
 }
+

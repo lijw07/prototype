@@ -26,6 +26,8 @@ using Prototype.POCO;
 using Prototype.Services;
 using Prototype.Services.Factory;
 using Prototype.Services.Interfaces;
+using Prototype.Services.BulkUpload;
+using Prototype.Services.BulkUpload.Mappers;
 using Prototype.Utility;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -77,13 +79,27 @@ builder.Services.AddScoped<IAuthenticatedUserAccessor, AuthenticatedUserAccessor
 builder.Services.AddScoped<IApplicationFactoryService, ApplicationFactoryService>();
 builder.Services.AddScoped<IUserApplicationFactoryService, UserApplicationFactoryService>();
 builder.Services.AddScoped<IApplicationConnectionFactoryService, ApplicationConnectionFactoryService>();
+builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<PasswordEncryptionService>();
+builder.Services.AddScoped<IValidationService, ValidationService>();
 builder.Services.AddScoped<ValidationService>();
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<IUserAccountService, UserAccountService>();
 builder.Services.AddScoped<IUserRoleService, UserRoleService>();
 builder.Services.AddScoped<DatabaseSeeder>();
+
+// Register Bulk Upload Services
+builder.Services.AddScoped<IBulkUploadService, BulkUploadService>();
+builder.Services.AddScoped<ITableDetectionService, TableDetectionService>();
+builder.Services.AddScoped<IFileStorageService, FileStorageService>();
+builder.Services.AddScoped<ITableMappingService, TableMappingService>();
+
+// Register Table Mappers
+builder.Services.AddScoped<UserTableMapper>();
+builder.Services.AddScoped<ApplicationTableMapper>();
+builder.Services.AddScoped<UserApplicationTableMapper>();
+builder.Services.AddScoped<TemporaryUserTableMapper>();
 
 // Add HTTP Context Accessor
 builder.Services.AddHttpContextAccessor();
@@ -292,6 +308,7 @@ app.UseAuthorization();
 
 // ENSURE THE BE DOESN'T CONNECT TO THE DB BEFORE IT STARTS
 app.MapGet("/health", () => Results.Ok("Healthy!"));
+app.MapGet("/test-bulk", () => Results.Ok("Bulk upload route test working!"));
 
 app.MapControllers();
 
