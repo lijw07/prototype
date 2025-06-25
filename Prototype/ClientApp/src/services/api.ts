@@ -349,6 +349,21 @@ export const userProvisioningApi = {
       body: formData
     }).then(response => response.json()),
     
+  bulkProvisionWithQueue: (formData: FormData) =>
+    fetch(`${getApiBaseUrl()}/api/BulkUpload/upload-queue`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
+      },
+      body: formData
+    }).then(response => response.json()),
+    
+  getQueueStatus: (jobId: string) =>
+    api.get<ApiResponse<any>>(`/api/BulkUpload/queue-status/${jobId}`),
+    
+  cancelQueue: (jobId: string) =>
+    api.post<ApiResponse<any>>(`/api/BulkUpload/cancel-queue/${jobId}`),
+    
   getProvisioningTemplates: () =>
     api.get<{ success: boolean; data: any }>('/api/user-provisioning/provisioning-templates'),
 };

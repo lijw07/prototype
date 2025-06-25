@@ -21,7 +21,7 @@ namespace Prototype.Services.BulkUpload.Mappers
             _logger = logger;
         }
 
-        public async Task<ValidationResult> ValidateRowAsync(DataRow row, int rowNumber)
+        public async Task<ValidationResult> ValidateRowAsync(DataRow row, int rowNumber, CancellationToken cancellationToken = default)
         {
             var result = new ValidationResult { IsValid = true };
 
@@ -94,7 +94,7 @@ namespace Prototype.Services.BulkUpload.Mappers
             return result;
         }
 
-        public Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId)
+        public Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId, CancellationToken cancellationToken = default)
         {
             try
             {

@@ -20,7 +20,7 @@ namespace Prototype.Services.BulkUpload.Mappers
             _logger = logger;
         }
 
-        public async Task<ValidationResult> ValidateRowAsync(DataRow row, int rowNumber)
+        public async Task<ValidationResult> ValidateRowAsync(DataRow row, int rowNumber, CancellationToken cancellationToken = default)
         {
             var result = new ValidationResult { IsValid = true };
 
@@ -67,12 +67,13 @@ namespace Prototype.Services.BulkUpload.Mappers
                 // Check for existing assignment
                 if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(applicationName))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var existingAssignment = await _context.UserApplications
                         .Include(ua => ua.User)
                         .Include(ua => ua.Application)
                         .FirstOrDefaultAsync(ua => 
                             ua.User.Username == username && 
-                            ua.Application.ApplicationName == applicationName);
+                            ua.Application.ApplicationName == applicationName, cancellationToken);
                     
                     if (existingAssignment != null)
                         result.Errors.Add($"Row {rowNumber}: User '{username}' is already assigned to application '{applicationName}'");
@@ -90,18 +91,24 @@ namespace Prototype.Services.BulkUpload.Mappers
             return result;
         }
 
-        public async Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId)
+        public async Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId, CancellationToken cancellationToken = default)
         {
             try
             {
+                // Check for cancellation before processing
+                cancellationToken.ThrowIfCancellationRequested();
+                
                 var username = GetColumnValue(row, "Username");
                 var applicationName = GetColumnValue(row, "ApplicationName");
 
                 // Get user and application IDs
+                cancellationToken.ThrowIfCancellationRequested();
                 var user = await _context.Users
-                    .FirstOrDefaultAsync(u => u.Username == username);
+                    .FirstOrDefaultAsync(u => u.Username == username, cancellationToken);
+                    
+                cancellationToken.ThrowIfCancellationRequested();
                 var application = await _context.Applications
-                    .FirstOrDefaultAsync(a => a.ApplicationName == applicationName);
+                    .FirstOrDefaultAsync(a => a.ApplicationName == applicationName, cancellationToken);
 
                 if (user == null || application == null)
                 {
@@ -117,8 +124,9 @@ namespace Prototype.Services.BulkUpload.Mappers
 
                 // For now, we'll need to create a default application connection or require it to exist
                 // This is a simplified implementation - in practice you might want to create a default connection
+                cancellationToken.ThrowIfCancellationRequested();
                 var defaultConnection = await _context.ApplicationConnections
-                    .FirstOrDefaultAsync(ac => ac.ApplicationId == application.ApplicationId);
+                    .FirstOrDefaultAsync(ac => ac.ApplicationId == application.ApplicationId, cancellationToken);
                 
                 if (defaultConnection == null)
                 {

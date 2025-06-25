@@ -20,7 +20,7 @@ namespace Prototype.Services.BulkUpload.Mappers
             _logger = logger;
         }
 
-        public async Task<ValidationResult> ValidateRowAsync(DataRow row, int rowNumber)
+        public async Task<ValidationResult> ValidateRowAsync(DataRow row, int rowNumber, CancellationToken cancellationToken = default)
         {
             var result = new ValidationResult { IsValid = true };
 
@@ -50,8 +50,9 @@ namespace Prototype.Services.BulkUpload.Mappers
                 // Check for duplicates
                 if (!string.IsNullOrWhiteSpace(applicationName))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var existingApp = await _context.Applications
-                        .FirstOrDefaultAsync(a => a.ApplicationName == applicationName);
+                        .FirstOrDefaultAsync(a => a.ApplicationName == applicationName, cancellationToken);
                     if (existingApp != null)
                         result.Errors.Add($"Row {rowNumber}: ApplicationName '{applicationName}' already exists");
                 }
@@ -68,10 +69,13 @@ namespace Prototype.Services.BulkUpload.Mappers
             return result;
         }
 
-        public Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId)
+        public Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId, CancellationToken cancellationToken = default)
         {
             try
             {
+                // Check for cancellation before processing
+                cancellationToken.ThrowIfCancellationRequested();
+                
                 var dataSourceTypeStr = GetColumnValue(row, "ApplicationDataSourceType") ?? "Database";
                 var dataSourceType = System.Enum.Parse<Prototype.Enum.DataSourceTypeEnum>(dataSourceTypeStr);
                 

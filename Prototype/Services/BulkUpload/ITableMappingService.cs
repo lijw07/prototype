@@ -12,8 +12,8 @@ namespace Prototype.Services.BulkUpload
 
     public interface ITableMapper
     {
-        Task<ValidationResult> ValidateRowAsync(DataRow row, int rowNumber);
-        Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId);
+        Task<ValidationResult> ValidateRowAsync(DataRow row, int rowNumber, CancellationToken cancellationToken = default);
+        Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId, CancellationToken cancellationToken = default);
         List<TableColumnInfo> GetTemplateColumns();
         List<Dictionary<string, object>> GetExampleData();
         string TableType { get; }

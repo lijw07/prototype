@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Prototype.Data;
 using Prototype.Models;
 using Prototype.DTOs;
@@ -25,6 +26,8 @@ namespace Prototype.Controllers.BulkUpload
         private readonly ITransactionService _transactionService;
         private readonly IAuthenticatedUserAccessor _userAccessor;
         private readonly IProgressService _progressService;
+        private readonly IJobCancellationService _jobCancellationService;
+        private readonly IFileQueueService _fileQueueService;
 
         public BulkUploadController(
             IBulkUploadService bulkUploadService,
@@ -34,7 +37,9 @@ namespace Prototype.Controllers.BulkUpload
             IValidationService validationService,
             ITransactionService transactionService,
             IAuthenticatedUserAccessor userAccessor,
-            IProgressService progressService)
+            IProgressService progressService,
+            IJobCancellationService jobCancellationService,
+            IFileQueueService fileQueueService)
         {
             _bulkUploadService = bulkUploadService;
             _tableDetectionService = tableDetectionService;
@@ -44,6 +49,8 @@ namespace Prototype.Controllers.BulkUpload
             _transactionService = transactionService;
             _userAccessor = userAccessor;
             _progressService = progressService;
+            _jobCancellationService = jobCancellationService;
+            _fileQueueService = fileQueueService;
         }
 
         [HttpPost("upload")]
@@ -193,14 +200,14 @@ namespace Prototype.Controllers.BulkUpload
                     });
                 }
 
-                // Use provided job ID or generate a new one for progress tracking
+                // Use provided job ID or generated a new one for progress tracking
                 var jobId = !string.IsNullOrEmpty(request.JobId) ? request.JobId : _progressService.GenerateJobId();
 
                 // Read file data immediately
                 var fileData = await ReadFileDataAsync(request.File);
                 var fileExtension = Path.GetExtension(request.File.FileName).ToLowerInvariant();
                 
-                // Detect table type immediately
+                // Detect a table type immediately
                 var detectedTable = await _tableDetectionService.DetectTableTypeAsync(fileData, fileExtension);
                 if (detectedTable == null)
                 {
@@ -212,18 +219,24 @@ namespace Prototype.Controllers.BulkUpload
                     });
                 }
 
-                // Generate job ID for progress tracking and return with result
-                var uploadResult = await _bulkUploadService.ProcessBulkDataWithProgressAsync(
-                    fileData, 
-                    detectedTable.TableType, 
-                    fileExtension, 
-                    currentUser.UserId, 
-                    jobId,
-                    request.File.FileName,
-                    0, // fileIndex
-                    1, // totalFiles
-                    request.IgnoreErrors == true
-                );
+                // Create a cancellation token for this job
+                var cancellationTokenSource = _jobCancellationService.CreateJobCancellation(jobId);
+                
+                try
+                {
+                    // Generate job ID for progress tracking and return with a result
+                    var uploadResult = await _bulkUploadService.ProcessBulkDataWithProgressAsync(
+                        fileData, 
+                        detectedTable.TableType, 
+                        fileExtension, 
+                        currentUser.UserId, 
+                        jobId,
+                        request.File.FileName,
+                        0, // fileIndex
+                        1, // totalFiles
+                        request.IgnoreErrors == true,
+                        cancellationTokenSource.Token
+                    );
 
                 if (!uploadResult.IsSuccess)
                 {
@@ -255,7 +268,23 @@ namespace Prototype.Controllers.BulkUpload
                     Data = new { JobId = jobId, Result = uploadResult.Data }
                 };
                 
-                return Ok(response);
+                    return Ok(response);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogInformation("Bulk upload job {JobId} was cancelled", jobId);
+                    return Ok(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "Migration was cancelled",
+                        Data = new { JobId = jobId }
+                    });
+                }
+                finally
+                {
+                    // Clean up the cancellation token
+                    _jobCancellationService.RemoveJob(jobId);
+                }
             }
             catch (Exception ex)
             {
@@ -286,7 +315,7 @@ namespace Prototype.Controllers.BulkUpload
                     });
                 }
 
-                if (request.Files == null || request.Files.Count == 0)
+                if (request.Files.IsNullOrEmpty())
                 {
                     return BadRequest(new ApiResponse<object>
                     {
@@ -397,6 +426,187 @@ namespace Prototype.Controllers.BulkUpload
                 {
                     Success = false,
                     Message = "An error occurred during multiple file bulk upload",
+                    Data = null
+                });
+            }
+        }
+
+        [HttpPost("upload-queue")]
+        public async Task<IActionResult> UploadBulkDataWithQueue([FromForm] MultipleBulkUploadRequest request)
+        {
+            try
+            {
+                // Temporary: Use admin user for testing
+                var currentUser = await _context.Users.FirstOrDefaultAsync(u => u.Username == "admin");
+                if (currentUser == null)
+                {
+                    return Unauthorized(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "Admin user not found",
+                        Data = null
+                    });
+                }
+
+                if (request.Files.IsNullOrEmpty())
+                {
+                    return BadRequest(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "No files uploaded",
+                        Data = null
+                    });
+                }
+
+                // Validate all files first
+                var allowedExtensions = new[] { ".csv", ".xml", ".json", ".xlsx", ".xls" };
+                foreach (var file in request.Files)
+                {
+                    var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+                    if (!allowedExtensions.Contains(fileExtension))
+                    {
+                        return BadRequest(new ApiResponse<object>
+                        {
+                            Success = false,
+                            Message = $"Invalid file format for {file.FileName}. Supported formats: CSV, XML, JSON, XLSX, XLS",
+                            Data = null
+                        });
+                    }
+                }
+
+                _logger.LogInformation("Queueing {FileCount} files for processing", request.Files.Count);
+
+                // Create queue request
+                var queueRequest = new QueuedFileUploadRequest
+                {
+                    Files = request.Files,
+                    UserId = currentUser.UserId,
+                    IgnoreErrors = request.IgnoreErrors,
+                    ContinueOnError = request.ContinueOnError
+                };
+
+                // Queue the files for processing
+                var jobId = await _fileQueueService.QueueMultipleFilesAsync(queueRequest);
+
+                return Ok(new ApiResponse<object>
+                {
+                    Success = true,
+                    Message = $"Files queued for processing. {request.Files.Count} files will be processed sequentially.",
+                    Data = new 
+                    { 
+                        JobId = jobId,
+                        TotalFiles = request.Files.Count,
+                        Status = "Queued",
+                        Message = "Files are queued and will be processed in order"
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error queueing multiple files for bulk upload");
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "An error occurred while queueing files for processing",
+                    Data = null
+                });
+            }
+        }
+
+        [HttpGet("queue-status/{jobId}")]
+        public IActionResult GetQueueStatus(string jobId)
+        {
+            try
+            {
+                var status = _fileQueueService.GetQueueStatus(jobId);
+                var files = _fileQueueService.GetQueuedFiles(jobId);
+
+                return Ok(new ApiResponse<object>
+                {
+                    Success = true,
+                    Message = "Queue status retrieved successfully",
+                    Data = new
+                    {
+                        JobId = jobId,
+                        Status = status.ToString(),
+                        TotalFiles = files.Count,
+                        CompletedFiles = files.Count(f => f.Status == QueuedFileStatus.Completed),
+                        FailedFiles = files.Count(f => f.Status == QueuedFileStatus.Failed),
+                        ProcessingFile = files.FirstOrDefault(f => f.Status == QueuedFileStatus.Processing)?.FileName,
+                        Files = files.Select(f => new
+                        {
+                            f.FileName,
+                            Status = f.Status.ToString(),
+                            f.ProcessedRecords,
+                            f.FailedRecords,
+                            f.TotalRecords,
+                            ProcessingTimeMs = f.ProcessingTime.TotalMilliseconds,
+                            ErrorCount = f.Errors?.Count ?? 0,
+                            f.QueuedAt,
+                            f.StartedAt,
+                            f.CompletedAt
+                        }).ToList()
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting queue status for job {JobId}", jobId);
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "An error occurred while getting queue status",
+                    Data = null
+                });
+            }
+        }
+
+        [HttpPost("cancel-queue/{jobId}")]
+        public async Task<IActionResult> CancelQueue(string jobId)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "User not authenticated",
+                        Data = null
+                    });
+                }
+
+                _logger.LogInformation("Queue cancellation requested for job {JobId} by user {UserId}", jobId, currentUser.UserId);
+
+                var wasCancelled = _fileQueueService.CancelQueue(jobId);
+                
+                if (wasCancelled)
+                {
+                    return Ok(new ApiResponse<object>
+                    {
+                        Success = true,
+                        Message = "File queue cancelled successfully",
+                        Data = new { jobId, status = "cancelled" }
+                    });
+                }
+                else
+                {
+                    return BadRequest(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "Queue not found or already completed",
+                        Data = new { jobId }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error cancelling queue for job {JobId}", jobId);
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Failed to cancel queue",
                     Data = null
                 });
             }
@@ -551,8 +761,8 @@ namespace Prototype.Controllers.BulkUpload
             {
                 UserActivityLogId = Guid.NewGuid(),
                 UserId = userId,
-                DeviceInformation = HttpContext.Request.Headers["User-Agent"].ToString() ?? "Unknown",
-                ActionType = Prototype.Enum.ActionTypeEnum.Create,
+                DeviceInformation = HttpContext.Request.Headers["User-Agent"].ToString(),
+                ActionType = Enum.ActionTypeEnum.Create,
                 Description = $"Multiple file bulk upload. Files: {response.TotalFiles}, Processed: {response.ProcessedFiles}, Failed: {response.FailedFiles}, Total Records: {response.TotalRecords}, Success: {response.OverallSuccess}",
                 Timestamp = DateTime.UtcNow,
                 IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
@@ -569,6 +779,64 @@ namespace Prototype.Controllers.BulkUpload
             return memoryStream.ToArray();
         }
 
+        [HttpPost("cancel/{jobId}")]
+        public async Task<IActionResult> CancelMigration(string jobId)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "User not authenticated",
+                        Data = null
+                    });
+                }
+
+                _logger.LogInformation("Cancellation requested for job {JobId} by user {UserId}", jobId, currentUser.UserId);
+
+                // Cancel the job using the cancellation service
+                var wasCancelled = _jobCancellationService.CancelJob(jobId);
+                
+                if (wasCancelled)
+                {
+                    // Notify through SignalR that the job was canceled
+                    await _progressService.NotifyError(jobId, "Migration cancelled by user");
+                    
+                    // Log the cancellation activity
+                    await LogBulkUploadActivity(currentUser.UserId, "Migration", 0, false);
+
+                    return Ok(new ApiResponse<object>
+                    {
+                        Success = true,
+                        Message = "Migration cancelled successfully",
+                        Data = new { jobId, status = "cancelled" }
+                    });
+                }
+                else
+                {
+                    return BadRequest(new ApiResponse<object>
+                    {
+                        Success = false,
+                        Message = "Job not found or already completed",
+                        Data = new { jobId }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error cancelling migration for job {JobId}", jobId);
+                return StatusCode(500, new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Failed to cancel migration",
+                    Data = null
+                });
+            }
+        }
+
         private async Task<UserModel?> GetCurrentUserAsync()
         {
             // Temporary: Return admin user for testing when authorization is disabled
@@ -581,8 +849,8 @@ namespace Prototype.Controllers.BulkUpload
             {
                 UserActivityLogId = Guid.NewGuid(),
                 UserId = userId,
-                DeviceInformation = HttpContext.Request.Headers["User-Agent"].ToString() ?? "Unknown",
-                ActionType = Prototype.Enum.ActionTypeEnum.Create,
+                DeviceInformation = HttpContext.Request.Headers["User-Agent"].ToString(),
+                ActionType = Enum.ActionTypeEnum.Create,
                 Description = $"Bulk upload to {tableType} table. Records: {recordCount}. Success: {success}",
                 Timestamp = DateTime.UtcNow,
                 IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()

@@ -94,6 +94,8 @@ builder.Services.AddScoped<IBulkUploadService, BulkUploadService>();
 builder.Services.AddScoped<ITableDetectionService, TableDetectionService>();
 builder.Services.AddScoped<ITableMappingService, TableMappingService>();
 builder.Services.AddScoped<IProgressService, ProgressService>();
+builder.Services.AddSingleton<IJobCancellationService, JobCancellationService>();
+builder.Services.AddScoped<IFileQueueService, FileQueueService>();
 
 // Register Table Mappers
 builder.Services.AddScoped<UserTableMapper>();

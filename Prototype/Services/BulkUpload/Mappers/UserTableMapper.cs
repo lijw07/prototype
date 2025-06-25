@@ -26,7 +26,7 @@ namespace Prototype.Services.BulkUpload.Mappers
             _logger = logger;
         }
 
-        public async Task<ValidationResult> ValidateRowAsync(DataRow row, int rowNumber)
+        public async Task<ValidationResult> ValidateRowAsync(DataRow row, int rowNumber, CancellationToken cancellationToken = default)
         {
             var result = new ValidationResult { IsValid = true };
 
@@ -64,16 +64,18 @@ namespace Prototype.Services.BulkUpload.Mappers
                 // Check for duplicates
                 if (!string.IsNullOrWhiteSpace(username))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var existingUser = await _context.Users
-                        .FirstOrDefaultAsync(u => u.Username == username);
+                        .FirstOrDefaultAsync(u => u.Username == username, cancellationToken);
                     if (existingUser != null)
                         result.Errors.Add($"Row {rowNumber}: Username '{username}' already exists");
                 }
 
                 if (!string.IsNullOrWhiteSpace(email))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var existingEmail = await _context.Users
-                        .FirstOrDefaultAsync(u => u.Email == email);
+                        .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
                     if (existingEmail != null)
                         result.Errors.Add($"Row {rowNumber}: Email '{email}' already exists");
                 }
@@ -90,10 +92,13 @@ namespace Prototype.Services.BulkUpload.Mappers
             return result;
         }
 
-        public Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId)
+        public Task<Result<bool>> SaveRowAsync(DataRow row, Guid userId, CancellationToken cancellationToken = default)
         {
             try
             {
+                // Check for cancellation before processing
+                cancellationToken.ThrowIfCancellationRequested();
+                
                 // Generate temporary password
                 var tempPassword = GenerateTemporaryPassword();
                 var hashedPassword = _passwordEncryption.HashPassword(tempPassword);

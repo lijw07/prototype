@@ -24,7 +24,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  X
 } from 'lucide-react';
 import { userProvisioningApi } from '../../services/api';
 import { progressService, ProgressUpdate, JobStart, JobComplete, JobError } from '../../services/signalr';
@@ -71,6 +72,108 @@ interface PendingRequest {
 }
 
 type MigrationStatus = 'idle' | 'processing' | 'completed' | 'error';
+
+// Error Display Component with truncation and expand functionality
+const ErrorDisplay: React.FC<{ errors: string[] }> = ({ errors }) => {
+  const [expandedErrors, setExpandedErrors] = useState<Set<number>>(new Set());
+  const [showAllErrors, setShowAllErrors] = useState(false);
+  
+  const MAX_ERROR_LENGTH = 200; // Characters before truncation
+  const MAX_INITIAL_ERRORS = 3; // Only show first 3 errors initially
+  
+  const toggleErrorExpansion = (index: number) => {
+    const newExpanded = new Set(expandedErrors);
+    if (newExpanded.has(index)) {
+      newExpanded.delete(index);
+    } else {
+      newExpanded.add(index);
+    }
+    setExpandedErrors(newExpanded);
+  };
+  
+  const truncateError = (error: string, maxLength: number) => {
+    if (error.length <= maxLength) return error;
+    return error.substring(0, maxLength);
+  };
+  
+  const errorsToShow = showAllErrors ? errors : errors.slice(0, MAX_INITIAL_ERRORS);
+  
+  return (
+    <div className="mb-3">
+      <h6 className="fw-semibold text-danger mb-2">Errors:</h6>
+      <div className="alert alert-danger">
+        <ul className="mb-0 ps-3">
+          {errorsToShow.map((error, index) => {
+            const isExpanded = expandedErrors.has(index);
+            const needsTruncation = error.length > MAX_ERROR_LENGTH;
+            const displayError = isExpanded || !needsTruncation 
+              ? error 
+              : truncateError(error, MAX_ERROR_LENGTH);
+            
+            return (
+              <li key={index} className="small mb-2">
+                <div>
+                  {displayError}
+                  {!isExpanded && needsTruncation && (
+                    <>
+                      <span className="text-muted">...</span>
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm p-0 ms-1 text-danger"
+                        style={{ fontSize: '0.75rem', textDecoration: 'underline' }}
+                        onClick={() => toggleErrorExpansion(index)}
+                      >
+                        Show More
+                      </button>
+                    </>
+                  )}
+                  {isExpanded && needsTruncation && (
+                    <button
+                      type="button"
+                      className="btn btn-link btn-sm p-0 ms-1 text-danger"
+                      style={{ fontSize: '0.75rem', textDecoration: 'underline' }}
+                      onClick={() => toggleErrorExpansion(index)}
+                    >
+                      Show Less
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+          
+          {/* Show remaining errors count and toggle */}
+          {errors.length > MAX_INITIAL_ERRORS && (
+            <li className="small text-muted mt-2">
+              {!showAllErrors ? (
+                <>
+                  ... and {errors.length - MAX_INITIAL_ERRORS} more errors
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm p-0 ms-2 text-danger"
+                    style={{ fontSize: '0.75rem', textDecoration: 'underline' }}
+                    onClick={() => setShowAllErrors(true)}
+                  >
+                    Show All Errors
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-link btn-sm p-0 text-danger"
+                  style={{ fontSize: '0.75rem', textDecoration: 'underline' }}
+                  onClick={() => setShowAllErrors(false)}
+                >
+                  Show Less Errors
+                </button>
+              )}
+            </li>
+          )}
+        </ul>
+      </div>
+    </div>
+  );
+};
 
 export default function UserProvisioning() {
   const { migrationState, updateMigrationState, clearMigrationState, shouldNavigateToBulkTab, setShouldNavigateToBulkTab, setIsOnBulkTab } = useMigration();
@@ -600,10 +703,20 @@ export default function UserProvisioning() {
     const validFiles: File[] = [];
     const errors: string[] = [];
     
+    // Check for duplicate files
+    const existingFileNames = new Set(uploadedFiles.map(f => f.name));
+    
     // Validate all files first
     for (const file of files) {
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
       console.log(`File: ${file.name}, Extension: ${fileExtension}`);
+      
+      // Check for duplicates
+      if (existingFileNames.has(file.name)) {
+        errors.push(`${file.name}: File already uploaded`);
+        continue;
+      }
+      
       if (!supportedFormats.includes(fileExtension || '')) {
         errors.push(`${file.name}: Unsupported format (${fileExtension?.toUpperCase()})`);
       } else {
@@ -615,7 +728,7 @@ export default function UserProvisioning() {
     console.log('Errors during validation:', errors);
     
     if (errors.length > 0) {
-      setDragError(`Some files have unsupported formats:\n${errors.join('\n')}`);
+      setDragError(`Some files have issues:\n${errors.join('\n')}`);
     }
     
     if (validFiles.length === 0) {
@@ -623,12 +736,14 @@ export default function UserProvisioning() {
       return;
     }
     
-    setUploadedFiles(validFiles);
-    console.log('Set uploaded files state');
+    // Add to existing files instead of replacing
+    const updatedFiles = [...uploadedFiles, ...validFiles];
+    setUploadedFiles(updatedFiles);
+    console.log('Added files to existing uploaded files. Total files:', updatedFiles.length);
     
-    // Process files for preview
-    const newFileDataMap = new Map<string, any[]>();
-    let allData: any[] = [];
+    // Process files for preview - preserve existing data and add new
+    const newFileDataMap = new Map(fileDataMap); // Start with existing data
+    let allData: any[] = [...allMigrationData]; // Start with existing migration data
     
     for (const file of validFiles) {
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
@@ -812,67 +927,13 @@ export default function UserProvisioning() {
     // Show initial notification
 
     try {
-      // Process only the first file for now with SignalR progress tracking
-      if (uploadedFiles.length > 0) {
-        const file = uploadedFiles[0];
-        
-        // Show initial progress
-        updateMigrationState({ progress: 1 });
-        
-        // First connect to SignalR before starting the upload
-        console.log('🔗 Connecting to SignalR...');
-        try {
-          await progressService.ensureConnection();
-          console.log('✅ SignalR connected successfully');
-          updateMigrationState({ progress: 5 });
-        } catch (signalRError) {
-          console.error('❌ Failed to connect to SignalR:', signalRError);
-          // Continue without SignalR
-        }
-        
-        // Pre-generate job ID and join SignalR group before API call
-        const jobId = progressService.generateJobId();
-        setCurrentJobId(jobId);
-        console.log('🔗 Pre-joining SignalR group for job:', jobId);
-        
-        try {
-          await progressService.joinProgressGroup(jobId);
-          console.log('✅ Successfully pre-joined SignalR progress group for job:', jobId);
-          updateMigrationState({ progress: 10, jobId });
-        } catch (signalRError) {
-          console.error('❌ Failed to pre-join SignalR progress group:', signalRError);
-        }
-        
-        // Create FormData to send the file to the progress-enabled endpoint
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('ignoreErrors', 'false');
-        formData.append('jobId', jobId); // Send the pre-generated job ID
-
-        console.log('📁 Uploading file:', file.name, 'Size:', file.size, 'bytes');
-        updateMigrationState({ progress: 15 });
-        
-        // Call the SignalR-enabled API endpoint with pre-generated job ID
-        const response = await userProvisioningApi.bulkProvisionWithProgress(formData);
-        console.log('📊 API Response:', response);
-
-        if (response.success && response.data) {
-          // Success case - progress updates will come via SignalR
-          console.log('✅ Upload started successfully, waiting for SignalR updates...');
-        } else {
-          // Error case - show error immediately
-          console.error('❌ Upload failed:', response.message);
-          updateMigrationState({
-            status: 'error',
-            results: {
-              successful: 0,
-              failed: 1,
-              errors: [response.message || 'Upload failed'],
-              processedFiles: 0,
-              totalFiles: 1
-            }
-          });
-        }
+      // Use queue-based processing for multiple files, single file processing for one file
+      if (uploadedFiles.length > 1) {
+        console.log(`📁 Processing ${uploadedFiles.length} files using queue system...`);
+        await processBulkMigrationWithQueue();
+      } else if (uploadedFiles.length === 1) {
+        console.log('📁 Processing single file with progress tracking...');
+        await processSingleFileWithProgress();
       } else {
         throw new Error('No files to process');
       }
@@ -1079,6 +1140,57 @@ export default function UserProvisioning() {
     // Hide notification
   };
 
+  const cancelMigration = async () => {
+    try {
+      if (currentJobId) {
+        console.log('🚫 Cancelling job:', currentJobId);
+        
+        // Determine if this is a queue job or single file job
+        let response;
+        if (uploadedFiles.length > 1) {
+          response = await userProvisioningApi.cancelQueue(currentJobId);
+        } else {
+          response = await fetch(`/api/bulkupload/cancel/${currentJobId}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          response = await response.json();
+        }
+
+        if (response.success || response.ok) {
+          console.log('✅ Job cancelled successfully');
+          
+          // Update the migration state to cancelled
+          updateMigrationState({
+            status: 'error',
+            endTime: new Date().toISOString(),
+            results: {
+              successful: 0,
+              failed: allMigrationData.length,
+              errors: ['Migration cancelled by user'],
+              processedFiles: 0,
+              totalFiles: uploadedFiles.length
+            }
+          });
+
+          // Clear periodic status checking
+          if (statusCheckInterval) {
+            clearInterval(statusCheckInterval);
+            setStatusCheckInterval(null);
+          }
+
+          setCurrentJobId(null);
+          setProgressDetails(null);
+        } else {
+          console.error('Failed to cancel migration');
+        }
+      }
+    } catch (error) {
+      console.error('Error cancelling migration:', error);
+    }
+  };
 
   const downloadTemplate = (format: 'csv' | 'json' | 'xml') => {
     let content = '';
@@ -1142,6 +1254,210 @@ export default function UserProvisioning() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  // Queue-based processing for multiple files
+  const processBulkMigrationWithQueue = async () => {
+    console.log(`📁 Starting queue-based processing for ${uploadedFiles.length} files...`);
+    
+    // First connect to SignalR before starting the upload
+    console.log('🔗 Connecting to SignalR...');
+    try {
+      await progressService.ensureConnection();
+      console.log('✅ SignalR connected successfully');
+      updateMigrationState({ progress: 5 });
+    } catch (signalRError) {
+      console.error('❌ Failed to connect to SignalR:', signalRError);
+      // Continue without SignalR
+    }
+    
+    // Create FormData for multiple files
+    const formData = new FormData();
+    uploadedFiles.forEach((file, index) => {
+      formData.append('files', file);
+    });
+    formData.append('ignoreErrors', 'false');
+    formData.append('continueOnError', 'true');
+    formData.append('processFilesSequentially', 'true');
+    
+    console.log(`📁 Uploading ${uploadedFiles.length} files to queue...`);
+    updateMigrationState({ progress: 10 });
+    
+    // Call the queue-based API endpoint
+    const response = await userProvisioningApi.bulkProvisionWithQueue(formData);
+    console.log('📊 Queue API Response:', response);
+    
+    if (response.success && response.data) {
+      const jobId = response.data.jobId;
+      setCurrentJobId(jobId);
+      
+      console.log('✅ Files queued successfully, job ID:', jobId);
+      updateMigrationState({ 
+        progress: 15,
+        jobId: jobId
+      });
+      
+      // Join SignalR group for this job
+      try {
+        await progressService.joinProgressGroup(jobId);
+        console.log('✅ Successfully joined SignalR progress group for job:', jobId);
+      } catch (signalRError) {
+        console.error('❌ Failed to join SignalR progress group:', signalRError);
+        // Fall back to polling
+        startQueueStatusPolling(jobId);
+      }
+    } else {
+      throw new Error(response.message || 'Failed to queue files for processing');
+    }
+  };
+
+  // Single file processing with progress tracking
+  const processSingleFileWithProgress = async () => {
+    const file = uploadedFiles[0];
+    
+    // Show initial progress
+    updateMigrationState({ progress: 1 });
+    
+    // First connect to SignalR before starting the upload
+    console.log('🔗 Connecting to SignalR...');
+    try {
+      await progressService.ensureConnection();
+      console.log('✅ SignalR connected successfully');
+      updateMigrationState({ progress: 5 });
+    } catch (signalRError) {
+      console.error('❌ Failed to connect to SignalR:', signalRError);
+      // Continue without SignalR
+    }
+    
+    // Pre-generate job ID and join SignalR group before API call
+    const jobId = progressService.generateJobId();
+    setCurrentJobId(jobId);
+    console.log('🔗 Pre-joining SignalR group for job:', jobId);
+    
+    try {
+      await progressService.joinProgressGroup(jobId);
+      console.log('✅ Successfully pre-joined SignalR progress group for job:', jobId);
+      updateMigrationState({ progress: 10, jobId });
+    } catch (signalRError) {
+      console.error('❌ Failed to pre-join SignalR progress group:', signalRError);
+    }
+    
+    // Create FormData to send the file to the progress-enabled endpoint
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('ignoreErrors', 'false');
+    formData.append('jobId', jobId); // Send the pre-generated job ID
+
+    console.log('📁 Uploading file:', file.name, 'Size:', file.size, 'bytes');
+    updateMigrationState({ progress: 15 });
+    
+    // Call the SignalR-enabled API endpoint with pre-generated job ID
+    const response = await userProvisioningApi.bulkProvisionWithProgress(formData);
+    console.log('📊 API Response:', response);
+
+    if (response.success && response.data) {
+      // Success case - progress updates will come via SignalR
+      console.log('✅ Upload started successfully, waiting for SignalR updates...');
+    } else {
+      // Error case - show error immediately
+      console.error('❌ Upload failed:', response.message);
+      updateMigrationState({
+        status: 'error',
+        results: {
+          successful: 0,
+          failed: 1,
+          errors: [response.message || 'Upload failed'],
+          processedFiles: 0,
+          totalFiles: 1
+        }
+      });
+    }
+  };
+
+  // Polling fallback for queue status when SignalR is not available
+  const startQueueStatusPolling = (jobId: string) => {
+    console.log('🔄 Starting queue status polling for job:', jobId);
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await userProvisioningApi.getQueueStatus(jobId);
+        
+        if (response.success && response.data) {
+          const queueData = response.data;
+          
+          // Calculate overall progress based on completed files
+          const progress = (queueData.completedFiles / queueData.totalFiles) * 100;
+          
+          updateMigrationState({ 
+            progress: Math.min(progress, 95) // Don't show 100% until actually complete
+          });
+          
+          // Update progress details with queue information
+          setProgressDetails({
+            jobId: jobId,
+            progressPercentage: progress,
+            status: queueData.status,
+            currentOperation: queueData.processingFile || `Processing file ${queueData.completedFiles + 1} of ${queueData.totalFiles}`,
+            processedRecords: 0,
+            totalRecords: 0,
+            currentFileName: queueData.processingFile,
+            processedFiles: queueData.completedFiles,
+            totalFiles: queueData.totalFiles,
+            timestamp: new Date().toISOString(),
+            errors: []
+          });
+          
+          // Check if queue is completed
+          if (queueData.status === 'Completed' || queueData.status === 'CompletedWithErrors') {
+            clearInterval(pollInterval);
+            
+            const totalProcessed = queueData.files?.reduce((sum: number, file: any) => sum + (file.processedRecords || 0), 0) || 0;
+            const totalFailed = queueData.files?.reduce((sum: number, file: any) => sum + (file.failedRecords || 0), 0) || 0;
+            const allErrors = queueData.files?.flatMap((file: any) => 
+              (file.errors || []).map((error: string) => `${file.fileName}: ${error}`)
+            ) || [];
+            
+            updateMigrationState({
+              status: queueData.status === 'Completed' ? 'completed' : 'error',
+              progress: 100,
+              endTime: new Date().toISOString(),
+              results: {
+                successful: totalProcessed,
+                failed: totalFailed,
+                errors: allErrors,
+                processedFiles: queueData.completedFiles,
+                totalFiles: queueData.totalFiles
+              }
+            });
+            
+            setProgressDetails(null);
+            setCurrentJobId(null);
+          } else if (queueData.status === 'Failed' || queueData.status === 'Cancelled') {
+            clearInterval(pollInterval);
+            
+            updateMigrationState({
+              status: 'error',
+              endTime: new Date().toISOString(),
+              results: {
+                successful: 0,
+                failed: queueData.totalFiles,
+                errors: [`Queue ${queueData.status.toLowerCase()}`],
+                processedFiles: queueData.completedFiles,
+                totalFiles: queueData.totalFiles
+              }
+            });
+            
+            setProgressDetails(null);
+            setCurrentJobId(null);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error polling queue status:', error);
+      }
+    }, 2000); // Poll every 2 seconds
+    
+    // Store the interval for cleanup
+    setStatusCheckInterval(pollInterval);
   };
 
   if (loading && !overview) {
@@ -1549,10 +1865,10 @@ export default function UserProvisioning() {
                           <Database className="text-primary me-3" size={24} />
                           <h5 className="card-title fw-bold mb-0">Bulk User Migration & Data Import</h5>
                         </div>
-                        {migrationStatus !== 'idle' && (
-                          <button onClick={resetMigration} className="btn btn-outline-secondary btn-sm">
-                            <RefreshCw size={16} className="me-2" />
-                            Reset
+                        {migrationStatus === 'processing' && (
+                          <button onClick={cancelMigration} className="btn btn-outline-danger btn-sm">
+                            <X size={16} className="me-2" />
+                            Cancel
                           </button>
                         )}
                       </div>
@@ -2059,21 +2375,7 @@ export default function UserProvisioning() {
 
                                 {/* Error Messages */}
                                 {migrationResults?.errors && migrationResults.errors.length > 0 && (
-                                  <div className="mb-3">
-                                    <h6 className="fw-semibold text-danger mb-2">Errors:</h6>
-                                    <div className="alert alert-danger">
-                                      <ul className="mb-0 ps-3">
-                                        {migrationResults.errors.slice(0, 5).map((error, index) => (
-                                          <li key={index} className="small">{error}</li>
-                                        ))}
-                                        {migrationResults.errors.length > 5 && (
-                                          <li className="small text-muted">
-                                            ... and {migrationResults.errors.length - 5} more errors
-                                          </li>
-                                        )}
-                                      </ul>
-                                    </div>
-                                  </div>
+                                  <ErrorDisplay errors={migrationResults.errors} />
                                 )}
 
                                 {/* Action Buttons */}

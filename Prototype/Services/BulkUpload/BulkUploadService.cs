@@ -40,7 +40,7 @@ namespace Prototype.Services.BulkUpload
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
         }
 
-        public async Task<Result<bool>> ValidateDataAsync(byte[] fileData, string tableType, string fileExtension)
+        public async Task<Result<bool>> ValidateDataAsync(byte[] fileData, string tableType, string fileExtension, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -282,11 +282,11 @@ namespace Prototype.Services.BulkUpload
             try
             {
                 var query = _context.BulkUploadHistories
-                    .Where(h => h.UserId == userId)
-                    .OrderByDescending(h => h.UploadedAt);
+                    .Where(h => h.UserId == userId);
 
                 var totalCount = await query.CountAsync();
                 var items = await query
+                    .OrderByDescending(h => h.UploadedAt)
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
                     .Select(h => new BulkUploadHistory
@@ -535,7 +535,8 @@ namespace Prototype.Services.BulkUpload
             string? fileName = null,
             int fileIndex = 0, 
             int totalFiles = 1, 
-            bool ignoreErrors = false)
+            bool ignoreErrors = false,
+            CancellationToken cancellationToken = default)
         {
             var stopwatch = Stopwatch.StartNew();
             _logger.LogInformation("Starting ProcessBulkDataWithProgressAsync for table: {TableType}, userId: {UserId}, jobId: {JobId}", tableType, userId, jobId);
@@ -607,9 +608,13 @@ namespace Prototype.Services.BulkUpload
                 var rowNumber = 1;
                 foreach (DataRow row in dataTable.Rows)
                 {
+                    // Check for cancellation before each validation
+                    cancellationToken.ThrowIfCancellationRequested();
+                    _logger.LogDebug("Processing validation for row {RowNumber} in job {JobId}", rowNumber, jobId);
+                    
                     try
                     {
-                        var validationResult = await mapper.ValidateRowAsync(row, rowNumber);
+                        var validationResult = await mapper.ValidateRowAsync(row, rowNumber, cancellationToken);
                         if (!validationResult.IsValid)
                         {
                             foreach (var error in validationResult.Errors)
@@ -709,17 +714,24 @@ namespace Prototype.Services.BulkUpload
                 rowNumber = 1;
                 foreach (DataRow row in dataTable.Rows)
                 {
+                    // Check for cancellation
+                    cancellationToken.ThrowIfCancellationRequested();
+                    _logger.LogDebug("Processing row {RowNumber} for saving in job {JobId}", rowNumber, jobId);
+                    
                     try
                     {
                         // Skip rows that failed validation if not ignoring errors
-                        var validationResult = await mapper.ValidateRowAsync(row, rowNumber);
+                        var validationResult = await mapper.ValidateRowAsync(row, rowNumber, cancellationToken);
                         if (!validationResult.IsValid && !ignoreErrors)
                         {
                             rowNumber++;
                             continue;
                         }
 
-                        var saveResult = await mapper.SaveRowAsync(row, userId);
+                        // Check for cancellation before saving
+                        cancellationToken.ThrowIfCancellationRequested();
+                        
+                        var saveResult = await mapper.SaveRowAsync(row, userId, cancellationToken);
                         if (saveResult.IsSuccess)
                         {
                             successfullyProcessed++;
@@ -752,6 +764,9 @@ namespace Prototype.Services.BulkUpload
                     // Update progress every 5 records or every 2% of total
                     if (successfullyProcessed % Math.Max(1, totalRecords / 50) == 0 || successfullyProcessed % 5 == 0)
                     {
+                        // Check for cancellation during progress updates
+                        cancellationToken.ThrowIfCancellationRequested();
+                        
                         var processingProgress = (double)successfullyProcessed / totalRecords * 60; // 60% for processing
                         await _progressService.NotifyProgress(jobId, new ProgressUpdateDto
                         {
@@ -785,9 +800,12 @@ namespace Prototype.Services.BulkUpload
                     TotalFiles = totalFiles
                 });
 
+                // Check for cancellation before final save
+                cancellationToken.ThrowIfCancellationRequested();
+                
                 if (response.ProcessedRecords > 0)
                 {
-                    await _context.SaveChangesAsync();
+                    await _context.SaveChangesAsync(cancellationToken);
                     _logger.LogInformation("Successfully saved all records to database for job {JobId}", jobId);
                 }
 
@@ -826,6 +844,26 @@ namespace Prototype.Services.BulkUpload
                 });
 
                 return Result<BulkUploadResponse>.Success(response);
+            }
+            catch (OperationCanceledException)
+            {
+                stopwatch.Stop();
+                _logger.LogWarning("⚠️ ProcessBulkDataWithProgressAsync was CANCELLED for job {JobId} - cancellation detected", jobId);
+                
+                await _progressService.NotifyError(jobId, "Migration cancelled by user");
+                
+                // Notify job completion with cancellation
+                await _progressService.NotifyJobCompleted(jobId, new JobCompleteDto
+                {
+                    JobId = jobId,
+                    Success = false,
+                    Message = "Migration cancelled by user",
+                    Data = null,
+                    CompletedAt = DateTime.UtcNow,
+                    TotalDuration = stopwatch.Elapsed
+                });
+                
+                return Result<BulkUploadResponse>.Failure("Migration was cancelled by user");
             }
             catch (Exception ex)
             {
