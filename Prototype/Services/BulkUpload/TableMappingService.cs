@@ -13,7 +13,8 @@ namespace Prototype.Services.BulkUpload
                 ["Users"] = serviceProvider.GetRequiredService<UserTableMapper>(),
                 ["Applications"] = serviceProvider.GetRequiredService<ApplicationTableMapper>(),
                 ["UserApplications"] = serviceProvider.GetRequiredService<UserApplicationTableMapper>(),
-                ["TemporaryUsers"] = serviceProvider.GetRequiredService<TemporaryUserTableMapper>()
+                ["TemporaryUsers"] = serviceProvider.GetRequiredService<TemporaryUserTableMapper>(),
+                ["UserRoles"] = serviceProvider.GetRequiredService<UserRoleTableMapper>()
             };
         }
 

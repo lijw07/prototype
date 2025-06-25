@@ -166,6 +166,22 @@ namespace Prototype.Services.BulkUpload
                         new() { ColumnName = "CreatedAt", DataType = "datetime", IsRequired = false, Description = "Auto-generated if not provided" },
                         new() { ColumnName = "Token", DataType = "string", IsRequired = false, MaxLength = 255, Description = "System managed verification token" }
                     }
+                },
+                ["UserRoles"] = new SupportedTableInfo
+                {
+                    TableName = "UserRoles",
+                    DisplayName = "User Roles",
+                    Description = "User roles that can be assigned to users",
+                    SupportsUpdate = false,
+                    PrimaryKeyColumn = "UserRoleId",
+                    RequiredColumns = new List<string> { "Role", "CreatedBy" },
+                    Columns = new List<TableColumnInfo>
+                    {
+                        new() { ColumnName = "UserRoleId", DataType = "guid", IsRequired = false, IsUnique = true, Description = "Auto-generated if not provided" },
+                        new() { ColumnName = "Role", DataType = "string", IsRequired = true, IsUnique = true, MaxLength = 100, Description = "Name of the user role (must be unique)" },
+                        new() { ColumnName = "CreatedBy", DataType = "string", IsRequired = true, MaxLength = 50, Description = "Username of who is creating this role" },
+                        new() { ColumnName = "CreatedAt", DataType = "datetime", IsRequired = false, Description = "Auto-generated if not provided" }
+                    }
                 }
             };
         }

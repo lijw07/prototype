@@ -8,7 +8,7 @@ using Prototype.Models;
 
 namespace Prototype.Services.BulkUpload.Mappers
 {
-    public class TemporaryUserTableMapper : ITableMapper
+    public class TemporaryUserTableMapper : IBatchTableMapper
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly SentinelContext _context;
@@ -33,8 +33,7 @@ namespace Prototype.Services.BulkUpload.Mappers
                 var lastName = GetColumnValue(row, "LastName");
                 var email = GetColumnValue(row, "Email");
                 var requestedApplications = GetColumnValue(row, "RequestedApplications");
-
-                // Required field validation
+                
                 if (string.IsNullOrWhiteSpace(firstName))
                     result.Errors.Add($"Row {rowNumber}: FirstName is required");
 
@@ -43,8 +42,7 @@ namespace Prototype.Services.BulkUpload.Mappers
 
                 if (string.IsNullOrWhiteSpace(email))
                     result.Errors.Add($"Row {rowNumber}: Email is required");
-
-                // Format validation
+                
                 if (!string.IsNullOrWhiteSpace(email) && !IsValidEmail(email))
                     result.Errors.Add($"Row {rowNumber}: Invalid email format");
 
@@ -53,12 +51,10 @@ namespace Prototype.Services.BulkUpload.Mappers
 
                 if (!string.IsNullOrWhiteSpace(lastName) && lastName.Length > 50)
                     result.Errors.Add($"Row {rowNumber}: LastName cannot exceed 50 characters");
-
-                // Use fresh DbContext scope for validation queries
+                
                 using var scope = _scopeFactory.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<SentinelContext>();
-
-                // Validate requested applications exist
+                
                 if (!string.IsNullOrWhiteSpace(requestedApplications))
                 {
                     var appNames = requestedApplications.Split(',', StringSplitOptions.RemoveEmptyEntries)
@@ -73,8 +69,7 @@ namespace Prototype.Services.BulkUpload.Mappers
                             result.Errors.Add($"Row {rowNumber}: Application '{appName}' does not exist");
                     }
                 }
-
-                // Check for duplicates
+                
                 if (!string.IsNullOrWhiteSpace(email))
                 {
                     var existingTempUser = await context.TemporaryUsers
@@ -118,7 +113,6 @@ namespace Prototype.Services.BulkUpload.Mappers
                 };
 
                 _context.TemporaryUsers.Add(tempUser);
-                // Note: SaveChanges will be called by the service after all rows are processed
                 
                 return Task.FromResult(Result<bool>.Success(true));
             }
@@ -180,6 +174,165 @@ namespace Prototype.Services.BulkUpload.Mappers
         {
             var emailRegex = new Regex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$");
             return emailRegex.IsMatch(email);
+        }
+
+        public async Task<Dictionary<int, ValidationResult>> ValidateBatchAsync(DataTable dataTable, CancellationToken cancellationToken = default)
+        {
+            var results = new Dictionary<int, ValidationResult>();
+            
+            try
+            {
+                var allEmails = dataTable.Rows.Cast<DataRow>()
+                    .Select(row => GetColumnValue(row, "Email"))
+                    .Where(email => !string.IsNullOrWhiteSpace(email))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var allApplicationNames = dataTable.Rows.Cast<DataRow>()
+                    .Select(row => GetColumnValue(row, "RequestedApplications"))
+                    .Where(apps => !string.IsNullOrWhiteSpace(apps))
+                    .SelectMany(apps => apps.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                    .Select(app => app.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var existingTempUsersData = await _context.TemporaryUsers
+                    .Where(tu => allEmails.Contains(tu.Email))
+                    .Select(tu => tu.Email.ToLower())
+                    .ToListAsync(cancellationToken);
+                var existingTempUsers = new HashSet<string>(existingTempUsersData);
+
+                var existingUsersData = await _context.Users
+                    .Where(u => allEmails.Contains(u.Email))
+                    .Select(u => u.Email.ToLower())
+                    .ToListAsync(cancellationToken);
+                var existingUsers = new HashSet<string>(existingUsersData);
+
+                var validApplicationsData = await _context.Applications
+                    .Where(a => allApplicationNames.Contains(a.ApplicationName))
+                    .Select(a => a.ApplicationName.ToLower())
+                    .ToListAsync(cancellationToken);
+                var validApplications = new HashSet<string>(validApplicationsData);
+
+                var emailsInBatch = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                var rowNumber = 1;
+                foreach (DataRow row in dataTable.Rows)
+                {
+                    var result = new ValidationResult { IsValid = true };
+
+                    var firstName = GetColumnValue(row, "FirstName");
+                    var lastName = GetColumnValue(row, "LastName");
+                    var email = GetColumnValue(row, "Email");
+                    var requestedApps = GetColumnValue(row, "RequestedApplications");
+
+                    if (string.IsNullOrWhiteSpace(firstName))
+                        result.Errors.Add($"Row {rowNumber}: FirstName is required");
+
+                    if (string.IsNullOrWhiteSpace(lastName))
+                        result.Errors.Add($"Row {rowNumber}: LastName is required");
+
+                    if (string.IsNullOrWhiteSpace(email))
+                    {
+                        result.Errors.Add($"Row {rowNumber}: Email is required");
+                    }
+                    else
+                    {
+                        if (!IsValidEmail(email))
+                            result.Errors.Add($"Row {rowNumber}: Invalid email format");
+
+                        if (existingTempUsers.Contains(email.ToLower()))
+                            result.Errors.Add($"Row {rowNumber}: Email '{email}' already has a temporary user request");
+
+                        if (existingUsers.Contains(email.ToLower()))
+                            result.Errors.Add($"Row {rowNumber}: Email '{email}' already exists as an active user");
+
+                        if (emailsInBatch.Contains(email))
+                            result.Errors.Add($"Row {rowNumber}: Email '{email}' appears multiple times in this batch");
+                        else
+                            emailsInBatch.Add(email);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(requestedApps))
+                    {
+                        var apps = requestedApps.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(app => app.Trim()).ToList();
+
+                        foreach (var appName in apps)
+                        {
+                            if (!validApplications.Contains(appName.ToLower()))
+                                result.Errors.Add($"Row {rowNumber}: Application '{appName}' does not exist");
+                        }
+                    }
+
+                    result.IsValid = !result.Errors.Any();
+                    results[rowNumber] = result;
+                    rowNumber++;
+                }
+
+                _logger.LogInformation("Batch validation completed for {RowCount} rows. Valid: {ValidCount}, Invalid: {InvalidCount}",
+                    results.Count, results.Count(r => r.Value.IsValid), results.Count(r => !r.Value.IsValid));
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during batch validation");
+                throw;
+            }
+        }
+
+        public async Task<Result<int>> SaveBatchAsync(DataTable dataTable, Guid userId, Dictionary<int, ValidationResult> validationResults, bool ignoreErrors = false, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var tempUsersToAdd = new List<TemporaryUserModel>();
+                var rowNumber = 1;
+                var successCount = 0;
+
+                foreach (DataRow row in dataTable.Rows)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    
+                    // Skip invalid rows if not ignoring errors
+                    if (validationResults.ContainsKey(rowNumber) && !validationResults[rowNumber].IsValid && !ignoreErrors)
+                    {
+                        rowNumber++;
+                        continue;
+                    }
+
+                    var tempUser = new TemporaryUserModel
+                    {
+                        TempUserId = Guid.NewGuid(),
+                        FirstName = GetColumnValue(row, "FirstName"),
+                        LastName = GetColumnValue(row, "LastName"),
+                        Email = GetColumnValue(row, "Email"),
+                        RequestedApplications = GetColumnValue(row, "RequestedApplications"),
+                        Notes = GetColumnValue(row, "Notes"),
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    tempUsersToAdd.Add(tempUser);
+                    successCount++;
+                    rowNumber++;
+                }
+
+                // Bulk add all temporary users at once
+                if (tempUsersToAdd.Any())
+                {
+                    _context.TemporaryUsers.AddRange(tempUsersToAdd);
+                    _logger.LogInformation("Added {TempUserCount} temporary users to context for bulk save", tempUsersToAdd.Count);
+                }
+
+                return Result<int>.Success(successCount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during batch save");
+                return Result<int>.Failure($"Batch save error: {ex.Message}");
+            }
         }
     }
 }

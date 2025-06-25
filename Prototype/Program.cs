@@ -106,6 +106,7 @@ builder.Services.AddScoped<UserTableMapper>();
 builder.Services.AddScoped<ApplicationTableMapper>();
 builder.Services.AddScoped<UserApplicationTableMapper>();
 builder.Services.AddScoped<TemporaryUserTableMapper>();
+builder.Services.AddScoped<UserRoleTableMapper>();
 
 // Add HTTP Context Accessor
 builder.Services.AddHttpContextAccessor();

@@ -19,6 +19,13 @@ namespace Prototype.Services.BulkUpload
         string TableType { get; }
     }
 
+    // Interface for mappers that support batch validation and processing (performance optimization)
+    public interface IBatchTableMapper : ITableMapper
+    {
+        Task<Dictionary<int, ValidationResult>> ValidateBatchAsync(DataTable dataTable, CancellationToken cancellationToken = default);
+        Task<Result<int>> SaveBatchAsync(DataTable dataTable, Guid userId, Dictionary<int, ValidationResult> validationResults, bool ignoreErrors = false, CancellationToken cancellationToken = default);
+    }
+
     public class ValidationResult
     {
         public bool IsValid { get; set; }

@@ -8,7 +8,7 @@ using Prototype.Models;
 
 namespace Prototype.Services.BulkUpload.Mappers
 {
-    public class UserTableMapper : ITableMapper
+    public class UserTableMapper : ITableMapper, IBatchTableMapper
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly SentinelContext _context;
@@ -41,7 +41,6 @@ namespace Prototype.Services.BulkUpload.Mappers
                 var lastName = GetColumnValue(row, "LastName");
                 var role = GetColumnValue(row, "Role");
 
-                // Required field validation
                 if (string.IsNullOrWhiteSpace(username))
                     result.Errors.Add($"Row {rowNumber}: Username is required");
 
@@ -54,7 +53,6 @@ namespace Prototype.Services.BulkUpload.Mappers
                 if (string.IsNullOrWhiteSpace(lastName))
                     result.Errors.Add($"Row {rowNumber}: LastName is required");
 
-                // Format validation
                 if (!string.IsNullOrWhiteSpace(email) && !IsValidEmail(email))
                     result.Errors.Add($"Row {rowNumber}: Invalid email format");
 
@@ -64,7 +62,6 @@ namespace Prototype.Services.BulkUpload.Mappers
                 if (!string.IsNullOrWhiteSpace(role) && !IsValidRole(role))
                     result.Errors.Add($"Row {rowNumber}: Invalid role. Must be Admin, User, or PlatformAdmin");
 
-                // Check for duplicates using fresh DbContext scope
                 using var scope = _scopeFactory.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<SentinelContext>();
                 
@@ -102,10 +99,8 @@ namespace Prototype.Services.BulkUpload.Mappers
         {
             try
             {
-                // Check for cancellation before processing
                 cancellationToken.ThrowIfCancellationRequested();
                 
-                // Generate temporary password
                 var tempPassword = GenerateTemporaryPassword();
                 var hashedPassword = _passwordEncryption.HashPassword(tempPassword);
 
@@ -125,7 +120,6 @@ namespace Prototype.Services.BulkUpload.Mappers
                 };
 
                 _context.Users.Add(user);
-                // Note: SaveChanges will be called by the service after all rows are processed
                 
                 return Task.FromResult(Result<bool>.Success(true));
             }
@@ -212,6 +206,162 @@ namespace Prototype.Services.BulkUpload.Mappers
         {
             var validRoles = new[] { "Admin", "User", "PlatformAdmin" };
             return validRoles.Contains(role, StringComparer.OrdinalIgnoreCase);
+        }
+
+        public async Task<Dictionary<int, ValidationResult>> ValidateBatchAsync(DataTable dataTable, CancellationToken cancellationToken = default)
+        {
+            var results = new Dictionary<int, ValidationResult>();
+            var validationErrors = new Dictionary<int, List<string>>();
+            
+            try
+            {
+                // Pre-load all existing usernames and emails in bulk to avoid N+1 queries
+                var allUsernames = dataTable.AsEnumerable()
+                    .Select(row => GetColumnValue(row, "Username"))
+                    .Where(username => !string.IsNullOrWhiteSpace(username))
+                    .Distinct()
+                    .ToList();
+                
+                var allEmails = dataTable.AsEnumerable()
+                    .Select(row => GetColumnValue(row, "Email"))
+                    .Where(email => !string.IsNullOrWhiteSpace(email))
+                    .Distinct()
+                    .ToList();
+
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<SentinelContext>();
+                
+                // Bulk load existing usernames and emails
+                var existingUsernames = await context.Users
+                    .Where(u => allUsernames.Contains(u.Username))
+                    .Select(u => u.Username)
+                    .ToHashSetAsync(cancellationToken);
+                    
+                var existingEmails = await context.Users
+                    .Where(u => allEmails.Contains(u.Email))
+                    .Select(u => u.Email)
+                    .ToHashSetAsync(cancellationToken);
+
+                // Validate each row using the pre-loaded data
+                int rowNumber = 1;
+                foreach (DataRow row in dataTable.Rows)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    
+                    var errors = new List<string>();
+                    
+                    var username = GetColumnValue(row, "Username");
+                    var email = GetColumnValue(row, "Email");
+                    var firstName = GetColumnValue(row, "FirstName");
+                    var lastName = GetColumnValue(row, "LastName");
+                    var role = GetColumnValue(row, "Role");
+
+                    // Basic field validation
+                    if (string.IsNullOrWhiteSpace(username))
+                        errors.Add($"Row {rowNumber}: Username is required");
+
+                    if (string.IsNullOrWhiteSpace(email))
+                        errors.Add($"Row {rowNumber}: Email is required");
+
+                    if (string.IsNullOrWhiteSpace(firstName))
+                        errors.Add($"Row {rowNumber}: FirstName is required");
+
+                    if (string.IsNullOrWhiteSpace(lastName))
+                        errors.Add($"Row {rowNumber}: LastName is required");
+
+                    if (!string.IsNullOrWhiteSpace(email) && !IsValidEmail(email))
+                        errors.Add($"Row {rowNumber}: Invalid email format");
+
+                    if (!string.IsNullOrWhiteSpace(username) && username.Length > 50)
+                        errors.Add($"Row {rowNumber}: Username cannot exceed 50 characters");
+
+                    if (!string.IsNullOrWhiteSpace(role) && !IsValidRole(role))
+                        errors.Add($"Row {rowNumber}: Invalid role. Must be Admin, User, or PlatformAdmin");
+
+                    // Check for duplicates using pre-loaded data (no database queries)
+                    if (!string.IsNullOrWhiteSpace(username) && existingUsernames.Contains(username))
+                        errors.Add($"Row {rowNumber}: Username '{username}' already exists");
+
+                    if (!string.IsNullOrWhiteSpace(email) && existingEmails.Contains(email))
+                        errors.Add($"Row {rowNumber}: Email '{email}' already exists");
+
+                    results[rowNumber] = new ValidationResult 
+                    { 
+                        IsValid = !errors.Any(),
+                        Errors = errors
+                    };
+                    
+                    rowNumber++;
+                }
+                
+                _logger.LogInformation("Batch validation completed for {TotalRows} rows. Valid: {ValidCount}, Invalid: {InvalidCount}", 
+                    dataTable.Rows.Count, results.Count(r => r.Value.IsValid), results.Count(r => !r.Value.IsValid));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during batch validation");
+                throw;
+            }
+
+            return results;
+        }
+
+        public async Task<Result<int>> SaveBatchAsync(DataTable dataTable, Guid userId, Dictionary<int, ValidationResult> validationResults, bool ignoreErrors = false, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var usersToAdd = new List<UserModel>();
+                var rowNumber = 1;
+                var successCount = 0;
+
+                foreach (DataRow row in dataTable.Rows)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    
+                    // Skip invalid rows if not ignoring errors
+                    if (validationResults.ContainsKey(rowNumber) && !validationResults[rowNumber].IsValid && !ignoreErrors)
+                    {
+                        rowNumber++;
+                        continue;
+                    }
+
+                    var tempPassword = GenerateTemporaryPassword();
+                    var hashedPassword = _passwordEncryption.HashPassword(tempPassword);
+
+                    var user = new UserModel
+                    {
+                        UserId = Guid.NewGuid(),
+                        Username = GetColumnValue(row, "Username"),
+                        Email = GetColumnValue(row, "Email"),
+                        FirstName = GetColumnValue(row, "FirstName"),
+                        LastName = GetColumnValue(row, "LastName"),
+                        PhoneNumber = GetColumnValue(row, "PhoneNumber"),
+                        Role = GetColumnValue(row, "Role") ?? "User",
+                        IsActive = ParseBoolean(GetColumnValue(row, "IsActive"), true),
+                        PasswordHash = hashedPassword,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    usersToAdd.Add(user);
+                    successCount++;
+                    rowNumber++;
+                }
+
+                // Bulk add all users at once
+                if (usersToAdd.Any())
+                {
+                    _context.Users.AddRange(usersToAdd);
+                    _logger.LogInformation("Added {UserCount} users to context for bulk save", usersToAdd.Count);
+                }
+
+                return Result<int>.Success(successCount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during batch save");
+                return Result<int>.Failure($"Batch save error: {ex.Message}");
+            }
         }
 
         private string GenerateTemporaryPassword()

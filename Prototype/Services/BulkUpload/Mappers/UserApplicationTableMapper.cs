@@ -33,18 +33,15 @@ namespace Prototype.Services.BulkUpload.Mappers
                 var permissionLevel = GetColumnValue(row, "PermissionLevel");
                 var expirationDate = GetColumnValue(row, "ExpirationDate");
 
-                // Required field validation
                 if (string.IsNullOrWhiteSpace(username))
                     result.Errors.Add($"Row {rowNumber}: Username is required");
 
                 if (string.IsNullOrWhiteSpace(applicationName))
                     result.Errors.Add($"Row {rowNumber}: ApplicationName is required");
 
-                // Use fresh DbContext scope for validation queries
                 using var scope = _scopeFactory.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<SentinelContext>();
 
-                // Validate user exists
                 if (!string.IsNullOrWhiteSpace(username))
                 {
                     var userExists = await context.Users
@@ -53,7 +50,6 @@ namespace Prototype.Services.BulkUpload.Mappers
                         result.Errors.Add($"Row {rowNumber}: User '{username}' does not exist or is inactive");
                 }
 
-                // Validate application exists
                 if (!string.IsNullOrWhiteSpace(applicationName))
                 {
                     var appExists = await context.Applications
@@ -62,15 +58,12 @@ namespace Prototype.Services.BulkUpload.Mappers
                         result.Errors.Add($"Row {rowNumber}: Application '{applicationName}' does not exist");
                 }
 
-                // Validate permission level
                 if (!string.IsNullOrWhiteSpace(permissionLevel) && !IsValidPermissionLevel(permissionLevel))
                     result.Errors.Add($"Row {rowNumber}: Invalid PermissionLevel. Must be Read, Write, or Admin");
 
-                // Validate expiration date
                 if (!string.IsNullOrWhiteSpace(expirationDate) && !DateTime.TryParse(expirationDate, out _))
                     result.Errors.Add($"Row {rowNumber}: Invalid ExpirationDate format");
 
-                // Check for existing assignment
                 if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(applicationName))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -101,13 +94,11 @@ namespace Prototype.Services.BulkUpload.Mappers
         {
             try
             {
-                // Check for cancellation before processing
                 cancellationToken.ThrowIfCancellationRequested();
                 
                 var username = GetColumnValue(row, "Username");
                 var applicationName = GetColumnValue(row, "ApplicationName");
 
-                // Get user and application IDs
                 cancellationToken.ThrowIfCancellationRequested();
                 var user = await _context.Users
                     .FirstOrDefaultAsync(u => u.Username == username, cancellationToken);
@@ -121,15 +112,6 @@ namespace Prototype.Services.BulkUpload.Mappers
                     return Result<bool>.Failure("User or Application not found");
                 }
 
-                var expirationDateStr = GetColumnValue(row, "ExpirationDate");
-                DateTime? expirationDate = null;
-                if (!string.IsNullOrWhiteSpace(expirationDateStr) && DateTime.TryParse(expirationDateStr, out var parsedDate))
-                {
-                    expirationDate = parsedDate;
-                }
-
-                // For now, we'll need to create a default application connection or require it to exist
-                // This is a simplified implementation - in practice you might want to create a default connection
                 cancellationToken.ThrowIfCancellationRequested();
                 var defaultConnection = await _context.ApplicationConnections
                     .FirstOrDefaultAsync(ac => ac.ApplicationId == application.ApplicationId, cancellationToken);
@@ -152,7 +134,6 @@ namespace Prototype.Services.BulkUpload.Mappers
                 };
 
                 _context.UserApplications.Add(userApplication);
-                // Note: SaveChanges will be called by the service after all rows are processed
                 
                 return Result<bool>.Success(true);
             }

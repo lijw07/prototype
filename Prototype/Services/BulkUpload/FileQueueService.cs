@@ -1,4 +1,10 @@
 using System.Collections.Concurrent;
+using System.Data;
+using System.Globalization;
+using System.Text;
+using CsvHelper;
+using CsvHelper.Configuration;
+using OfficeOpenXml;
 using Prototype.DTOs.BulkUpload;
 using Prototype.Data;
 using Prototype.Models;
@@ -33,6 +39,9 @@ namespace Prototype.Services.BulkUpload
             _progressService = progressService;
             _jobCancellationService = jobCancellationService;
             _logger = logger;
+            
+            // Set Excel license context for EPPlus
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
         }
 
         public async Task<string> QueueMultipleFilesAsync(QueuedFileUploadRequest request)
@@ -114,19 +123,42 @@ namespace Prototype.Services.BulkUpload
 
             try
             {
+                // Calculate total records across all files for initial estimate
+                var estimatedTotalRecords = 0;
+                foreach (var file in queue.Files)
+                {
+                    // Estimate records by parsing file headers - this is a rough estimate
+                    try
+                    {
+                        var dataTable = ParseFileToDataTable(file.FileData, file.FileExtension);
+                        if (dataTable != null)
+                        {
+                            estimatedTotalRecords += dataTable.Rows.Count;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Could not estimate records for file {FileName}", file.FileName);
+                        // Add a default estimate of 100 records per file if parsing fails
+                        estimatedTotalRecords += 100;
+                    }
+                }
+
                 // Initial progress notification
                 await _progressService.NotifyJobStarted(jobId, new JobStartDto
                 {
                     JobId = jobId,
                     JobType = "FileQueue",
                     TotalFiles = queue.Files.Count,
-                    EstimatedTotalRecords = 0,
+                    EstimatedTotalRecords = estimatedTotalRecords,
                     StartTime = DateTime.UtcNow
                 });
 
                 var totalFiles = queue.Files.Count;
                 var completedFiles = 0;
                 var failedFiles = 0;
+                var totalProcessedRecords = 0;
+                var totalFailedRecords = 0;
 
                 foreach (var queuedFile in queue.Files)
                 {
@@ -145,8 +177,8 @@ namespace Prototype.Services.BulkUpload
                         ProgressPercentage = (double)completedFiles / totalFiles * 100,
                         Status = "Processing",
                         CurrentOperation = $"Processing file: {queuedFile.FileName}",
-                        ProcessedRecords = 0,
-                        TotalRecords = 0,
+                        ProcessedRecords = totalProcessedRecords,
+                        TotalRecords = estimatedTotalRecords,
                         CurrentFileName = queuedFile.FileName,
                         ProcessedFiles = completedFiles,
                         TotalFiles = totalFiles
@@ -187,9 +219,27 @@ namespace Prototype.Services.BulkUpload
                             queuedFile.ProcessingTime = result.Data.ProcessingTime;
                             queuedFile.Errors = result.Data.Errors?.Select(e => e.ErrorMessage).ToList() ?? new List<string>();
 
+                            // Update cumulative totals
+                            totalProcessedRecords += result.Data.ProcessedRecords;
+                            totalFailedRecords += result.Data.FailedRecords;
                             completedFiles++;
+
                             _logger.LogInformation("File {FileName} completed successfully. Processed: {ProcessedRecords}, Failed: {FailedRecords}", 
                                 queuedFile.FileName, result.Data.ProcessedRecords, result.Data.FailedRecords);
+
+                            // Send updated progress after file completion
+                            await _progressService.NotifyProgress(jobId, new ProgressUpdateDto
+                            {
+                                JobId = jobId,
+                                ProgressPercentage = (double)completedFiles / totalFiles * 100,
+                                Status = completedFiles == totalFiles ? "Completed" : "Processing",
+                                CurrentOperation = completedFiles == totalFiles ? "All files processed" : $"Completed file: {queuedFile.FileName}",
+                                ProcessedRecords = totalProcessedRecords,
+                                TotalRecords = estimatedTotalRecords,
+                                CurrentFileName = queuedFile.FileName,
+                                ProcessedFiles = completedFiles,
+                                TotalFiles = totalFiles
+                            });
                         }
                         else
                         {
@@ -234,14 +284,38 @@ namespace Prototype.Services.BulkUpload
                 // Log the overall queue completion to BulkUploadHistory
                 await LogQueueCompletionHistory(queue, completedFiles, failedFiles);
 
+                // Create a summary response for the completed job
+                var summaryResponse = new MultipleBulkUploadResponse
+                {
+                    TotalFiles = totalFiles,
+                    ProcessedFiles = completedFiles,
+                    FailedFiles = failedFiles,
+                    TotalRecords = queue.Files.Sum(f => f.TotalRecords),
+                    ProcessedRecords = totalProcessedRecords,
+                    FailedRecords = totalFailedRecords,
+                    ProcessedAt = DateTime.UtcNow,
+                    TotalProcessingTime = DateTime.UtcNow - (queue.StartedAt ?? queue.CreatedAt),
+                    OverallSuccess = failedFiles == 0,
+                    FileResults = queue.Files.Select(f => new BulkUploadResponse
+                    {
+                        FileName = f.FileName,
+                        TotalRecords = f.TotalRecords,
+                        ProcessedRecords = f.ProcessedRecords,
+                        FailedRecords = f.FailedRecords,
+                        ProcessingTime = f.ProcessingTime,
+                        ProcessedAt = f.CompletedAt ?? DateTime.UtcNow,
+                        Errors = f.Errors?.Select(e => new BulkUploadError { ErrorMessage = e }).ToList() ?? new List<BulkUploadError>()
+                    }).ToList()
+                };
+
                 await _progressService.NotifyJobCompleted(jobId, new JobCompleteDto
                 {
                     JobId = jobId,
                     Success = failedFiles == 0,
                     Message = failedFiles == 0 
-                        ? $"All {totalFiles} files processed successfully" 
-                        : $"Processing completed. {completedFiles} succeeded, {failedFiles} failed",
-                    Data = null, // We'll provide queue status through the API endpoint instead
+                        ? $"All {totalFiles} files processed successfully. {totalProcessedRecords} total records processed." 
+                        : $"Processing completed. {completedFiles} files succeeded, {failedFiles} files failed. {totalProcessedRecords} records processed.",
+                    Data = summaryResponse,
                     CompletedAt = DateTime.UtcNow,
                     TotalDuration = DateTime.UtcNow - queue.CreatedAt
                 });
@@ -390,6 +464,182 @@ namespace Prototype.Services.BulkUpload
             using var memoryStream = new MemoryStream();
             await file.CopyToAsync(memoryStream);
             return memoryStream.ToArray();
+        }
+
+        private DataTable? ParseFileToDataTable(byte[] fileData, string fileExtension)
+        {
+            return fileExtension.ToLower() switch
+            {
+                ".csv" => ParseCsvToDataTable(fileData),
+                ".json" => ParseJsonToDataTable(fileData),
+                ".xml" => ParseXmlToDataTable(fileData),
+                ".xlsx" or ".xls" => ParseExcelToDataTable(fileData),
+                _ => null
+            };
+        }
+
+        private DataTable ParseCsvToDataTable(byte[] fileData)
+        {
+            var dataTable = new DataTable();
+            
+            using var memoryStream = new MemoryStream(fileData);
+            using var reader = new StreamReader(memoryStream, Encoding.UTF8);
+            using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
+            {
+                HasHeaderRecord = true,
+                BadDataFound = null
+            });
+
+            using var dr = new CsvDataReader(csv);
+            dataTable.Load(dr);
+
+            return dataTable;
+        }
+
+        private DataTable ParseJsonToDataTable(byte[] fileData)
+        {
+            var dataTable = new DataTable();
+
+            try
+            {
+                var json = Encoding.UTF8.GetString(fileData);
+                var jsonDoc = System.Text.Json.JsonDocument.Parse(json);
+
+                if (jsonDoc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array || 
+                    jsonDoc.RootElement.GetArrayLength() == 0)
+                {
+                    return dataTable;
+                }
+
+                // Get columns from first object
+                var firstElement = jsonDoc.RootElement[0];
+                if (firstElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    // Add columns based on first object properties
+                    foreach (var property in firstElement.EnumerateObject())
+                    {
+                        dataTable.Columns.Add(property.Name);
+                    }
+
+                    // Add rows for all objects in array
+                    foreach (var element in jsonDoc.RootElement.EnumerateArray())
+                    {
+                        if (element.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        {
+                            var row = dataTable.NewRow();
+                            foreach (DataColumn column in dataTable.Columns)
+                            {
+                                if (element.TryGetProperty(column.ColumnName, out var propertyValue))
+                                {
+                                    row[column.ColumnName] = propertyValue.ValueKind switch
+                                    {
+                                        System.Text.Json.JsonValueKind.String => propertyValue.GetString() ?? string.Empty,
+                                        System.Text.Json.JsonValueKind.Number => propertyValue.GetRawText(),
+                                        System.Text.Json.JsonValueKind.True => "true",
+                                        System.Text.Json.JsonValueKind.False => "false",
+                                        System.Text.Json.JsonValueKind.Null => string.Empty,
+                                        _ => propertyValue.GetRawText()
+                                    };
+                                }
+                                else
+                                {
+                                    row[column.ColumnName] = string.Empty;
+                                }
+                            }
+                            dataTable.Rows.Add(row);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error parsing JSON to DataTable");
+            }
+
+            return dataTable;
+        }
+
+        private DataTable ParseXmlToDataTable(byte[] fileData)
+        {
+            var dataTable = new DataTable();
+
+            try
+            {
+                var xml = Encoding.UTF8.GetString(fileData);
+                var doc = System.Xml.Linq.XDocument.Parse(xml);
+                
+                var root = doc.Root;
+                if (root == null || !root.Elements().Any())
+                {
+                    return dataTable;
+                }
+
+                // Get all unique element names from the first record to create columns
+                var firstRecord = root.Elements().First();
+                var columnNames = firstRecord.Elements()
+                    .Select(e => e.Name.LocalName)
+                    .Distinct()
+                    .ToList();
+
+                // Add columns to DataTable
+                foreach (var columnName in columnNames)
+                {
+                    dataTable.Columns.Add(columnName);
+                }
+
+                // Add rows for each record
+                foreach (var record in root.Elements())
+                {
+                    var row = dataTable.NewRow();
+                    foreach (DataColumn column in dataTable.Columns)
+                    {
+                        var element = record.Elements()
+                            .FirstOrDefault(e => e.Name.LocalName == column.ColumnName);
+                        row[column.ColumnName] = element?.Value ?? string.Empty;
+                    }
+                    dataTable.Rows.Add(row);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error parsing XML to DataTable");
+            }
+
+            return dataTable;
+        }
+
+        private DataTable ParseExcelToDataTable(byte[] fileData)
+        {
+            var dataTable = new DataTable();
+
+            using var memoryStream = new MemoryStream(fileData);
+            using var package = new ExcelPackage(memoryStream);
+            
+            var worksheet = package.Workbook.Worksheets.FirstOrDefault();
+            if (worksheet == null || worksheet.Dimension == null)
+            {
+                return dataTable;
+            }
+
+            // Add columns
+            for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
+            {
+                var columnName = worksheet.Cells[1, col].Value?.ToString() ?? $"Column{col}";
+                dataTable.Columns.Add(columnName);
+            }
+
+            // Add rows
+            for (int row = 2; row <= worksheet.Dimension.End.Row; row++)
+            {
+                var dataRow = dataTable.NewRow();
+                for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
+                {
+                    dataRow[col - 1] = worksheet.Cells[row, col].Value?.ToString() ?? string.Empty;
+                }
+                dataTable.Rows.Add(dataRow);
+            }
+
+            return dataTable;
         }
     }
 

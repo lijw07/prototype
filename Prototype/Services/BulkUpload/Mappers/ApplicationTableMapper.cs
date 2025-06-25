@@ -32,14 +32,12 @@ namespace Prototype.Services.BulkUpload.Mappers
                 var applicationDescription = GetColumnValue(row, "ApplicationDescription");
                 var dataSourceType = GetColumnValue(row, "ApplicationDataSourceType");
 
-                // Required field validation
                 if (string.IsNullOrWhiteSpace(applicationName))
                     result.Errors.Add($"Row {rowNumber}: ApplicationName is required");
 
                 if (string.IsNullOrWhiteSpace(applicationDescription))
                     result.Errors.Add($"Row {rowNumber}: ApplicationDescription is required");
 
-                // Format validation
                 if (!string.IsNullOrWhiteSpace(applicationName) && applicationName.Length > 100)
                     result.Errors.Add($"Row {rowNumber}: ApplicationName cannot exceed 100 characters");
 
@@ -49,7 +47,6 @@ namespace Prototype.Services.BulkUpload.Mappers
                 if (!string.IsNullOrWhiteSpace(dataSourceType) && !IsValidDataSourceType(dataSourceType))
                     result.Errors.Add($"Row {rowNumber}: Invalid ApplicationDataSourceType. Must be Database, API, File, or Cloud");
 
-                // Check for duplicates using fresh DbContext scope
                 using var scope = _scopeFactory.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<SentinelContext>();
                 
@@ -78,7 +75,6 @@ namespace Prototype.Services.BulkUpload.Mappers
         {
             try
             {
-                // Check for cancellation before processing
                 cancellationToken.ThrowIfCancellationRequested();
                 
                 var dataSourceTypeStr = GetColumnValue(row, "ApplicationDataSourceType") ?? "Database";
@@ -95,7 +91,6 @@ namespace Prototype.Services.BulkUpload.Mappers
                 };
 
                 _context.Applications.Add(application);
-                // Note: SaveChanges will be called by the service after all rows are processed
                 
                 return Task.FromResult(Result<bool>.Success(true));
             }
@@ -151,19 +146,6 @@ namespace Prototype.Services.BulkUpload.Mappers
 
             var value = row[columnName];
             return value == DBNull.Value ? string.Empty : value?.ToString() ?? string.Empty;
-        }
-
-        private bool ParseBoolean(string value, bool defaultValue = false)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return defaultValue;
-
-            return value.ToLower() switch
-            {
-                "true" or "yes" or "1" or "y" => true,
-                "false" or "no" or "0" or "n" => false,
-                _ => defaultValue
-            };
         }
 
         private bool IsValidDataSourceType(string dataSourceType)

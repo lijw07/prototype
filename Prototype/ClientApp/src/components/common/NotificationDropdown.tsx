@@ -21,6 +21,7 @@ interface NotificationDropdownProps {
 }
 
 const NOTIFICATIONS_STORAGE_KEY = 'cams_notifications';
+const DISMISSED_NOTIFICATIONS_KEY = 'cams_dismissed_notifications';
 
 export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ 
   isOpen, 
@@ -28,6 +29,18 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
 }) => {
   const navigate = useNavigate();
   const { migrationState, setShouldNavigateToBulkTab } = useMigration();
+  
+  // Track dismissed notification IDs
+  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(DISMISSED_NOTIFICATIONS_KEY);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch (error) {
+      console.error('Error loading dismissed notifications from localStorage:', error);
+      return new Set();
+    }
+  });
+
   const [notifications, setNotifications] = useState<Notification[]>(() => {
     // Load notifications from localStorage on initialization
     try {
@@ -56,7 +69,16 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
     }
   }, [notifications]);
 
-  // Clean up old notifications periodically
+  // Save dismissed notifications to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify([...dismissedNotifications]));
+    } catch (error) {
+      console.error('Error saving dismissed notifications to localStorage:', error);
+    }
+  }, [dismissedNotifications]);
+
+  // Clean up old notifications and dismissed IDs periodically
   useEffect(() => {
     const cleanup = () => {
       const now = new Date();
@@ -69,6 +91,16 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         
         return cleaned.length !== prev.length ? cleaned : prev;
       });
+
+      // Also clean up old dismissed notification IDs (older than 7 days)
+      setDismissedNotifications(prev => {
+        const activeNotificationIds = new Set(notifications.map(n => n.id));
+        const recentDismissedIds = new Set([...prev].filter(id => {
+          // Keep IDs that still have active notifications or might be migration-related
+          return activeNotificationIds.has(id) || id.startsWith('migration-');
+        }));
+        return recentDismissedIds.size !== prev.size ? recentDismissedIds : prev;
+      });
     };
 
     // Clean up on mount and then every hour
@@ -76,7 +108,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
     const interval = setInterval(cleanup, 60 * 60 * 1000);
     
     return () => clearInterval(interval);
-  }, []);
+  }, [notifications]);
 
   // Generate notifications based on migration state
   useEffect(() => {
@@ -86,8 +118,16 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       return;
     }
 
+    const migrationNotificationId = `migration-${migrationState.jobId || 'unknown'}`;
+    
+    // Don't create notification if it was previously dismissed and migration is completed/failed
+    if (dismissedNotifications.has(migrationNotificationId) && 
+        (migrationState.status === 'completed' || migrationState.status === 'error')) {
+      return;
+    }
+
     const migrationNotification: Notification = {
-      id: `migration-${migrationState.jobId || 'unknown'}`,
+      id: migrationNotificationId,
       type: 'migration',
       status: migrationState.status,
       title: 'Bulk Migration',
@@ -110,7 +150,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       
       return [migrationNotification, ...filtered];
     });
-  }, [migrationState]);
+  }, [migrationState, dismissedNotifications]);
 
   const getStatusMessage = (status: string, progress: number): string => {
     switch (status) {
@@ -156,6 +196,9 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   };
 
   const removeNotification = (id: string) => {
+    // Track that this notification was dismissed
+    setDismissedNotifications(prev => new Set([...prev, id]));
+    // Remove from current notifications
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
@@ -172,10 +215,17 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   };
 
   const clearAllNotifications = () => {
-    // Remove all notifications except those that are currently processing
-    setNotifications(prev => 
-      prev.filter(n => n.type === 'migration' && n.status === 'processing')
-    );
+    // Track all cleared notifications as dismissed (except processing ones)
+    setNotifications(prev => {
+      const toRemove = prev.filter(n => !(n.type === 'migration' && n.status === 'processing'));
+      const removedIds = toRemove.map(n => n.id);
+      
+      // Add removed IDs to dismissed set
+      setDismissedNotifications(dismissed => new Set([...dismissed, ...removedIds]));
+      
+      // Keep only processing migration notifications
+      return prev.filter(n => n.type === 'migration' && n.status === 'processing');
+    });
   };
 
   const navigateToMigration = () => {

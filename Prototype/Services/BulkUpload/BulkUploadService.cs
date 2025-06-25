@@ -57,16 +57,55 @@ namespace Prototype.Services.BulkUpload
                 }
 
                 var validationErrors = new List<string>();
-                var rowNumber = 2;
+                
+                _logger.LogInformation("Starting validation for {TotalRecords} records", dataTable.Rows.Count);
 
-                foreach (DataRow row in dataTable.Rows)
+                // Use batch validation if supported for better performance
+                if (mapper is IBatchTableMapper batchMapper)
                 {
-                    var validationResult = await mapper.ValidateRowAsync(row, rowNumber);
-                    if (!validationResult.IsValid)
+                    _logger.LogInformation("Using optimized batch validation for {TotalRecords} records", dataTable.Rows.Count);
+                    
+                    try
                     {
-                        validationErrors.AddRange(validationResult.Errors);
+                        var validationResults = await batchMapper.ValidateBatchAsync(dataTable, cancellationToken);
+                        
+                        // Process validation results
+                        foreach (var (rowNum, result) in validationResults)
+                        {
+                            if (!result.IsValid)
+                            {
+                                validationErrors.AddRange(result.Errors);
+                            }
+                        }
+                        
+                        _logger.LogInformation("Batch validation completed. Valid: {ValidRecords}, Invalid: {InvalidRecords}", 
+                            validationResults.Count(vr => vr.Value.IsValid), validationResults.Count(vr => !vr.Value.IsValid));
                     }
-                    rowNumber++;
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Batch validation failed, falling back to row-by-row validation");
+                        // Fall back to individual validation if batch fails
+                        validationErrors.Clear();
+                    }
+                }
+                
+                // Fall back to row-by-row validation if batch not supported or failed
+                if (!validationErrors.Any() && !(mapper is IBatchTableMapper))
+                {
+                    _logger.LogInformation("Using row-by-row validation for {TotalRecords} records", dataTable.Rows.Count);
+                    
+                    var rowNumber = 1;
+                    foreach (DataRow row in dataTable.Rows)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        
+                        var validationResult = await mapper.ValidateRowAsync(row, rowNumber, cancellationToken);
+                        if (!validationResult.IsValid)
+                        {
+                            validationErrors.AddRange(validationResult.Errors);
+                        }
+                        rowNumber++;
+                    }
                 }
 
                 if (validationErrors.Any())
@@ -123,83 +162,168 @@ namespace Prototype.Services.BulkUpload
                 
                 _logger.LogInformation("Found mapper for table type: {TableType}", tableType);
 
-                // Process rows directly without nested transaction since controller already manages transaction
-                var rowNumber = 2;
-                _logger.LogInformation("Starting to process {TotalRows} rows", dataTable.Rows.Count);
+                // Use optimized batch processing for better performance
+                var totalRecords = dataTable.Rows.Count;
+                var validationResults = new Dictionary<int, ValidationResult>();
+                var validationErrors = new List<BulkUploadError>();
                 
-                foreach (DataRow row in dataTable.Rows)
+                _logger.LogInformation("Starting validation for {TotalRecords} records", totalRecords);
+
+                // Phase 1: Validation - Use batch validation if supported
+                if (mapper is IBatchTableMapper batchMapper)
                 {
+                    _logger.LogInformation("Using optimized batch validation for {TotalRecords} records", totalRecords);
+                    
                     try
                     {
-                        var validationResult = await mapper.ValidateRowAsync(row, rowNumber);
-                        if (!validationResult.IsValid)
+                        validationResults = await batchMapper.ValidateBatchAsync(dataTable);
+                        
+                        // Process validation results
+                        foreach (var (rowNum, result) in validationResults)
                         {
-                            response.FailedRecords++;
-                            foreach (var error in validationResult.Errors)
+                            if (!result.IsValid)
                             {
-                                response.Errors.Add(new BulkUploadError
+                                foreach (var error in result.Errors)
                                 {
-                                    RowNumber = rowNumber,
-                                    ErrorMessage = error,
-                                    RowData = GetRowData(row)
-                                });
+                                    validationErrors.Add(new BulkUploadError
+                                    {
+                                        RowNumber = rowNum,
+                                        ErrorMessage = error
+                                    });
+                                }
+                                if (!ignoreErrors)
+                                {
+                                    response.FailedRecords++;
+                                }
                             }
+                        }
+                        
+                        _logger.LogInformation("Batch validation completed. Valid: {ValidRecords}, Invalid: {InvalidRecords}", 
+                            validationResults.Count(vr => vr.Value.IsValid), validationResults.Count(vr => !vr.Value.IsValid));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Batch validation failed, falling back to row-by-row validation");
+                        // Fall back to individual validation if batch fails
+                        validationResults.Clear();
+                        validationErrors.Clear();
+                        response.FailedRecords = 0;
+                    }
+                }
 
+                // Fall back to row-by-row validation if batch not supported or failed
+                if (validationResults.Count == 0)
+                {
+                    _logger.LogInformation("Using row-by-row validation for {TotalRecords} records", totalRecords);
+                    
+                    var validationRowNumber = 1;
+                    foreach (DataRow row in dataTable.Rows)
+                    {
+                        try
+                        {
+                            var validationResult = await mapper.ValidateRowAsync(row, validationRowNumber);
+                            validationResults[validationRowNumber] = validationResult;
+                            
+                            if (!validationResult.IsValid)
+                            {
+                                foreach (var error in validationResult.Errors)
+                                {
+                                    validationErrors.Add(new BulkUploadError
+                                    {
+                                        RowNumber = validationRowNumber,
+                                        ErrorMessage = error,
+                                        RowData = string.Join(", ", GetRowData(row).Values)
+                                    });
+                                }
+                                if (!ignoreErrors)
+                                {
+                                    response.FailedRecords++;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            validationResults[validationRowNumber] = new ValidationResult { IsValid = false, Errors = new List<string> { $"Validation error - {ex.Message}" } };
+                            validationErrors.Add(new BulkUploadError
+                            {
+                                RowNumber = validationRowNumber,
+                                ErrorMessage = $"Validation error - {ex.Message}",
+                                RowData = string.Join(", ", GetRowData(row).Values)
+                            });
+                            _logger.LogError(ex, "Validation error for row {RowNumber}", validationRowNumber);
                             if (!ignoreErrors)
                             {
-                                return Result<BulkUploadResponse>.Failure("Validation errors encountered");
+                                response.FailedRecords++;
                             }
+                        }
+
+                        validationRowNumber++;
+                    }
+                }
+
+                response.Errors = validationErrors;
+
+                // Check if we should continue based on validation results
+                if (!ignoreErrors && response.FailedRecords > 0)
+                {
+                    response.ProcessingTime = stopwatch.Elapsed;
+                    return Result<BulkUploadResponse>.Failure($"Validation failed: {string.Join("; ", validationErrors.Select(e => e.ErrorMessage))}");
+                }
+
+                // Phase 2: Data Processing - Use optimized batch processing
+                _logger.LogInformation("Starting optimized batch processing for {TotalRecords} rows", totalRecords);
+                
+                var successfullyProcessed = 0;
+                
+                // Use batch processing if mapper supports it
+                if (mapper is IBatchTableMapper batchMapper)
+                {
+                    _logger.LogInformation("Using optimized batch processing for {TotalRecords} records", totalRecords);
+                    
+                    try
+                    {
+                        var batchResult = await batchMapper.SaveBatchAsync(dataTable, userId, validationResults, ignoreErrors, cancellationToken);
+                        if (batchResult.IsSuccess)
+                        {
+                            successfullyProcessed = batchResult.Data;
+                            
+                            // Single save operation for all records
+                            await _context.SaveChangesAsync(cancellationToken);
+                            _logger.LogInformation("Bulk save completed. Processed {ProcessedCount} records", successfullyProcessed);
                         }
                         else
                         {
-                            var saveResult = await mapper.SaveRowAsync(row, userId);
-                            if (saveResult.IsSuccess)
+                            response.FailedRecords = totalRecords;
+                            response.Errors.Add(new BulkUploadError
                             {
-                                response.ProcessedRecords++;
-                            }
-                            else
-                            {
-                                response.FailedRecords++;
-                                response.Errors.Add(new BulkUploadError
-                                {
-                                    RowNumber = rowNumber,
-                                    ErrorMessage = saveResult.ErrorMessage,
-                                    RowData = GetRowData(row)
-                                });
-
-                                if (!ignoreErrors)
-                                {
-                                    return Result<BulkUploadResponse>.Failure($"Error saving row {rowNumber}: {saveResult.ErrorMessage}");
-                                }
-                            }
+                                RowNumber = 0,
+                                ErrorMessage = $"Batch processing failed: {batchResult.ErrorMessage}",
+                                RowData = "All records"
+                            });
                         }
                     }
                     catch (Exception ex)
                     {
-                        response.FailedRecords++;
-                        response.Errors.Add(new BulkUploadError
-                        {
-                            RowNumber = rowNumber,
-                            ErrorMessage = ex.Message,
-                            RowData = GetRowData(row)
-                        });
-
-                        if (!ignoreErrors)
-                        {
-                            throw;
-                        }
+                        _logger.LogError(ex, "Batch processing failed, falling back to individual processing");
+                        // Fall back to individual processing if batch fails
+                        successfullyProcessed = await ProcessRowByRowAsync(dataTable, mapper, userId, validationResults, ignoreErrors, response, cancellationToken);
                     }
-                    rowNumber++;
+                }
+                else
+                {
+                    // Fall back to optimized individual processing
+                    _logger.LogInformation("Using optimized individual processing for {TotalRecords} records", totalRecords);
+                    successfullyProcessed = await ProcessRowByRowAsync(dataTable, mapper, userId, validationResults, ignoreErrors, response, cancellationToken);
                 }
 
+                response.ProcessedRecords = successfullyProcessed;
+                
                 stopwatch.Stop();
                 response.ProcessingTime = stopwatch.Elapsed;
                 
                 await LogBulkUploadHistory(userId, tableType, response);
                 
-                _logger.LogInformation("Saving {ProcessedRecords} processed records to database", response.ProcessedRecords);
-                await _context.SaveChangesAsync();
-                _logger.LogInformation("Successfully saved all records to database");
+                _logger.LogInformation("Successfully completed batch processing. Total processed: {ProcessedRecords}", successfullyProcessed);
 
                 return Result<BulkUploadResponse>.Success(response);
             }
@@ -605,73 +729,121 @@ namespace Prototype.Services.BulkUpload
 
                 _logger.LogInformation("Starting validation for {TotalRecords} records", totalRecords);
 
-                // Validate all rows first and store results
-                var rowNumber = 1;
-                foreach (DataRow row in dataTable.Rows)
+                // Use batch validation if supported for better performance
+                if (mapper is IBatchTableMapper batchMapper)
                 {
-                    // Check for cancellation before each validation
-                    cancellationToken.ThrowIfCancellationRequested();
-                    _logger.LogDebug("Processing validation for row {RowNumber} in job {JobId}", rowNumber, jobId);
+                    _logger.LogInformation("Using optimized batch validation for {TotalRecords} records", totalRecords);
                     
                     try
                     {
-                        var validationResult = await mapper.ValidateRowAsync(row, rowNumber, cancellationToken);
-                        validationResults[rowNumber] = validationResult;
+                        validationResults = await batchMapper.ValidateBatchAsync(dataTable, cancellationToken);
                         
-                        if (!validationResult.IsValid)
+                        // Process validation results
+                        foreach (var (rowNum, result) in validationResults)
                         {
-                            foreach (var error in validationResult.Errors)
+                            if (!result.IsValid)
                             {
-                                validationErrors.Add(new BulkUploadError
+                                foreach (var error in result.Errors)
                                 {
-                                    RowNumber = rowNumber,
-                                    ErrorMessage = error,
-                                    FileName = fileName
-                                });
+                                    validationErrors.Add(new BulkUploadError
+                                    {
+                                        RowNumber = rowNum,
+                                        ErrorMessage = error,
+                                        FileName = fileName
+                                    });
+                                }
+                                if (!ignoreErrors)
+                                {
+                                    response.FailedRecords++;
+                                }
                             }
+                        }
+                        
+                        processedRecords = totalRecords; // All records processed in batch
+                        _logger.LogInformation("Batch validation completed. Valid: {ValidRecords}, Invalid: {InvalidRecords}", 
+                            validationResults.Count(vr => vr.Value.IsValid), validationResults.Count(vr => !vr.Value.IsValid));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Batch validation failed, falling back to row-by-row validation");
+                        // Fall back to individual validation if batch fails
+                        validationResults.Clear();
+                        validationErrors.Clear();
+                        response.FailedRecords = 0;
+                        processedRecords = 0;
+                    }
+                }
+
+                // Fall back to row-by-row validation if batch not supported or failed
+                if (processedRecords == 0)
+                {
+                    _logger.LogInformation("Using row-by-row validation for {TotalRecords} records", totalRecords);
+                    
+                    var fallbackRowNumber = 1;
+                    foreach (DataRow row in dataTable.Rows)
+                    {
+                        // Check for cancellation before each validation
+                        cancellationToken.ThrowIfCancellationRequested();
+                        
+                        try
+                        {
+                            var validationResult = await mapper.ValidateRowAsync(row, fallbackRowNumber, cancellationToken);
+                            validationResults[fallbackRowNumber] = validationResult;
+                            
+                            if (!validationResult.IsValid)
+                            {
+                                foreach (var error in validationResult.Errors)
+                                {
+                                    validationErrors.Add(new BulkUploadError
+                                    {
+                                        RowNumber = fallbackRowNumber,
+                                        ErrorMessage = error,
+                                        FileName = fileName
+                                    });
+                                }
+                                if (!ignoreErrors)
+                                {
+                                    response.FailedRecords++;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            validationResults[fallbackRowNumber] = new ValidationResult { IsValid = false, Errors = new List<string> { $"Validation error - {ex.Message}" } };
+                            validationErrors.Add(new BulkUploadError
+                            {
+                                RowNumber = fallbackRowNumber,
+                                ErrorMessage = $"Validation error - {ex.Message}",
+                                FileName = fileName
+                            });
+                            _logger.LogError(ex, "Validation error for row {RowNumber}", fallbackRowNumber);
                             if (!ignoreErrors)
                             {
                                 response.FailedRecords++;
                             }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        // Store failed validation result
-                        validationResults[rowNumber] = new ValidationResult { IsValid = false, Errors = new List<string> { $"Validation error - {ex.Message}" } };
-                        validationErrors.Add(new BulkUploadError
+
+                        fallbackRowNumber++;
+                        processedRecords++;
+
+                        // Update progress less frequently (every 10% instead of every 5%)
+                        if (processedRecords % Math.Max(1, totalRecords / 10) == 0)
                         {
-                            RowNumber = rowNumber,
-                            ErrorMessage = $"Validation error - {ex.Message}",
-                            FileName = fileName
-                        });
-                        _logger.LogError(ex, "Validation error for row {RowNumber}", rowNumber);
-                        if (!ignoreErrors)
-                        {
-                            response.FailedRecords++;
+                            var validationProgress = (double)processedRecords / totalRecords * 30;
+                            await _progressService.NotifyProgress(jobId, new ProgressUpdateDto
+                            {
+                                JobId = jobId,
+                                ProgressPercentage = baseProgress + (10.0 / totalFiles) + (validationProgress / totalFiles),
+                                Status = "Validating",
+                                CurrentOperation = $"Validated {processedRecords}/{totalRecords} records",
+                                ProcessedRecords = processedRecords,
+                                TotalRecords = totalRecords,
+                                CurrentFileName = fileName,
+                                ProcessedFiles = fileIndex,
+                                TotalFiles = totalFiles,
+                                Errors = validationErrors.Count > 0 ? validationErrors.TakeLast(3).Select(e => e.ErrorMessage).ToList() : null
+                            });
                         }
-                    }
-
-                    rowNumber++;
-                    processedRecords++;
-
-                    // Update progress every 10 records or every 5% of total
-                    if (processedRecords % Math.Max(1, totalRecords / 20) == 0 || processedRecords % 10 == 0)
-                    {
-                        var validationProgress = (double)processedRecords / totalRecords * 30; // 30% for validation
-                        await _progressService.NotifyProgress(jobId, new ProgressUpdateDto
-                        {
-                            JobId = jobId,
-                            ProgressPercentage = baseProgress + (10.0 / totalFiles) + (validationProgress / totalFiles),
-                            Status = "Validating",
-                            CurrentOperation = $"Validated {processedRecords}/{totalRecords} records",
-                            ProcessedRecords = processedRecords,
-                            TotalRecords = totalRecords,
-                            CurrentFileName = fileName,
-                            ProcessedFiles = fileIndex,
-                            TotalFiles = totalFiles,
-                            Errors = validationErrors.Count > 0 ? validationErrors.TakeLast(5).Select(e => e.ErrorMessage).ToList() : null
-                        });
                     }
                 }
 
@@ -714,79 +886,109 @@ namespace Prototype.Services.BulkUpload
 
                 _logger.LogInformation("Starting to process {TotalRecords} rows", totalRecords);
 
-                // Process and save data using stored validation results
+                // Process data in optimized batches
                 var successfullyProcessed = 0;
-                rowNumber = 1;
-                foreach (DataRow row in dataTable.Rows)
-                {
-                    // Check for cancellation
-                    cancellationToken.ThrowIfCancellationRequested();
-                    _logger.LogDebug("Processing row {RowNumber} for saving in job {JobId}", rowNumber, jobId);
-                    
-                    try
-                    {
-                        // Skip rows that failed validation if not ignoring errors
-                        var validationResult = validationResults.ContainsKey(rowNumber) ? validationResults[rowNumber] : new ValidationResult { IsValid = false };
-                        if (!validationResult.IsValid && !ignoreErrors)
-                        {
-                            rowNumber++;
-                            continue;
-                        }
+                var rowNumber = 1;
+                const int batchSize = 100; // Process in batches of 100 records
+                var totalBatches = (int)Math.Ceiling((double)dataTable.Rows.Count / batchSize);
+                
+                _logger.LogInformation("Processing {TotalRecords} records in {TotalBatches} batches of {BatchSize}", 
+                    totalRecords, totalBatches, batchSize);
 
-                        // Check for cancellation before saving
-                        cancellationToken.ThrowIfCancellationRequested();
-                        
-                        var saveResult = await mapper.SaveRowAsync(row, userId, cancellationToken);
-                        if (saveResult.IsSuccess)
+                for (int batchIndex = 0; batchIndex < totalBatches; batchIndex++)
+                {
+                    // Check for cancellation at batch level
+                    cancellationToken.ThrowIfCancellationRequested();
+                    
+                    var batchStart = batchIndex * batchSize;
+                    var batchEnd = Math.Min(batchStart + batchSize, dataTable.Rows.Count);
+                    var batchRows = dataTable.Rows.Cast<DataRow>().Skip(batchStart).Take(batchEnd - batchStart).ToList();
+                    
+                    _logger.LogDebug("Processing batch {BatchIndex}/{TotalBatches} (rows {BatchStart}-{BatchEnd}) for job {JobId}", 
+                        batchIndex + 1, totalBatches, batchStart + 1, batchEnd, jobId);
+
+                    // Process batch
+                    var batchProcessed = 0;
+                    var currentRowNumber = rowNumber;
+                    
+                    foreach (var row in batchRows)
+                    {
+                        try
                         {
-                            successfullyProcessed++;
+                            // Skip rows that failed validation if not ignoring errors
+                            var validationResult = validationResults.ContainsKey(currentRowNumber) ? validationResults[currentRowNumber] : new ValidationResult { IsValid = false };
+                            if (!validationResult.IsValid && !ignoreErrors)
+                            {
+                                currentRowNumber++;
+                                continue;
+                            }
+
+                            var saveResult = await mapper.SaveRowAsync(row, userId, cancellationToken);
+                            if (saveResult.IsSuccess)
+                            {
+                                batchProcessed++;
+                            }
+                            else
+                            {
+                                response.FailedRecords++;
+                                response.Errors.Add(new BulkUploadError
+                                {
+                                    RowNumber = currentRowNumber,
+                                    ErrorMessage = saveResult.ErrorMessage,
+                                    FileName = fileName
+                                });
+                            }
                         }
-                        else
+                        catch (Exception ex)
                         {
                             response.FailedRecords++;
                             response.Errors.Add(new BulkUploadError
                             {
-                                RowNumber = rowNumber,
-                                ErrorMessage = saveResult.ErrorMessage,
+                                RowNumber = currentRowNumber,
+                                ErrorMessage = $"Processing error - {ex.Message}",
                                 FileName = fileName
                             });
+                            _logger.LogError(ex, "Processing error for row {RowNumber}", currentRowNumber);
+                        }
+
+                        currentRowNumber++;
+                    }
+
+                    successfullyProcessed += batchProcessed;
+                    rowNumber = currentRowNumber;
+
+                    // Save batch to database (more efficient than individual saves)
+                    if (batchProcessed > 0)
+                    {
+                        try
+                        {
+                            await _context.SaveChangesAsync(cancellationToken);
+                            _logger.LogDebug("Saved batch {BatchIndex}/{TotalBatches} - {BatchProcessed} records", 
+                                batchIndex + 1, totalBatches, batchProcessed);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error saving batch {BatchIndex}", batchIndex + 1);
+                            // Could implement retry logic here
+                            throw;
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        response.FailedRecords++;
-                        response.Errors.Add(new BulkUploadError
-                        {
-                            RowNumber = rowNumber,
-                            ErrorMessage = $"Processing error - {ex.Message}",
-                            FileName = fileName
-                        });
-                        _logger.LogError(ex, "Processing error for row {RowNumber}", rowNumber);
-                    }
 
-                    rowNumber++;
-
-                    // Update progress every 5 records or every 2% of total
-                    if (successfullyProcessed % Math.Max(1, totalRecords / 50) == 0 || successfullyProcessed % 5 == 0)
+                    // Update progress every batch (much less frequent than per row)
+                    var processingProgress = (double)successfullyProcessed / totalRecords * 60; // 60% for processing
+                    await _progressService.NotifyProgress(jobId, new ProgressUpdateDto
                     {
-                        // Check for cancellation during progress updates
-                        cancellationToken.ThrowIfCancellationRequested();
-                        
-                        var processingProgress = (double)successfullyProcessed / totalRecords * 60; // 60% for processing
-                        await _progressService.NotifyProgress(jobId, new ProgressUpdateDto
-                        {
-                            JobId = jobId,
-                            ProgressPercentage = baseProgress + (40.0 / totalFiles) + (processingProgress / totalFiles),
-                            Status = "Processing",
-                            CurrentOperation = $"Processed {successfullyProcessed}/{totalRecords} records",
-                            ProcessedRecords = successfullyProcessed,
-                            TotalRecords = totalRecords,
-                            CurrentFileName = fileName,
-                            ProcessedFiles = fileIndex,
-                            TotalFiles = totalFiles,
-                            Errors = response.Errors.Count > 0 ? response.Errors.TakeLast(3).Select(e => e.ErrorMessage).ToList() : null
-                        });
-                    }
+                        JobId = jobId,
+                        ProgressPercentage = baseProgress + (40.0 / totalFiles) + (processingProgress / totalFiles),
+                        Status = "Processing",
+                        CurrentOperation = $"Processed {successfullyProcessed}/{totalRecords} records (Batch {batchIndex + 1}/{totalBatches})",
+                        ProcessedRecords = successfullyProcessed,
+                        TotalRecords = totalRecords,
+                        CurrentFileName = fileName,
+                        ProcessedFiles = fileIndex,
+                        TotalFiles = totalFiles,
+                        Errors = response.Errors.Count > 0 ? response.Errors.TakeLast(3).Select(e => e.ErrorMessage).ToList() : null
+                    });
                 }
 
                 response.ProcessedRecords = successfullyProcessed;
@@ -808,11 +1010,9 @@ namespace Prototype.Services.BulkUpload
                 // Check for cancellation before final save
                 cancellationToken.ThrowIfCancellationRequested();
                 
-                if (response.ProcessedRecords > 0)
-                {
-                    await _context.SaveChangesAsync(cancellationToken);
-                    _logger.LogInformation("Successfully saved all records to database for job {JobId}", jobId);
-                }
+                // All batches already saved - no need for final SaveChanges
+                _logger.LogInformation("Successfully completed batch processing for job {JobId}. Total processed: {ProcessedRecords}", 
+                    jobId, successfullyProcessed);
 
                 stopwatch.Stop();
                 response.ProcessingTime = stopwatch.Elapsed;
@@ -891,5 +1091,99 @@ namespace Prototype.Services.BulkUpload
                 return Result<BulkUploadResponse>.Failure($"Error processing bulk data: {ex.Message}");
             }
         }
+
+        private async Task<int> ProcessRowByRowAsync(DataTable dataTable, ITableMapper mapper, Guid userId, 
+            Dictionary<int, ValidationResult> validationResults, bool ignoreErrors, BulkUploadResponse response, 
+            CancellationToken cancellationToken)
+        {
+            var successfullyProcessed = 0;
+            var rowNumber = 1;
+            const int batchSize = 1000; // Larger batch size for better performance
+            var totalBatches = (int)Math.Ceiling((double)dataTable.Rows.Count / batchSize);
+            
+            _logger.LogInformation("Processing {TotalRecords} records in {TotalBatches} batches of {BatchSize}", 
+                dataTable.Rows.Count, totalBatches, batchSize);
+
+            for (int batchIndex = 0; batchIndex < totalBatches; batchIndex++)
+            {
+                var batchStart = batchIndex * batchSize;
+                var batchEnd = Math.Min(batchStart + batchSize, dataTable.Rows.Count);
+                var batchRows = dataTable.Rows.Cast<DataRow>().Skip(batchStart).Take(batchEnd - batchStart).ToList();
+                
+                _logger.LogDebug("Processing batch {BatchIndex}/{TotalBatches} (rows {BatchStart}-{BatchEnd})", 
+                    batchIndex + 1, totalBatches, batchStart + 1, batchEnd);
+
+                var batchProcessed = 0;
+                var currentRowNumber = rowNumber;
+                
+                foreach (var row in batchRows)
+                {
+                    try
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        
+                        // Skip rows that failed validation if not ignoring errors
+                        var validationResult = validationResults.ContainsKey(currentRowNumber) ? 
+                            validationResults[currentRowNumber] : new ValidationResult { IsValid = false };
+                        if (!validationResult.IsValid && !ignoreErrors)
+                        {
+                            currentRowNumber++;
+                            continue;
+                        }
+
+                        var saveResult = await mapper.SaveRowAsync(row, userId, cancellationToken);
+                        if (saveResult.IsSuccess)
+                        {
+                            batchProcessed++;
+                        }
+                        else
+                        {
+                            response.FailedRecords++;
+                            response.Errors.Add(new BulkUploadError
+                            {
+                                RowNumber = currentRowNumber,
+                                ErrorMessage = saveResult.ErrorMessage ?? "Unknown error",
+                                RowData = string.Join(", ", GetRowData(row).Values)
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        response.FailedRecords++;
+                        response.Errors.Add(new BulkUploadError
+                        {
+                            RowNumber = currentRowNumber,
+                            ErrorMessage = $"Processing error - {ex.Message}",
+                            RowData = string.Join(", ", GetRowData(row).Values)
+                        });
+                        _logger.LogError(ex, "Processing error for row {RowNumber}", currentRowNumber);
+                    }
+
+                    currentRowNumber++;
+                }
+
+                successfullyProcessed += batchProcessed;
+                rowNumber = currentRowNumber;
+
+                // Save batch to database
+                if (batchProcessed > 0)
+                {
+                    try
+                    {
+                        await _context.SaveChangesAsync(cancellationToken);
+                        _logger.LogDebug("Saved batch {BatchIndex}/{TotalBatches} - {BatchProcessed} records", 
+                            batchIndex + 1, totalBatches, batchProcessed);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error saving batch {BatchIndex}", batchIndex + 1);
+                        throw;
+                    }
+                }
+            }
+            
+            return successfullyProcessed;
+        }
+
     }
 }
