@@ -233,7 +233,7 @@ public class BulkUploadService : IBulkUploadService
                                 {
                                     RowNumber = validationRowNumber,
                                     ErrorMessage = error,
-                                    RowData = string.Join(", ", GetRowData(row).Values)
+                                    RowData = GetRowData(row)
                                 });
                             }
                             if (!ignoreErrors)
@@ -249,7 +249,7 @@ public class BulkUploadService : IBulkUploadService
                         {
                             RowNumber = validationRowNumber,
                             ErrorMessage = $"Validation error - {ex.Message}",
-                            RowData = string.Join(", ", GetRowData(row).Values)
+                            RowData = GetRowData(row)
                         });
                         _logger.LogError(ex, "Validation error for row {RowNumber}", validationRowNumber);
                         if (!ignoreErrors)
@@ -299,7 +299,7 @@ public class BulkUploadService : IBulkUploadService
                         {
                             RowNumber = 0,
                             ErrorMessage = $"Batch processing failed: {batchResult.ErrorMessage}",
-                            RowData = "All records"
+                            RowData = new Dictionary<string, object> { ["Status"] = "All records failed" }
                         });
                     }
                 }
@@ -485,24 +485,44 @@ public class BulkUploadService : IBulkUploadService
             return dataTable;
         }
 
-        // Add columns
-        for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
+        // Optimize for large Excel files - use more efficient reading
+        var rowCount = worksheet.Dimension.End.Row;
+        var colCount = worksheet.Dimension.End.Column;
+        
+        _logger.LogInformation("Processing Excel file with {RowCount} rows and {ColCount} columns", rowCount, colCount);
+
+        // Add columns with proper data types for better performance
+        for (int col = 1; col <= colCount; col++)
         {
             var columnName = worksheet.Cells[1, col].Value?.ToString() ?? $"Column{col}";
-            dataTable.Columns.Add(columnName);
+            dataTable.Columns.Add(columnName, typeof(string));
         }
 
-        // Add rows
-        for (int row = 2; row <= worksheet.Dimension.End.Row; row++)
+        // Batch row processing for memory efficiency
+        const int batchSize = 1000;
+        for (int startRow = 2; startRow <= rowCount; startRow += batchSize)
         {
-            var dataRow = dataTable.NewRow();
-            for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
+            var endRow = Math.Min(startRow + batchSize - 1, rowCount);
+            
+            for (int row = startRow; row <= endRow; row++)
             {
-                dataRow[col - 1] = worksheet.Cells[row, col].Value?.ToString() ?? string.Empty;
+                var dataRow = dataTable.NewRow();
+                for (int col = 1; col <= colCount; col++)
+                {
+                    var cellValue = worksheet.Cells[row, col].Value;
+                    dataRow[col - 1] = cellValue?.ToString() ?? string.Empty;
+                }
+                dataTable.Rows.Add(dataRow);
             }
-            dataTable.Rows.Add(dataRow);
+            
+            // Progress logging for large files
+            if (rowCount > 5000 && startRow % 5000 == 0)
+            {
+                _logger.LogDebug("Parsed {ProcessedRows}/{TotalRows} Excel rows", Math.Min(endRow - 1, rowCount - 1), rowCount - 1);
+            }
         }
 
+        _logger.LogInformation("Successfully parsed Excel file: {RowCount} data rows, {ColCount} columns", rowCount - 1, colCount);
         return dataTable;
     }
 
@@ -521,17 +541,21 @@ public class BulkUploadService : IBulkUploadService
                 return dataTable;
             }
 
+            var arrayLength = jsonDoc.RootElement.GetArrayLength();
+            _logger.LogInformation("Processing JSON file with {RecordCount} records", arrayLength);
+
             // Get columns from first object
             var firstElement = jsonDoc.RootElement[0];
             if (firstElement.ValueKind == System.Text.Json.JsonValueKind.Object)
             {
-                // Add columns based on first object properties
+                // Add columns based on first object properties with proper types
                 foreach (var property in firstElement.EnumerateObject())
                 {
-                    dataTable.Columns.Add(property.Name);
+                    dataTable.Columns.Add(property.Name, typeof(string));
                 }
 
-                // Add rows for all objects in array
+                // Add rows for all objects in array with progress tracking
+                var processedCount = 0;
                 foreach (var element in jsonDoc.RootElement.EnumerateArray())
                 {
                     if (element.ValueKind == System.Text.Json.JsonValueKind.Object)
@@ -557,8 +581,18 @@ public class BulkUploadService : IBulkUploadService
                             }
                         }
                         dataTable.Rows.Add(row);
+                        processedCount++;
+                        
+                        // Progress logging for large files
+                        if (arrayLength > 5000 && processedCount % 5000 == 0)
+                        {
+                            _logger.LogDebug("Parsed {ProcessedRecords}/{TotalRecords} JSON records", processedCount, arrayLength);
+                        }
                     }
                 }
+                
+                _logger.LogInformation("Successfully parsed JSON file: {RecordCount} records, {ColumnCount} columns", 
+                    dataTable.Rows.Count, dataTable.Columns.Count);
             }
         }
         catch (Exception ex)
@@ -826,8 +860,7 @@ public class BulkUploadService : IBulkUploadService
 
                     fallbackRowNumber++;
                     processedRecords++;
-
-                    // Update progress less frequently (every 10% instead of every 5%)
+                    
                     if (processedRecords % Math.Max(1, totalRecords / 10) == 0)
                     {
                         var validationProgress = (double)processedRecords / totalRecords * 30;
@@ -870,8 +903,7 @@ public class BulkUploadService : IBulkUploadService
                 response.ProcessingTime = stopwatch.Elapsed;
                 return Result<BulkUploadResponseDto>.Failure($"Validation failed: {string.Join("; ", validationErrors.Select(e => e.ErrorMessage))}");
             }
-
-            // Phase 2: Data Processing (takes about 60% of time)
+            
             await _progressService.NotifyProgress(jobId, new ProgressUpdateDto
             {
                 JobId = jobId,
@@ -886,11 +918,10 @@ public class BulkUploadService : IBulkUploadService
             });
 
             _logger.LogInformation("Starting to process {TotalRecords} rows", totalRecords);
-
-            // Process data in optimized batches
+            
             var successfullyProcessed = 0;
             var rowNumber = 1;
-            const int batchSize = 100; // Process in batches of 100 records
+            const int batchSize = 100;
             var totalBatches = (int)Math.Ceiling((double)dataTable.Rows.Count / batchSize);
             
             _logger.LogInformation("Processing {TotalRecords} records in {TotalBatches} batches of {BatchSize}", 
@@ -1099,88 +1130,121 @@ public class BulkUploadService : IBulkUploadService
     {
         var successfullyProcessed = 0;
         var rowNumber = 1;
-        const int batchSize = 1000; // Larger batch size for better performance
-        var totalBatches = (int)Math.Ceiling((double)dataTable.Rows.Count / batchSize);
+        
+        // Dynamic batch sizing based on table size - optimized for SQL Server bulk operations
+        var dynamicBatchSize = dataTable.Rows.Count switch
+        {
+            < 100 => 50,
+            < 1000 => 200,
+            < 10000 => 500,
+            < 50000 => 1000,
+            _ => 2000
+        };
+        
+        var totalBatches = (int)Math.Ceiling((double)dataTable.Rows.Count / dynamicBatchSize);
         
         _logger.LogInformation("Processing {TotalRecords} records in {TotalBatches} batches of {BatchSize}", 
-            dataTable.Rows.Count, totalBatches, batchSize);
+            dataTable.Rows.Count, totalBatches, dynamicBatchSize);
 
-        for (int batchIndex = 0; batchIndex < totalBatches; batchIndex++)
+        // Single transaction for entire operation - major performance boost
+        using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        
+        try
         {
-            var batchStart = batchIndex * batchSize;
-            var batchEnd = Math.Min(batchStart + batchSize, dataTable.Rows.Count);
-            var batchRows = dataTable.Rows.Cast<DataRow>().Skip(batchStart).Take(batchEnd - batchStart).ToList();
+            // Disable change tracking for bulk operations - significant memory optimization
+            var originalChangeTrackingState = _context.ChangeTracker.AutoDetectChangesEnabled;
+            _context.ChangeTracker.AutoDetectChangesEnabled = false;
             
-            _logger.LogDebug("Processing batch {BatchIndex}/{TotalBatches} (rows {BatchStart}-{BatchEnd})", 
-                batchIndex + 1, totalBatches, batchStart + 1, batchEnd);
-
-            var batchProcessed = 0;
-            var currentRowNumber = rowNumber;
-            
-            foreach (var row in batchRows)
+            for (int batchIndex = 0; batchIndex < totalBatches; batchIndex++)
             {
-                try
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    
-                    // Skip rows that failed validation if not ignoring errors
-                    var validationResult = validationResults.ContainsKey(currentRowNumber) ? 
-                        validationResults[currentRowNumber] : new ValidationResultDto { IsValid = false };
-                    if (!validationResult.IsValid && !ignoreErrors)
-                    {
-                        currentRowNumber++;
-                        continue;
-                    }
+                var batchStart = batchIndex * dynamicBatchSize;
+                var batchEnd = Math.Min(batchStart + dynamicBatchSize, dataTable.Rows.Count);
+                var batchRows = dataTable.Rows.Cast<DataRow>().Skip(batchStart).Take(batchEnd - batchStart).ToList();
+                
+                _logger.LogDebug("Processing batch {BatchIndex}/{TotalBatches} (rows {BatchStart}-{BatchEnd})", 
+                    batchIndex + 1, totalBatches, batchStart + 1, batchEnd);
 
-                    var saveResult = await mapper.SaveRowAsync(row, userId, cancellationToken);
-                    if (saveResult.IsSuccess)
+                var batchProcessed = 0;
+                var currentRowNumber = rowNumber;
+                
+                foreach (var row in batchRows)
+                {
+                    try
                     {
-                        batchProcessed++;
+                        cancellationToken.ThrowIfCancellationRequested();
+                        
+                        // Skip rows that failed validation if not ignoring errors
+                        var validationResult = validationResults.ContainsKey(currentRowNumber) ? 
+                            validationResults[currentRowNumber] : new ValidationResultDto { IsValid = false };
+                        if (!validationResult.IsValid && !ignoreErrors)
+                        {
+                            currentRowNumber++;
+                            continue;
+                        }
+
+                        var saveResult = await mapper.SaveRowAsync(row, userId, cancellationToken);
+                        if (saveResult.IsSuccess)
+                        {
+                            batchProcessed++;
+                        }
+                        else
+                        {
+                            responseDto.FailedRecords++;
+                            responseDto.Errors.Add(new BulkUploadErrorDto
+                            {
+                                RowNumber = currentRowNumber,
+                                ErrorMessage = saveResult.ErrorMessage ?? "Unknown error",
+                                RowData = GetRowData(row)
+                            });
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
                         responseDto.FailedRecords++;
                         responseDto.Errors.Add(new BulkUploadErrorDto
                         {
                             RowNumber = currentRowNumber,
-                            ErrorMessage = saveResult.ErrorMessage ?? "Unknown error",
-                            RowData = string.Join(", ", GetRowData(row).Values)
+                            ErrorMessage = $"Processing error - {ex.Message}",
+                            RowData = GetRowData(row)
                         });
+                        _logger.LogError(ex, "Processing error for row {RowNumber}", currentRowNumber);
                     }
+
+                    currentRowNumber++;
                 }
-                catch (Exception ex)
+
+                successfullyProcessed += batchProcessed;
+                rowNumber = currentRowNumber;
+                
+                // Progress reporting every 10 batches to reduce log noise
+                if (batchIndex % 10 == 0 || batchIndex == totalBatches - 1)
                 {
-                    responseDto.FailedRecords++;
-                    responseDto.Errors.Add(new BulkUploadErrorDto
-                    {
-                        RowNumber = currentRowNumber,
-                        ErrorMessage = $"Processing error - {ex.Message}",
-                        RowData = string.Join(", ", GetRowData(row).Values)
-                    });
-                    _logger.LogError(ex, "Processing error for row {RowNumber}", currentRowNumber);
+                    _logger.LogDebug("Processed batch {BatchIndex}/{TotalBatches} - {BatchProcessed} records total: {TotalProcessed}", 
+                        batchIndex + 1, totalBatches, batchProcessed, successfullyProcessed);
                 }
-
-                currentRowNumber++;
             }
-
-            successfullyProcessed += batchProcessed;
-            rowNumber = currentRowNumber;
-
-            // Save batch to database
-            if (batchProcessed > 0)
+            
+            // Single SaveChanges call for all batches - massive performance improvement
+            if (successfullyProcessed > 0)
             {
-                try
-                {
-                    await _context.SaveChangesAsync(cancellationToken);
-                    _logger.LogDebug("Saved batch {BatchIndex}/{TotalBatches} - {BatchProcessed} records", 
-                        batchIndex + 1, totalBatches, batchProcessed);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error saving batch {BatchIndex}", batchIndex + 1);
-                    throw;
-                }
+                _logger.LogInformation("Saving {TotalRecords} records in single transaction", successfullyProcessed);
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                _logger.LogInformation("Successfully saved all {TotalRecords} records", successfullyProcessed);
             }
+            else
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+            
+            // Restore change tracking
+            _context.ChangeTracker.AutoDetectChangesEnabled = originalChangeTrackingState;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in batch processing, rolling back transaction");
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
         }
         
         return successfullyProcessed;

@@ -300,11 +300,11 @@ public class TemporaryUserTableMapper(
                     FirstName = GetColumnValue(row, "FirstName"),
                     LastName = GetColumnValue(row, "LastName"),
                     Email = GetColumnValue(row, "Email"),
-                    RequestedApplications = GetColumnValue(row, "RequestedApplications"),
-                    Notes = GetColumnValue(row, "Notes"),
-                    IsActive = true,
+                    Username = GetColumnValue(row, "Username"),
+                    PasswordHash = GetColumnValue(row, "PasswordHash"),
+                    PhoneNumber = GetColumnValue(row, "PhoneNumber"),
                     CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
+                    Token = GetColumnValue(row, "Token")
                 };
 
                 tempUsersToAdd.Add(tempUser);

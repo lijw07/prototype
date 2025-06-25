@@ -6,6 +6,7 @@ using Prototype.Data;
 using Prototype.Models;
 using Prototype.DTOs;
 using Prototype.DTOs.BulkUpload;
+using Prototype.Enum;
 using Prototype.Services.BulkUpload;
 using Prototype.Services.Interfaces;
 using Prototype.Utility;

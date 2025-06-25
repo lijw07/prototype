@@ -44,19 +44,8 @@ public class UserRoleTableMapper(
             if (!string.IsNullOrWhiteSpace(createdBy) && createdBy.Length > 50)
                 result.Errors.Add($"Row {rowNumber}: CreatedBy cannot exceed 50 characters");
 
-            // Use fresh DbContext scope for validation queries
-            using var scope = scopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<SentinelContext>();
-
-            // Check for duplicates (case-insensitive)
-            if (!string.IsNullOrWhiteSpace(role))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var existingRole = await context.UserRoles
-                    .FirstOrDefaultAsync(ur => ur.Role.ToLower() == role.ToLower(), cancellationToken);
-                if (existingRole != null)
-                    result.Errors.Add($"Row {rowNumber}: Role '{role}' already exists");
-            }
+            // NOTE: Individual row validation skips database checks - use batch validation for performance
+            // Database duplicate checking is done in ValidateBatchAsync to avoid N+1 queries
 
             result.IsValid = !result.Errors.Any();
         }
@@ -233,13 +222,10 @@ public class UserRoleTableMapper(
 
                 var userRole = new UserRoleModel
                 {
-                    RoleId = Guid.NewGuid(),
+                    UserRoleId = Guid.NewGuid(),
                     Role = GetColumnValue(row, "Role"),
-                    Description = GetColumnValue(row, "Description"),
-                    Permissions = GetColumnValue(row, "Permissions"),
                     CreatedBy = GetColumnValue(row, "CreatedBy"),
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow
                 };
 
                 rolesToAdd.Add(userRole);

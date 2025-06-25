@@ -63,13 +63,17 @@ var dbName = Environment.GetEnvironmentVariable("DB_NAME") ?? "PrototypeDb";
 var dbUser = Environment.GetEnvironmentVariable("DB_USER") ?? "sa";
 var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "YourStrong!Passw0rd";
 
-var connectionString = $"Server={dbHost},{dbPort};Database={dbName};User={dbUser};Password={dbPassword};TrustServerCertificate=True;MultipleActiveResultSets=False;Connection Timeout=300";
+var connectionString = $"Server={dbHost},{dbPort};Database={dbName};User={dbUser};Password={dbPassword};TrustServerCertificate=True;MultipleActiveResultSets=True;Connection Timeout=300;Max Pool Size=200;Min Pool Size=10;Pooling=True;Command Timeout=300";
 
 builder.Services.AddDbContext<SentinelContext>(options =>
     options.UseSqlServer(connectionString, sqlOptions =>
     {
         sqlOptions.CommandTimeout(300); // 5 minutes timeout for bulk operations
-    }));
+        sqlOptions.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(30), null);
+    })
+    .EnableSensitiveDataLogging(builder.Environment.IsDevelopment())
+    .EnableDetailedErrors(builder.Environment.IsDevelopment())
+    .ConfigureWarnings(warnings => warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.FirstWithoutOrderByAndFilterWarning)));
 
 // Bind SMTP Settings
 builder.Services.Configure<SmtpSettingsPoco>(
@@ -100,6 +104,7 @@ builder.Services.AddScoped<ITableMappingService, TableMappingService>();
 builder.Services.AddScoped<IProgressService, ProgressService>();
 builder.Services.AddSingleton<IJobCancellationService, JobCancellationService>();
 builder.Services.AddScoped<IFileQueueService, FileQueueService>();
+builder.Services.AddScoped<IBulkInsertService, SqlServerBulkInsertService>();
 
 // Register Table Mappers
 builder.Services.AddScoped<UserTableMapper>();
@@ -133,7 +138,7 @@ builder.Services.AddScoped<IDatabaseConnectionStrategy, ElasticSearchDatabaseStr
 
 // Add API Connection Strategies
 builder.Services.AddScoped<IApiConnectionStrategy, RestApiConnectionStrategy>();
-builder.Services.AddScoped<IApiConnectionStrategy, GraphQLConnectionStrategy>();
+// builder.Services.AddScoped<IApiConnectionStrategy, GraphQLConnectionStrategy>(); // TODO: Implement GraphQLConnectionStrategy
 builder.Services.AddScoped<IApiConnectionStrategy, SoapApiConnectionStrategy>();
 
 // Add File Connection Strategies
@@ -147,7 +152,7 @@ builder.Services.AddScoped<IFileConnectionStrategy, GoogleCloudStorageConnection
 
 // Add HttpClient for API connections
 builder.Services.AddHttpClient<RestApiConnectionStrategy>();
-builder.Services.AddHttpClient<GraphQLConnectionStrategy>();
+// builder.Services.AddHttpClient<GraphQLConnectionStrategy>(); // TODO: Implement GraphQLConnectionStrategy
 builder.Services.AddHttpClient<SoapApiConnectionStrategy>();
 
 // Add Database Connection Factory
