@@ -50,13 +50,13 @@ public class SqlServerBulkInsertService : IBulkInsertService
             {
                 _context.Database.UseTransaction(transaction);
                 
-                using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
+                using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.CheckConstraints | SqlBulkCopyOptions.FireTriggers, transaction)
                 {
                     DestinationTableName = tableName,
-                    BatchSize = 5000, // Optimal batch size for SQL Server
-                    BulkCopyTimeout = 300, // 5 minutes timeout
+                    BatchSize = CalculateOptimalBatchSize(dataTable.Rows.Count),
+                    BulkCopyTimeout = 600, // 10 minutes timeout for large datasets
                     EnableStreaming = true,
-                    NotifyAfter = 1000 // Progress notifications every 1000 rows
+                    NotifyAfter = Math.Max(1000, dataTable.Rows.Count / 20) // Dynamic progress notifications
                 };
 
                 // Add column mappings
@@ -185,6 +185,19 @@ public class SqlServerBulkInsertService : IBulkInsertService
             FROM {sourceTable}";
         
         return sql;
+    }
+
+    private int CalculateOptimalBatchSize(int totalRecords)
+    {
+        // Optimize batch size based on record count for SQL Server bulk operations
+        return totalRecords switch
+        {
+            < 1000 => 500,
+            < 10000 => 2000,
+            < 50000 => 5000,
+            < 200000 => 10000,
+            _ => 20000 // Maximum for very large datasets
+        };
     }
 
     private string GenerateMergeSql(string targetTable, string sourceTable, 

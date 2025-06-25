@@ -6,6 +6,7 @@ using CsvHelper;
 using CsvHelper.Configuration;
 using OfficeOpenXml;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Prototype.Data;
 using Prototype.DTOs.BulkUpload;
 using Prototype.Helpers;
@@ -356,13 +357,13 @@ public class BulkUploadService : IBulkUploadService
                     }
                 }
             }
-            else if (mapper is IBatchTableMapper batchMapper)
+            else if (mapper is IBatchTableMapper standardBatchMapper)
             {
                 _logger.LogInformation("Using optimized batch processing for {TotalRecords} records", totalRecords);
                 
                 try
                 {
-                    var batchResult = await batchMapper.SaveBatchAsync(dataTable, userId, validationResults, ignoreErrors, cancellationToken);
+                    var batchResult = await standardBatchMapper.SaveBatchAsync(dataTable, userId, validationResults, ignoreErrors, cancellationToken);
                     if (batchResult.IsSuccess)
                     {
                         successfullyProcessed = batchResult.Data;
@@ -556,7 +557,7 @@ public class BulkUploadService : IBulkUploadService
             return dataTable;
         }
 
-        // Optimize for large Excel files - use more efficient reading
+        // Optimize for large Excel files - streaming approach with memory management
         var rowCount = worksheet.Dimension.End.Row;
         var colCount = worksheet.Dimension.End.Column;
         
@@ -569,25 +570,45 @@ public class BulkUploadService : IBulkUploadService
             dataTable.Columns.Add(columnName, typeof(string));
         }
 
-        // Batch row processing for memory efficiency
-        const int batchSize = 1000;
-        for (int startRow = 2; startRow <= rowCount; startRow += batchSize)
+        // Memory-optimized batch processing with dynamic sizing
+        var memoryOptimizedBatchSize = CalculateMemoryOptimizedBatchSize(rowCount, colCount);
+        
+        for (int startRow = 2; startRow <= rowCount; startRow += memoryOptimizedBatchSize)
         {
-            var endRow = Math.Min(startRow + batchSize - 1, rowCount);
+            var endRow = Math.Min(startRow + memoryOptimizedBatchSize - 1, rowCount);
+            
+            // Process batch with minimal memory allocation
+            var batchRows = new List<object[]>(endRow - startRow + 1);
             
             for (int row = startRow; row <= endRow; row++)
             {
-                var dataRow = dataTable.NewRow();
+                var rowData = new object[colCount];
                 for (int col = 1; col <= colCount; col++)
                 {
                     var cellValue = worksheet.Cells[row, col].Value;
-                    dataRow[col - 1] = cellValue?.ToString() ?? string.Empty;
+                    rowData[col - 1] = cellValue?.ToString() ?? string.Empty;
                 }
+                batchRows.Add(rowData);
+            }
+            
+            // Add batch to DataTable efficiently
+            foreach (var rowData in batchRows)
+            {
+                var dataRow = dataTable.NewRow();
+                dataRow.ItemArray = rowData;
                 dataTable.Rows.Add(dataRow);
             }
             
+            // Force garbage collection for large files to manage memory
+            if (rowCount > 50000 && startRow % (memoryOptimizedBatchSize * 5) == 0)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                _logger.LogDebug("Memory cleanup performed at row {CurrentRow}/{TotalRows}", endRow - 1, rowCount - 1);
+            }
+            
             // Progress logging for large files
-            if (rowCount > 5000 && startRow % 5000 == 0)
+            if (rowCount > 5000 && startRow % (memoryOptimizedBatchSize * 2) == 0)
             {
                 _logger.LogDebug("Parsed {ProcessedRows}/{TotalRows} Excel rows", Math.Min(endRow - 1, rowCount - 1), rowCount - 1);
             }
@@ -595,6 +616,31 @@ public class BulkUploadService : IBulkUploadService
 
         _logger.LogInformation("Successfully parsed Excel file: {RowCount} data rows, {ColCount} columns", rowCount - 1, colCount);
         return dataTable;
+    }
+
+    private int CalculateMemoryOptimizedBatchSize(int rowCount, int colCount)
+    {
+        // Calculate optimal batch size based on memory constraints and data size
+        var baseBatchSize = rowCount switch
+        {
+            < 1000 => 500,
+            < 5000 => 1000,
+            < 20000 => 2000,
+            < 100000 => 5000,
+            _ => 10000
+        };
+        
+        // Adjust for column count (more columns = smaller batches)
+        var columnAdjustment = colCount switch
+        {
+            < 10 => 1.0,
+            < 25 => 0.8,
+            < 50 => 0.6,
+            < 100 => 0.4,
+            _ => 0.2
+        };
+        
+        return Math.Max(100, (int)(baseBatchSize * columnAdjustment));
     }
 
     private DataTable ParseJsonToDataTable(byte[] fileData)
@@ -1352,7 +1398,9 @@ public class BulkUploadService : IBulkUploadService
         _logger.LogInformation("Filtered to {ValidRecords} valid records for bulk insert", validDataTable.Rows.Count);
 
         // Use bulk insert service if available
-        var bulkInsertService = new SqlServerBulkInsertService(_context, _logger);
+        var bulkInsertService = new SqlServerBulkInsertService(_context, 
+            _logger as ILogger<SqlServerBulkInsertService> ?? 
+            LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<SqlServerBulkInsertService>());
         
         if (bulkInsertService.IsBulkOperationSupported)
         {
@@ -1519,7 +1567,7 @@ public class BulkUploadService : IBulkUploadService
         }
         
         _logger.LogInformation("Optimized parallel processing completed. Processed: {ProcessedRecords}, Failed: {FailedRecords}", 
-            successfullyProcessed, errors.Count);
+            successfullyProcessed, responseDto.FailedRecords);
         
         return successfullyProcessed;
     }
