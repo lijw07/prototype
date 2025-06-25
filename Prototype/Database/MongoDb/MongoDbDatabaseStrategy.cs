@@ -8,20 +8,12 @@ using Prototype.Services;
 
 namespace Prototype.Database.MongoDb;
 
-public class MongoDbDatabaseStrategy : IDatabaseConnectionStrategy
+public class MongoDbDatabaseStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<MongoDbDatabaseStrategy> logger)
+    : IDatabaseConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<MongoDbDatabaseStrategy> _logger;
-
     public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.MongoDb;
-
-    public MongoDbDatabaseStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<MongoDbDatabaseStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -117,11 +109,11 @@ public class MongoDbDatabaseStrategy : IDatabaseConnectionStrategy
             DatabaseName = source.DatabaseName,
             AuthenticationType = source.AuthenticationType,
             Username = source.Username,
-            Password = string.IsNullOrEmpty(source.Password) ? null : _encryptionService.Decrypt(source.Password),
+            Password = string.IsNullOrEmpty(source.Password) ? null : encryptionService.Decrypt(source.Password),
             AuthenticationDatabase = source.AuthenticationDatabase,
             AwsAccessKeyId = source.AwsAccessKeyId,
-            AwsSecretAccessKey = string.IsNullOrEmpty(source.AwsSecretAccessKey) ? null : _encryptionService.Decrypt(source.AwsSecretAccessKey),
-            AwsSessionToken = string.IsNullOrEmpty(source.AwsSessionToken) ? null : _encryptionService.Decrypt(source.AwsSessionToken),
+            AwsSecretAccessKey = string.IsNullOrEmpty(source.AwsSecretAccessKey) ? null : encryptionService.Decrypt(source.AwsSecretAccessKey),
+            AwsSessionToken = string.IsNullOrEmpty(source.AwsSessionToken) ? null : encryptionService.Decrypt(source.AwsSessionToken),
             Principal = source.Principal,
             ServiceName = source.ServiceName,
             ServiceRealm = source.ServiceRealm,
@@ -146,7 +138,7 @@ public class MongoDbDatabaseStrategy : IDatabaseConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "MongoDB connection test failed");
+            logger.LogError(ex, "MongoDB connection test failed");
             return false;
         }
     }

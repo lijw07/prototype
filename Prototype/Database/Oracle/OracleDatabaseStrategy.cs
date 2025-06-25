@@ -7,20 +7,12 @@ using Prototype.Services;
 
 namespace Prototype.Database.Oracle;
 
-public class OracleDatabaseStrategy : IDatabaseConnectionStrategy
+public class OracleDatabaseStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<OracleDatabaseStrategy> logger)
+    : IDatabaseConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<OracleDatabaseStrategy> _logger;
-
     public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.Oracle;
-
-    public OracleDatabaseStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<OracleDatabaseStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -58,7 +50,7 @@ public class OracleDatabaseStrategy : IDatabaseConnectionStrategy
         switch (source.AuthenticationType)
         {
             case AuthenticationTypeEnum.UserPassword:
-                var password = string.IsNullOrEmpty(source.Password) ? "" : _encryptionService.Decrypt(source.Password);
+                var password = string.IsNullOrEmpty(source.Password) ? "" : encryptionService.Decrypt(source.Password);
                 connectionString += $"UID={source.Username};PWD={password};";
                 break;
                 
@@ -83,7 +75,7 @@ public class OracleDatabaseStrategy : IDatabaseConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Oracle ODBC connection test failed: {Error}", ex.Message);
+            logger.LogError(ex, "Oracle ODBC connection test failed: {Error}", ex.Message);
             return false;
         }
     }

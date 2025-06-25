@@ -64,19 +64,14 @@ const Roles: React.FC = () => {
     const fetchRoles = async (page: number = currentPage, size: number = pageSize) => {
         setLoading(true);
         try {
-            console.log('Fetching roles...');
             const response = await roleApi.getAllRoles(page, size);
-            console.log('Fetch roles response:', response);
             if (response.success && response.data?.data) {
-                console.log('Setting roles:', response.data.data);
                 setRoles(response.data.data);
                 setCurrentPage(response.data.page || page);
                 setPageSize(response.data.pageSize || size);
                 setTotalCount(response.data.totalCount || 0);
                 setTotalPages(response.data.totalPages || 1);
             } else if (response.success && response.roles) {
-                // Fallback for old API response format - use client-side pagination
-                console.log('Setting roles (fallback):', response.roles);
                 const startIndex = (page - 1) * size;
                 const endIndex = startIndex + size;
                 const paginatedRoles = response.roles.slice(startIndex, endIndex);
@@ -86,8 +81,6 @@ const Roles: React.FC = () => {
                 setTotalPages(Math.ceil(response.roles.length / size));
                 setCurrentPage(page);
                 setPageSize(size);
-            } else {
-                console.log('No roles returned or response not successful');
             }
         } catch (error) {
             console.error('Failed to fetch roles:', error);
@@ -179,12 +172,9 @@ const Roles: React.FC = () => {
                 }
             } else {
                 // Create new role
-                console.log('Creating role with name:', roleForm.roleName);
                 const response = await roleApi.createRole({ roleName: roleForm.roleName });
-                console.log('Create role response:', response);
                 if (response.success) {
                     setSubmitSuccess(true);
-                    console.log('Fetching roles after creation...');
                     refetchAndGoToFirstPage(); // Go to first page where new role should appear
                     
                     // Role form will be closed manually by user clicking X

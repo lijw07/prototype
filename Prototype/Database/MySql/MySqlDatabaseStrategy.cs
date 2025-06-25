@@ -7,20 +7,12 @@ using Prototype.Services;
 
 namespace Prototype.Database.MySql;
 
-public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
+public class MySqlDatabaseStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<MySqlDatabaseStrategy> logger)
+    : IDatabaseConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<MySqlDatabaseStrategy> _logger;
-
     public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.MySql;
-
-    public MySqlDatabaseStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<MySqlDatabaseStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -65,7 +57,7 @@ public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
         switch (source.AuthenticationType)
         {
             case AuthenticationTypeEnum.UserPassword:
-                var password = string.IsNullOrEmpty(source.Password) ? "" : _encryptionService.Decrypt(source.Password);
+                var password = string.IsNullOrEmpty(source.Password) ? "" : encryptionService.Decrypt(source.Password);
                 connectionString += $"UID={source.Username};PWD={password};";
                 break;
                 
@@ -96,7 +88,7 @@ public class MySqlDatabaseStrategy : IDatabaseConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "MySQL ODBC connection test failed: {Error}", ex.Message);
+            logger.LogError(ex, "MySQL ODBC connection test failed: {Error}", ex.Message);
             return false;
         }
     }

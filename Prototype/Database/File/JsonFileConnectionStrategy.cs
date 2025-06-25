@@ -8,20 +8,14 @@ using Prototype.Services;
 
 namespace Prototype.Database.File;
 
-public class JsonFileConnectionStrategy : IFileConnectionStrategy
+public class JsonFileConnectionStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<JsonFileConnectionStrategy> logger)
+    : IFileConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<JsonFileConnectionStrategy> _logger;
+    private readonly PasswordEncryptionService _encryptionService = encryptionService;
 
     public DataSourceTypeEnum ConnectionType => DataSourceTypeEnum.JsonFile;
-
-    public JsonFileConnectionStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<JsonFileConnectionStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -110,7 +104,7 @@ public class JsonFileConnectionStrategy : IFileConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to read JSON file: {FilePath}", source.FilePath);
+            logger.LogError(ex, "Failed to read JSON file: {FilePath}", source.FilePath);
             throw;
         }
     }
@@ -149,7 +143,7 @@ public class JsonFileConnectionStrategy : IFileConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "JSON connection test failed for {FilePath}", source.FilePath);
+            logger.LogError(ex, "JSON connection test failed for {FilePath}", source.FilePath);
             return false;
         }
     }

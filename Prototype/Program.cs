@@ -48,9 +48,10 @@ if (builder.Environment.IsDevelopment())
     {
         options.AddPolicy("AllowAll", policy =>
         {
-            policy.AllowAnyOrigin()
+            policy.WithOrigins("http://localhost:3000", "http://localhost:8080")
                   .AllowAnyMethod()
-                  .AllowAnyHeader();
+                  .AllowAnyHeader()
+                  .AllowCredentials(); // Required for SignalR
         });
     });
 }
@@ -62,10 +63,17 @@ var dbName = Environment.GetEnvironmentVariable("DB_NAME") ?? "PrototypeDb";
 var dbUser = Environment.GetEnvironmentVariable("DB_USER") ?? "sa";
 var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "YourStrong!Passw0rd";
 
-var connectionString = $"Server={dbHost},{dbPort};Database={dbName};User={dbUser};Password={dbPassword};TrustServerCertificate=True;MultipleActiveResultSets=True";
+var connectionString = $"Server={dbHost},{dbPort};Database={dbName};User={dbUser};Password={dbPassword};TrustServerCertificate=True;MultipleActiveResultSets=True;Connection Timeout=300;Max Pool Size=200;Min Pool Size=10;Pooling=True;Command Timeout=300";
 
 builder.Services.AddDbContext<SentinelContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(connectionString, sqlOptions =>
+    {
+        sqlOptions.CommandTimeout(300); // 5 minutes timeout for bulk operations
+        sqlOptions.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(30), null);
+    })
+    .EnableSensitiveDataLogging(builder.Environment.IsDevelopment())
+    .EnableDetailedErrors(builder.Environment.IsDevelopment())
+    .ConfigureWarnings(warnings => warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.FirstWithoutOrderByAndFilterWarning)));
 
 // Bind SMTP Settings
 builder.Services.Configure<SmtpSettingsPoco>(
@@ -92,20 +100,27 @@ builder.Services.AddScoped<DatabaseSeeder>();
 // Register Bulk Upload Services
 builder.Services.AddScoped<IBulkUploadService, BulkUploadService>();
 builder.Services.AddScoped<ITableDetectionService, TableDetectionService>();
-builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<ITableMappingService, TableMappingService>();
+builder.Services.AddScoped<IProgressService, ProgressService>();
+builder.Services.AddSingleton<IJobCancellationService, JobCancellationService>();
+builder.Services.AddScoped<IFileQueueService, FileQueueService>();
+builder.Services.AddScoped<IBulkInsertService, SqlServerBulkInsertService>();
 
 // Register Table Mappers
 builder.Services.AddScoped<UserTableMapper>();
 builder.Services.AddScoped<ApplicationTableMapper>();
 builder.Services.AddScoped<UserApplicationTableMapper>();
 builder.Services.AddScoped<TemporaryUserTableMapper>();
+builder.Services.AddScoped<UserRoleTableMapper>();
 
 // Add HTTP Context Accessor
 builder.Services.AddHttpContextAccessor();
 
 // Add Memory Cache
 builder.Services.AddMemoryCache();
+
+// Add SignalR
+builder.Services.AddSignalR();
 
 // SQL Server connection strategies are now self-contained in SqlServerDatabaseStrategy
 
@@ -123,7 +138,7 @@ builder.Services.AddScoped<IDatabaseConnectionStrategy, ElasticSearchDatabaseStr
 
 // Add API Connection Strategies
 builder.Services.AddScoped<IApiConnectionStrategy, RestApiConnectionStrategy>();
-builder.Services.AddScoped<IApiConnectionStrategy, GraphQLConnectionStrategy>();
+// builder.Services.AddScoped<IApiConnectionStrategy, GraphQLConnectionStrategy>(); // TODO: Implement GraphQLConnectionStrategy
 builder.Services.AddScoped<IApiConnectionStrategy, SoapApiConnectionStrategy>();
 
 // Add File Connection Strategies
@@ -137,7 +152,7 @@ builder.Services.AddScoped<IFileConnectionStrategy, GoogleCloudStorageConnection
 
 // Add HttpClient for API connections
 builder.Services.AddHttpClient<RestApiConnectionStrategy>();
-builder.Services.AddHttpClient<GraphQLConnectionStrategy>();
+// builder.Services.AddHttpClient<GraphQLConnectionStrategy>(); // TODO: Implement GraphQLConnectionStrategy
 builder.Services.AddHttpClient<SoapApiConnectionStrategy>();
 
 // Add Database Connection Factory
@@ -169,6 +184,25 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ClockSkew = TimeSpan.FromMinutes(1),
             RequireExpirationTime = true
         };
+        
+        // Configure JWT Bearer to read token from query string for SignalR
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                
+                // If the request is for our SignalR hub...
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    (path.StartsWithSegments("/progressHub")))
+                {
+                    // Read the token out of the query string
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Configuration
@@ -199,7 +233,7 @@ using (var scope = app.Services.CreateScope())
     {
         try
         {
-            logger.LogInformation("Database initialization attempt {Attempt} of {MaxAttempts}...", i + 1, maxRetries);
+            logger.LogDebug("Database initialization attempt {Attempt} of {MaxAttempts}...", i + 1, maxRetries);
             
             // First ensure the database exists by creating it if necessary
             try
@@ -213,7 +247,7 @@ using (var scope = app.Services.CreateScope())
                     {
                         command.CommandText = $"IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '{dbName}') CREATE DATABASE [{dbName}]";
                         await command.ExecuteNonQueryAsync();
-                        logger.LogInformation("Database existence check completed.");
+                        logger.LogDebug("Database existence check completed.");
                     }
                 }
             }
@@ -227,7 +261,7 @@ using (var scope = app.Services.CreateScope())
             try
             {
                 await context.Database.MigrateAsync();
-                logger.LogInformation("Database migrations applied successfully.");
+                logger.LogDebug("Database migrations applied successfully.");
             }
             catch (Exception migrationEx)
             {
@@ -245,7 +279,7 @@ using (var scope = app.Services.CreateScope())
             var canConnect = await context.Database.CanConnectAsync();
             if (canConnect)
             {
-                logger.LogInformation("Database connection verified successfully.");
+                logger.LogDebug("Database connection verified successfully.");
                 
                 // Seed database with initial data
                 var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
@@ -277,15 +311,22 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Add request logging for debugging (should be absolute first)
+// Commented out to reduce console noise - uncomment if needed for debugging
+/*
 if (app.Environment.IsDevelopment())
 {
     app.Use(async (context, next) =>
     {
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-        logger.LogInformation("Request: {Method} {Path}", context.Request.Method, context.Request.Path);
+        // Skip logging for webpack dev server WebSocket requests
+        if (!context.Request.Path.StartsWithSegments("/ws"))
+        {
+            logger.LogInformation("Request: {Method} {Path}", context.Request.Method, context.Request.Path);
+        }
         await next();
     });
 }
+*/
 
 // Global exception handling (should be first)
 app.UseMiddleware<GlobalExceptionMiddleware>();
@@ -311,5 +352,8 @@ app.MapGet("/health", () => Results.Ok("Healthy!"));
 app.MapGet("/test-bulk", () => Results.Ok("Bulk upload route test working!"));
 
 app.MapControllers();
+
+// Map SignalR Hub
+app.MapHub<Prototype.Hubs.ProgressHub>("/progressHub");
 
 app.Run();

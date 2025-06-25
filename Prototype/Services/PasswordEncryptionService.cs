@@ -18,7 +18,7 @@ public class PasswordEncryptionService
             // In development, generate a warning and use a temporary key
             if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development")
             {
-                Console.WriteLine("WARNING: No encryption key configured. Using temporary key for development only!");
+                // WARNING: No encryption key configured. Using temporary key for development only!
                 keyString = GenerateTemporaryKey();
             }
             else

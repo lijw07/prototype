@@ -49,3 +49,17 @@ html, body, #root {
 .nav-link:hover svg {
   transform: scale(1.1);
 }
+
+/* Rotating animation for migration indicator */
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.rotating {
+  animation: rotate 2s linear infinite;
+}

@@ -8,34 +8,20 @@ using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
 
-public class AuthenticationService : IAuthenticationService
+public class AuthenticationService(
+    SentinelContext context,
+    IJwtTokenService jwtTokenService,
+    PasswordEncryptionService passwordService,
+    ValidationService validationService,
+    ILogger<AuthenticationService> logger)
+    : IAuthenticationService
 {
-    private readonly SentinelContext _context;
-    private readonly IJwtTokenService _jwtTokenService;
-    private readonly PasswordEncryptionService _passwordService;
-    private readonly ValidationService _validationService;
-    private readonly ILogger<AuthenticationService> _logger;
-
-    public AuthenticationService(
-        SentinelContext context,
-        IJwtTokenService jwtTokenService,
-        PasswordEncryptionService passwordService,
-        ValidationService validationService,
-        ILogger<AuthenticationService> logger)
-    {
-        _context = context;
-        _jwtTokenService = jwtTokenService;
-        _passwordService = passwordService;
-        _validationService = validationService;
-        _logger = logger;
-    }
-
     public async Task<LoginResponse> AuthenticateAsync(LoginRequestDto request)
     {
         try
         {
             // Validation
-            var validationResult = _validationService.ValidateLoginRequest(request);
+            var validationResult = validationService.ValidateLoginRequest(request);
             if (!validationResult.IsSuccess)
                 return new LoginResponse
                 {
@@ -44,12 +30,12 @@ public class AuthenticationService : IAuthenticationService
                 };
 
             // Find user
-            var user = await _context.Users
+            var user = await context.Users
                 .FirstOrDefaultAsync(u => u.Username == request.Username);
 
-            if (user == null || !_passwordService.VerifyPassword(request.Password, user.PasswordHash))
+            if (user == null || !passwordService.VerifyPassword(request.Password, user.PasswordHash))
             {
-                _logger.LogWarning("Failed login attempt for username: {Username}", request.Username);
+                logger.LogWarning("Failed login attempt for username: {Username}", request.Username);
                 return new LoginResponse
                 {
                     Success = false,
@@ -74,13 +60,13 @@ public class AuthenticationService : IAuthenticationService
                 Timestamp = DateTime.UtcNow
             };
 
-            _context.UserActivityLogs.Add(userActivityLog);
-            await _context.SaveChangesAsync();
+            context.UserActivityLogs.Add(userActivityLog);
+            await context.SaveChangesAsync();
 
             // Generate token
-            var token = _jwtTokenService.BuildUserClaims(user, ActionTypeEnum.Login);
+            var token = jwtTokenService.BuildUserClaims(user, ActionTypeEnum.Login);
             
-            _logger.LogInformation("Successful login for user: {Username}", user.Username);
+            logger.LogInformation("Successful login for user: {Username}", user.Username);
             return new LoginResponse
             {
                 Success = true,
@@ -90,7 +76,7 @@ public class AuthenticationService : IAuthenticationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during authentication for username: {Username}", request.Username);
+            logger.LogError(ex, "Error during authentication for username: {Username}", request.Username);
             return new LoginResponse
             {
                 Success = false,

@@ -7,20 +7,12 @@ using Prototype.Services;
 
 namespace Prototype.Database.PostgreSql;
 
-public class PostgreSqlDatabaseStrategy : IDatabaseConnectionStrategy
+public class PostgreSqlDatabaseStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<PostgreSqlDatabaseStrategy> logger)
+    : IDatabaseConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<PostgreSqlDatabaseStrategy> _logger;
-
     public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.PostgreSql;
-
-    public PostgreSqlDatabaseStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<PostgreSqlDatabaseStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -65,7 +57,7 @@ public class PostgreSqlDatabaseStrategy : IDatabaseConnectionStrategy
         switch (source.AuthenticationType)
         {
             case AuthenticationTypeEnum.UserPassword:
-                var password = string.IsNullOrEmpty(source.Password) ? "" : _encryptionService.Decrypt(source.Password);
+                var password = string.IsNullOrEmpty(source.Password) ? "" : encryptionService.Decrypt(source.Password);
                 connectionString += $"UID={source.Username};PWD={password};";
                 break;
                 
@@ -96,7 +88,7 @@ public class PostgreSqlDatabaseStrategy : IDatabaseConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "PostgreSQL ODBC connection test failed: {Error}", ex.Message);
+            logger.LogError(ex, "PostgreSQL ODBC connection test failed: {Error}", ex.Message);
             return false;
         }
     }

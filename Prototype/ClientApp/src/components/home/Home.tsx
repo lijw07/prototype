@@ -71,18 +71,14 @@ export default function Home() {
   return (
     <div className="min-vh-100">
       {/* Hero Section */}
-      <section className="position-relative overflow-hidden" style={{
-        background: 'linear-gradient(135deg, #1e3a8a 0%, #3730a3 25%, #1e40af 50%, #2563eb 75%, #3b82f6 100%)',
+      <section className="position-relative overflow-hidden hero-section" style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 25%, #334155 50%, #475569 75%, #64748b 100%)',
         minHeight: '100vh',
         paddingTop: '100px'
       }}>
-        {/* Animated Background Pattern */}
-        <div className="position-absolute w-100 h-100" style={{
-          backgroundImage: `radial-gradient(circle at 25% 25%, rgba(255,255,255,0.1) 1px, transparent 1px),
-                           radial-gradient(circle at 75% 75%, rgba(255,255,255,0.05) 1px, transparent 1px)`,
-          backgroundSize: '50px 50px, 100px 100px',
-          animation: 'float 20s ease-in-out infinite'
-        }}></div>
+        {/* Enhanced Animated Background */}
+        <div className="position-absolute w-100 h-100 hero-bg-pattern"></div>
+        <div className="position-absolute w-100 h-100 hero-particles"></div>
 
         <div className="container position-relative" style={{ zIndex: 10 }}>
           <div className="row align-items-center min-vh-100 py-5">
@@ -94,9 +90,9 @@ export default function Home() {
                 </div>
               </div>
               
-              <h1 className="display-2 fw-bold text-white mb-4 lh-1">
+              <h1 className="display-2 fw-bold text-white mb-4 lh-1 hero-title">
                 The Future of
-                <span className="d-block text-warning fw-bolder">Employee Access Management</span>
+                <span className="d-block text-gradient-gold fw-bolder">Employee Access Management</span>
               </h1>
               
               <p className="lead text-white mb-5 opacity-90 fs-4">
@@ -107,7 +103,7 @@ export default function Home() {
               <div className="d-flex flex-column flex-sm-row gap-4 mb-5">
                 {user ? (
                   <button 
-                    className="btn btn-warning btn-lg rounded-3 fw-bold px-5 py-3 shadow-lg d-flex align-items-center"
+                    className="btn btn-gradient-gold btn-lg rounded-4 fw-bold px-5 py-3 shadow-lg d-flex align-items-center cta-button"
                     onClick={() => navigate('/dashboard')}
                     style={{ fontSize: '1.1rem' }}
                   >
@@ -117,7 +113,7 @@ export default function Home() {
                   </button>
                 ) : (
                   <button 
-                    className="btn btn-warning btn-lg rounded-3 fw-bold px-5 py-3 shadow-lg d-flex align-items-center"
+                    className="btn btn-gradient-gold btn-lg rounded-4 fw-bold px-5 py-3 shadow-lg d-flex align-items-center cta-button"
                     onClick={() => navigate('/login')}
                     style={{ fontSize: '1.1rem' }}
                   >
@@ -127,54 +123,54 @@ export default function Home() {
                   </button>
                 )}
                 
-                <button className="btn btn-outline-light btn-lg rounded-3 fw-semibold px-5 py-3 d-flex align-items-center"
+                <button className="btn btn-outline-light btn-lg rounded-4 fw-semibold px-5 py-3 d-flex align-items-center secondary-button"
                         style={{ fontSize: '1.1rem' }}>
                   <Eye className="me-2" size={22} />
                   Watch Demo
                 </button>
               </div>
 
-              {/* Enterprise Stats */}
-              <div className="row g-4">
+              {/* Enhanced Enterprise Stats */}
+              <div className="row g-4 stats-container">
                 <div className="col-6 col-md-3">
-                  <div className="text-center">
-                    <div className="h1 fw-bold text-warning mb-1">
+                  <div className="text-center stat-item">
+                    <div className="h1 fw-bold text-gradient-gold mb-1 counter-number">
                       {animatedCounters.enterprises.toLocaleString()}+
                     </div>
-                    <div className="text-white opacity-80 fw-medium">Enterprises</div>
+                    <div className="text-white opacity-90 fw-medium">Enterprises</div>
                   </div>
                 </div>
                 <div className="col-6 col-md-3">
-                  <div className="text-center">
-                    <div className="h1 fw-bold text-warning mb-1">
+                  <div className="text-center stat-item">
+                    <div className="h1 fw-bold text-gradient-gold mb-1 counter-number">
                       {(animatedCounters.connections / 1000).toFixed(0)}K+
                     </div>
-                    <div className="text-white opacity-80 fw-medium">Connections</div>
+                    <div className="text-white opacity-90 fw-medium">Connections</div>
                   </div>
                 </div>
                 <div className="col-6 col-md-3">
-                  <div className="text-center">
-                    <div className="h1 fw-bold text-warning mb-1">
+                  <div className="text-center stat-item">
+                    <div className="h1 fw-bold text-gradient-gold mb-1 counter-number">
                       {(animatedCounters.users / 1000).toFixed(0)}K+
                     </div>
-                    <div className="text-white opacity-80 fw-medium">Users</div>
+                    <div className="text-white opacity-90 fw-medium">Users</div>
                   </div>
                 </div>
                 <div className="col-6 col-md-3">
-                  <div className="text-center">
-                    <div className="h1 fw-bold text-warning mb-1">
+                  <div className="text-center stat-item">
+                    <div className="h1 fw-bold text-gradient-gold mb-1 counter-number">
                       {animatedCounters.uptime.toFixed(2)}%
                     </div>
-                    <div className="text-white opacity-80 fw-medium">Uptime</div>
+                    <div className="text-white opacity-90 fw-medium">Uptime</div>
                   </div>
                 </div>
               </div>
             </div>
             
             <div className="col-lg-6">
-              <div className="position-relative">
-                {/* Enterprise Dashboard Mockup */}
-                <div className="card border-0 shadow-2xl rounded-4 overflow-hidden bg-white">
+              <div className="position-relative dashboard-preview">
+                {/* Enhanced Enterprise Dashboard Mockup */}
+                <div className="card border-0 shadow-2xl rounded-4 overflow-hidden bg-white dashboard-card">
                   <div className="card-header bg-gradient-dark text-white p-4">
                     <div className="d-flex align-items-center justify-content-between">
                       <div className="d-flex align-items-center">
@@ -182,7 +178,7 @@ export default function Home() {
                         <span className="fw-bold">Enterprise Control Center</span>
                       </div>
                       <div className="d-flex align-items-center">
-                        <div className="bg-success rounded-circle me-2" style={{ width: '8px', height: '8px' }}></div>
+                        <div className="bg-success rounded-circle me-2 live-indicator" style={{ width: '8px', height: '8px' }}></div>
                         <small className="text-success fw-medium">Live</small>
                       </div>
                     </div>
@@ -320,7 +316,7 @@ export default function Home() {
 
           <div className="row g-4">
             <div className="col-lg-4 col-md-6">
-              <div className="card border-0 rounded-4 shadow-sm h-100 p-4">
+              <div className="card border-0 rounded-4 shadow-sm h-100 p-4 feature-card">
                 <div className="d-flex align-items-center mb-3">
                   <div className="bg-primary bg-opacity-10 rounded-3 p-2 me-3">
                     <Database className="text-primary" size={24} />
@@ -335,7 +331,7 @@ export default function Home() {
             </div>
             
             <div className="col-lg-4 col-md-6">
-              <div className="card border-0 rounded-4 shadow-sm h-100 p-4">
+              <div className="card border-0 rounded-4 shadow-sm h-100 p-4 feature-card">
                 <div className="d-flex align-items-center mb-3">
                   <div className="bg-success bg-opacity-10 rounded-3 p-2 me-3">
                     <Shield className="text-success" size={24} />
@@ -350,7 +346,7 @@ export default function Home() {
             </div>
             
             <div className="col-lg-4 col-md-6">
-              <div className="card border-0 rounded-4 shadow-sm h-100 p-4">
+              <div className="card border-0 rounded-4 shadow-sm h-100 p-4 feature-card">
                 <div className="d-flex align-items-center mb-3">
                   <div className="bg-info bg-opacity-10 rounded-3 p-2 me-3">
                     <Users className="text-info" size={24} />
@@ -365,7 +361,7 @@ export default function Home() {
             </div>
             
             <div className="col-lg-4 col-md-6">
-              <div className="card border-0 rounded-4 shadow-sm h-100 p-4">
+              <div className="card border-0 rounded-4 shadow-sm h-100 p-4 feature-card">
                 <div className="d-flex align-items-center mb-3">
                   <div className="bg-warning bg-opacity-10 rounded-3 p-2 me-3">
                     <BarChart3 className="text-warning" size={24} />
@@ -380,7 +376,7 @@ export default function Home() {
             </div>
             
             <div className="col-lg-4 col-md-6">
-              <div className="card border-0 rounded-4 shadow-sm h-100 p-4">
+              <div className="card border-0 rounded-4 shadow-sm h-100 p-4 feature-card">
                 <div className="d-flex align-items-center mb-3">
                   <div className="bg-danger bg-opacity-10 rounded-3 p-2 me-3">
                     <Code className="text-danger" size={24} />
@@ -395,7 +391,7 @@ export default function Home() {
             </div>
             
             <div className="col-lg-4 col-md-6">
-              <div className="card border-0 rounded-4 shadow-sm h-100 p-4">
+              <div className="card border-0 rounded-4 shadow-sm h-100 p-4 feature-card">
                 <div className="d-flex align-items-center mb-3">
                   <div className="bg-secondary bg-opacity-10 rounded-3 p-2 me-3">
                     <Cloud className="text-secondary" size={24} />
@@ -426,7 +422,7 @@ export default function Home() {
 
           <div className="row g-4">
             <div className="col-lg-4">
-              <div className="card border-0 rounded-4 shadow-lg h-100">
+              <div className="card border-0 rounded-4 shadow-lg h-100 testimonial-card">
                 <div className="card-body p-5">
                   <div className="mb-4">
                     {[...Array(5)].map((_, i) => (
@@ -453,7 +449,7 @@ export default function Home() {
             </div>
             
             <div className="col-lg-4">
-              <div className="card border-0 rounded-4 shadow-lg h-100">
+              <div className="card border-0 rounded-4 shadow-lg h-100 testimonial-card">
                 <div className="card-body p-5">
                   <div className="mb-4">
                     {[...Array(5)].map((_, i) => (
@@ -480,7 +476,7 @@ export default function Home() {
             </div>
             
             <div className="col-lg-4">
-              <div className="card border-0 rounded-4 shadow-lg h-100">
+              <div className="card border-0 rounded-4 shadow-lg h-100 testimonial-card">
                 <div className="card-body p-5">
                   <div className="mb-4">
                     {[...Array(5)].map((_, i) => (
@@ -527,7 +523,7 @@ export default function Home() {
               <div className="d-flex flex-column flex-sm-row gap-4 justify-content-center mb-5">
                 {user ? (
                   <button 
-                    className="btn btn-dark btn-lg rounded-3 fw-bold px-5 py-3 shadow-lg d-flex align-items-center"
+                    className="btn btn-dark btn-lg rounded-4 fw-bold px-5 py-3 shadow-lg d-flex align-items-center cta-button"
                     onClick={() => navigate('/applications')}
                     style={{ fontSize: '1.1rem' }}
                   >
@@ -537,7 +533,7 @@ export default function Home() {
                   </button>
                 ) : (
                   <button 
-                    className="btn btn-dark btn-lg rounded-3 fw-bold px-5 py-3 shadow-lg d-flex align-items-center"
+                    className="btn btn-dark btn-lg rounded-4 fw-bold px-5 py-3 shadow-lg d-flex align-items-center cta-button"
                     onClick={() => navigate('/login')}
                     style={{ fontSize: '1.1rem' }}
                   >
@@ -547,7 +543,7 @@ export default function Home() {
                   </button>
                 )}
                 
-                <button className="btn btn-outline-dark btn-lg rounded-3 fw-bold px-5 py-3 d-flex align-items-center"
+                <button className="btn btn-outline-dark btn-lg rounded-4 fw-bold px-5 py-3 d-flex align-items-center secondary-button"
                         style={{ fontSize: '1.1rem' }}>
                   <Headphones className="me-2" size={22} />
                   Talk to Sales

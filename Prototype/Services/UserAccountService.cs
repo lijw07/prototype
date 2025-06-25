@@ -8,62 +8,44 @@ using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
 
-public class UserAccountService : IUserAccountService
+public class UserAccountService(
+    SentinelContext context,
+    IJwtTokenService jwtTokenService,
+    IEmailNotificationFactoryService emailService,
+    ValidationService validationService,
+    TransactionService transactionService,
+    PasswordEncryptionService passwordService,
+    ILogger<UserAccountService> logger,
+    IHttpContextAccessor httpContextAccessor)
+    : IUserAccountService
 {
-    private readonly SentinelContext _context;
-    private readonly IJwtTokenService _jwtTokenService;
-    private readonly IEmailNotificationFactoryService _emailService;
-    private readonly ValidationService _validationService;
-    private readonly TransactionService _transactionService;
-    private readonly PasswordEncryptionService _passwordService;
-    private readonly ILogger<UserAccountService> _logger;
-    private readonly IHttpContextAccessor _httpContextAccessor;
-
-    public UserAccountService(
-        SentinelContext context,
-        IJwtTokenService jwtTokenService,
-        IEmailNotificationFactoryService emailService,
-        ValidationService validationService,
-        TransactionService transactionService,
-        PasswordEncryptionService passwordService,
-        ILogger<UserAccountService> logger,
-        IHttpContextAccessor httpContextAccessor)
-    {
-        _context = context;
-        _jwtTokenService = jwtTokenService;
-        _emailService = emailService;
-        _validationService = validationService;
-        _transactionService = transactionService;
-        _passwordService = passwordService;
-        _logger = logger;
-        _httpContextAccessor = httpContextAccessor;
-    }
+    private readonly ValidationService _validationService = validationService;
 
     public async Task<UserModel?> GetUserByEmailAsync(string email)
     {
-        return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+        return await context.Users.FirstOrDefaultAsync(u => u.Email == email);
     }
 
     public async Task<UserModel?> GetUserByUsernameAsync(string username)
     {
-        return await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+        return await context.Users.FirstOrDefaultAsync(u => u.Username == username);
     }
 
     public async Task<UserModel?> GetUserByIdAsync(Guid userId)
     {
-        return await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+        return await context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
     }
 
     public async Task<List<UserModel>> GetAllUsersAsync()
     {
-        return await _context.Users
+        return await context.Users
             .OrderByDescending(u => u.CreatedAt)
             .ToListAsync();
     }
 
     public async Task<LoginResponse> RegisterTemporaryUserAsync(RegisterRequestDto request)
     {
-        return await _transactionService.ExecuteInTransactionAsync(async () =>
+        return await transactionService.ExecuteInTransactionAsync(async () =>
         {
             var existingUser = await GetUserByEmailAsync(request.Email);
             if (existingUser != null)
@@ -75,7 +57,7 @@ public class UserAccountService : IUserAccountService
                 };
             }
 
-            var token = _jwtTokenService.BuildUserClaims(request, ActionTypeEnum.Register);
+            var token = jwtTokenService.BuildUserClaims(request, ActionTypeEnum.Register);
 
             var tempUser = new TemporaryUserModel
             {
@@ -85,13 +67,13 @@ public class UserAccountService : IUserAccountService
                 FirstName = request.FirstName ?? "",
                 LastName = request.LastName ?? "",
                 PhoneNumber = request.PhoneNumber ?? "",
-                PasswordHash = _passwordService.HashPassword(request.Password),
+                PasswordHash = passwordService.HashPassword(request.Password),
                 CreatedAt = DateTime.UtcNow,
                 Token = token
             };
 
-            _context.TemporaryUsers.Add(tempUser);
-            await _context.SaveChangesAsync();
+            context.TemporaryUsers.Add(tempUser);
+            await context.SaveChangesAsync();
             
             // Note: Cannot create audit log for temporary user as it requires a real UserId from Users table
             // Audit log will be created when temporary user is converted to permanent user
@@ -99,12 +81,12 @@ public class UserAccountService : IUserAccountService
             // Send verification email to temporary user
             try 
             {
-                await _emailService.SendVerificationEmailAsync(request.Email, token);
-                _logger.LogInformation("Verification email sent successfully to {Email}", request.Email);
+                await emailService.SendVerificationEmailAsync(request.Email, token);
+                logger.LogInformation("Verification email sent successfully to {Email}", request.Email);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to send verification email to {Email}, but user was created", request.Email);
+                logger.LogWarning(ex, "Failed to send verification email to {Email}, but user was created", request.Email);
                 // TODO: Continue even if email fails - user can be verified manually
             }
             
@@ -119,7 +101,7 @@ public class UserAccountService : IUserAccountService
 
     public async Task<LoginResponse> ForgotPasswordAsync(ForgotUserRequestDto request)
     {
-        return await _transactionService.ExecuteInTransactionAsync(async () =>
+        return await transactionService.ExecuteInTransactionAsync(async () =>
         {
             var user = await GetUserByEmailAsync(request.Email);
             if (user == null)
@@ -131,7 +113,7 @@ public class UserAccountService : IUserAccountService
                 };
             }
 
-            var token = _jwtTokenService.BuildUserClaims(user, ActionTypeEnum.ForgotPassword);
+            var token = jwtTokenService.BuildUserClaims(user, ActionTypeEnum.ForgotPassword);
             
             var userRecovery = new UserRecoveryRequestModel
             {
@@ -145,18 +127,18 @@ public class UserAccountService : IUserAccountService
                 ExpiresAt = DateTime.UtcNow.AddMinutes(30)
             };
 
-            _context.UserRecoveryRequests.Add(userRecovery);
-            await _context.SaveChangesAsync();
-            _logger.LogInformation("UserRecoveryRequest saved successfully for user {UserId} with ID {RecoveryId}", user.UserId, userRecovery.UserRecoveryRequestId);
+            context.UserRecoveryRequests.Add(userRecovery);
+            await context.SaveChangesAsync();
+            logger.LogInformation("UserRecoveryRequest saved successfully for user {UserId} with ID {RecoveryId}", user.UserId, userRecovery.UserRecoveryRequestId);
 
             try
             {
-                await _emailService.SendPasswordResetEmailAsync(request.Email, token);
-                _logger.LogInformation("Password reset email sent successfully to {Email}", request.Email);
+                await emailService.SendPasswordResetEmailAsync(request.Email, token);
+                logger.LogInformation("Password reset email sent successfully to {Email}", request.Email);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send password reset email to {Email}. Recovery request {RecoveryId} was saved but email failed.", request.Email, userRecovery.UserRecoveryRequestId);
+                logger.LogError(ex, "Failed to send password reset email to {Email}. Recovery request {RecoveryId} was saved but email failed.", request.Email, userRecovery.UserRecoveryRequestId);
                 
                 // TODO:
                 // Don't return error here - the recovery request was saved successfully
@@ -168,7 +150,7 @@ public class UserAccountService : IUserAccountService
             await CreateUserActivityLogAsync(user.UserId, ActionTypeEnum.ForgotPassword, "Password reset requested");
 
             // Save all changes made by audit and activity logging
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
 
             return new LoginResponse
             {
@@ -180,9 +162,9 @@ public class UserAccountService : IUserAccountService
 
     public async Task<LoginResponse> ResetPasswordAsync(ResetPasswordRequestDto request)
     {
-        return await _transactionService.ExecuteInTransactionAsync(async () =>
+        return await transactionService.ExecuteInTransactionAsync(async () =>
         {
-            if (!_jwtTokenService.ValidateToken(request.Token, out var principal))
+            if (!jwtTokenService.ValidateToken(request.Token, out var principal))
             {
                 return new LoginResponse
                 {
@@ -211,9 +193,9 @@ public class UserAccountService : IUserAccountService
                 };
             }
 
-            user.PasswordHash = _passwordService.HashPassword(request.NewPassword);
+            user.PasswordHash = passwordService.HashPassword(request.NewPassword);
             user.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
 
             // Create an audit log for password reset
             await CreateAuditLogAsync(user.UserId, ActionTypeEnum.ResetPassword, "User password reset successfully");
@@ -231,9 +213,9 @@ public class UserAccountService : IUserAccountService
 
     public async Task<LoginResponse> RegisterNewUser(string token)
     {
-        return await _transactionService.ExecuteInTransactionAsync(async () =>
+        return await transactionService.ExecuteInTransactionAsync(async () =>
         {
-            if (!_jwtTokenService.ValidateToken(token, out var principal))
+            if (!jwtTokenService.ValidateToken(token, out var principal))
             {
                 return new LoginResponse
                 {
@@ -252,7 +234,7 @@ public class UserAccountService : IUserAccountService
                 };
             }
 
-            var tempUser = await _context.TemporaryUsers.FirstOrDefaultAsync(u => u.Email == email);
+            var tempUser = await context.TemporaryUsers.FirstOrDefaultAsync(u => u.Email == email);
             if (tempUser != null)
             {
                 // Convert temporary user to permanent user
@@ -271,9 +253,9 @@ public class UserAccountService : IUserAccountService
                     UpdatedAt = DateTime.UtcNow
                 };
 
-                _context.Users.Add(newUser);
-                _context.TemporaryUsers.Remove(tempUser);
-                await _context.SaveChangesAsync();
+                context.Users.Add(newUser);
+                context.TemporaryUsers.Remove(tempUser);
+                await context.SaveChangesAsync();
 
                 // Create an audit log for user account creation
                 await CreateAuditLogAsync(newUser.UserId, ActionTypeEnum.Register,
@@ -300,10 +282,10 @@ public class UserAccountService : IUserAccountService
 
     public async Task CreateUserActivityLogAsync(Guid userId, ActionTypeEnum action, string description)
     {
-        var user = await _context.Users.FindAsync(userId);
+        var user = await context.Users.FindAsync(userId);
         if (user != null)
         {
-            var httpContext = _httpContextAccessor.HttpContext;
+            var httpContext = httpContextAccessor.HttpContext;
             var ipAddress = GetClientIpAddress(httpContext);
             var deviceInfo = GetDeviceInformation(httpContext);
 
@@ -319,7 +301,7 @@ public class UserAccountService : IUserAccountService
                 Timestamp = DateTime.UtcNow
             };
 
-            _context.UserActivityLogs.Add(activityLog);
+            context.UserActivityLogs.Add(activityLog);
             // Note: SaveChanges will be called by the transaction service
         }
     }
@@ -394,7 +376,7 @@ public class UserAccountService : IUserAccountService
 
     public async Task<LoginResponse> UpdateUserAsync(UpdateUserRequestDto request)
     {
-        return await _transactionService.ExecuteInTransactionAsync(async () =>
+        return await transactionService.ExecuteInTransactionAsync(async () =>
         {
             var user = await GetUserByIdAsync(request.UserId);
             if (user == null)
@@ -407,7 +389,7 @@ public class UserAccountService : IUserAccountService
             }
 
             // Check if username is already taken by another user
-            var existingUserWithUsername = await _context.Users
+            var existingUserWithUsername = await context.Users
                 .FirstOrDefaultAsync(u => u.Username == request.Username && u.UserId != request.UserId);
             if (existingUserWithUsername != null)
             {
@@ -419,7 +401,7 @@ public class UserAccountService : IUserAccountService
             }
 
             // Check if email is already taken by another user
-            var existingUserWithEmail = await _context.Users
+            var existingUserWithEmail = await context.Users
                 .FirstOrDefaultAsync(u => u.Email == request.Email && u.UserId != request.UserId);
             if (existingUserWithEmail != null)
             {
@@ -440,7 +422,7 @@ public class UserAccountService : IUserAccountService
             user.IsActive = request.IsActive;
             user.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
 
             return new LoginResponse
             {
@@ -452,7 +434,7 @@ public class UserAccountService : IUserAccountService
 
     public async Task<LoginResponse> DeleteUserAsync(Guid userId)
     {
-        return await _transactionService.ExecuteInTransactionAsync(async () =>
+        return await transactionService.ExecuteInTransactionAsync(async () =>
         {
             var user = await GetUserByIdAsync(userId);
             if (user == null)
@@ -465,8 +447,8 @@ public class UserAccountService : IUserAccountService
             }
 
             // Remove user from database
-            _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
+            context.Users.Remove(user);
+            await context.SaveChangesAsync();
 
             return new LoginResponse
             {
@@ -479,7 +461,7 @@ public class UserAccountService : IUserAccountService
 
     public async Task CreateAuditLogAsync(Guid userId, ActionTypeEnum action, string metadata)
     {
-        var user = await _context.Users.FindAsync(userId);
+        var user = await context.Users.FindAsync(userId);
         if (user != null)
         {
             var auditLog = new AuditLogModel
@@ -492,7 +474,7 @@ public class UserAccountService : IUserAccountService
                 CreatedAt = DateTime.UtcNow
             };
 
-            _context.AuditLogs.Add(auditLog);
+            context.AuditLogs.Add(auditLog);
         }
     }
 }

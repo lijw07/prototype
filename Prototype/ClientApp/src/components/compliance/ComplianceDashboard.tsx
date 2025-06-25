@@ -432,7 +432,7 @@ export default function ComplianceDashboard() {
                     </div>
                     <div className="card-body p-0">
                       <div className="table-responsive">
-                        <table className="table table-hover mb-0">
+                        <table className="table mb-0">
                           <thead className="bg-light">
                             <tr>
                               <th className="border-0 px-4 py-3">Type</th>

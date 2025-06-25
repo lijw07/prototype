@@ -6,25 +6,17 @@ namespace Prototype.Controllers.Login;
 
 [ApiController]
 [Route("PasswordReset")]
-public class PasswordResetController : ControllerBase
+public class PasswordResetController(
+    IUserAccountService userAccountService,
+    ILogger<PasswordResetController> logger)
+    : ControllerBase
 {
-    private readonly IUserAccountService _userAccountService;
-    private readonly ILogger<PasswordResetController> _logger;
-
-    public PasswordResetController(
-        IUserAccountService userAccountService,
-        ILogger<PasswordResetController> logger)
-    {
-        _userAccountService = userAccountService;
-        _logger = logger;
-    }
-
     [HttpPost]
     public async Task<IActionResult> PasswordReset([FromBody] ResetPasswordRequestDto requestDto)
     {
         try
         {
-            var result = await _userAccountService.ResetPasswordAsync(requestDto);
+            var result = await userAccountService.ResetPasswordAsync(requestDto);
             
             if (!result.Success)
                 return BadRequest(result);
@@ -33,7 +25,7 @@ public class PasswordResetController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during password reset");
+            logger.LogError(ex, "Error during password reset");
             return StatusCode(500, new { message = "An internal error occurred" });
         }
     }

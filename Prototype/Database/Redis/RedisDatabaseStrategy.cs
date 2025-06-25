@@ -7,20 +7,12 @@ using Prototype.Services;
 
 namespace Prototype.Database.Redis;
 
-public class RedisDatabaseStrategy : IDatabaseConnectionStrategy
+public class RedisDatabaseStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<RedisDatabaseStrategy> logger)
+    : IDatabaseConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<RedisDatabaseStrategy> _logger;
-
     public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.Redis;
-
-    public RedisDatabaseStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<RedisDatabaseStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -91,7 +83,7 @@ public class RedisDatabaseStrategy : IDatabaseConnectionStrategy
             DatabaseName = source.DatabaseName,
             AuthenticationType = source.AuthenticationType,
             Username = source.Username,
-            Password = string.IsNullOrEmpty(source.Password) ? null : _encryptionService.Decrypt(source.Password),
+            Password = string.IsNullOrEmpty(source.Password) ? null : encryptionService.Decrypt(source.Password),
             Url = source.Url ?? string.Empty
         };
 
@@ -112,7 +104,7 @@ public class RedisDatabaseStrategy : IDatabaseConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Redis connection test failed");
+            logger.LogError(ex, "Redis connection test failed");
             return false;
         }
     }

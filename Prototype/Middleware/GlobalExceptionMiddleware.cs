@@ -4,26 +4,17 @@ using Prototype.Common.Responses;
 
 namespace Prototype.Middleware;
 
-public class GlobalExceptionMiddleware
+public class GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger)
 {
-    private readonly RequestDelegate _next;
-    private readonly ILogger<GlobalExceptionMiddleware> _logger;
-
-    public GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger)
-    {
-        _next = next;
-        _logger = logger;
-    }
-
     public async Task InvokeAsync(HttpContext context)
     {
         try
         {
-            await _next(context);
+            await next(context);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception occurred. Path: {Path}, Method: {Method}", 
+            logger.LogError(ex, "Unhandled exception occurred. Path: {Path}, Method: {Method}", 
                 context.Request.Path, context.Request.Method);
             await HandleExceptionAsync(context, ex);
         }

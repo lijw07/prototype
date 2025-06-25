@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink as RouterLink, useLocation } from 'react-router-dom';
-import { Home, Users, Database, Shield, Activity, FileText, Key, Monitor, Briefcase, UserPlus, Award } from 'lucide-react';
+import { Home, Users, Database, Shield, Activity, FileText, Key, Monitor, Briefcase, UserPlus, Award, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import './NavMenu.css';
 
@@ -21,13 +21,12 @@ const navSections: NavSection[] = [
     items: [
       { path: '/dashboard', label: 'Home', icon: Home, allowedRoles: ['User', 'Admin', 'Platform Admin'] },
       { path: '/compliance', label: 'Compliance', icon: Award, allowedRoles: ['User', 'Admin', 'Platform Admin'] },
-      { path: '/executive-dashboard', label: 'Executive', icon: Briefcase, allowedRoles: ['User', 'Admin', 'Platform Admin'] },
+      { path: '/analytics-overview', label: 'Analytics Overview', icon: Briefcase, allowedRoles: ['User', 'Admin', 'Platform Admin'] },
       { path: '/security-dashboard', label: 'Security', icon: Shield, allowedRoles: ['User', 'Admin', 'Platform Admin'] },
-
     ],
   },
   {
-    title: 'Personnel',
+    title: 'Personal',
     items: [
       { path: '/accounts', label: 'Accounts', icon: Users, allowedRoles: ['User', 'Admin', 'Platform Admin'] },
       { path: '/applications', label: 'Applications', icon: Database, allowedRoles: ['User', 'Admin', 'Platform Admin'] },
@@ -137,6 +136,7 @@ export default function NavMenu() {
               );
             }
         })}
+
       </div>
       <div className="mt-auto p-3 border-top">
         <small className="text-muted">CAMS v1.0</small>

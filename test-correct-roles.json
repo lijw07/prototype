@@ -1,0 +1,29 @@
+[
+  {
+    "FirstName": "TestCorrect1",
+    "LastName": "User",
+    "Email": "testcorrect1@example.com",
+    "Username": "testcorrect1",
+    "Password": "password123",
+    "PhoneNumber": "555-1111",
+    "Role": "User"
+  },
+  {
+    "FirstName": "TestCorrect2",
+    "LastName": "Admin",
+    "Email": "testcorrect2@example.com",
+    "Username": "testcorrect2",
+    "Password": "password456",
+    "PhoneNumber": "555-2222",
+    "Role": "Admin"
+  },
+  {
+    "FirstName": "TestCorrect3",
+    "LastName": "Platform",
+    "Email": "testcorrect3@example.com",
+    "Username": "testcorrect3",
+    "Password": "password789",
+    "PhoneNumber": "555-3333",
+    "Role": "PlatformAdmin"
+  }
+]

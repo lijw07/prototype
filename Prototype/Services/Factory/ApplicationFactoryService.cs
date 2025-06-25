@@ -4,15 +4,8 @@ using Prototype.Services.Interfaces;
 
 namespace Prototype.Services.Factory;
 
-public class ApplicationFactoryService : IApplicationFactoryService
+public class ApplicationFactoryService(PasswordEncryptionService encryptionService) : IApplicationFactoryService
 {
-    private readonly PasswordEncryptionService _encryptionService;
-
-    public ApplicationFactoryService(PasswordEncryptionService encryptionService)
-    {
-        _encryptionService = encryptionService;
-    }
-
     public ApplicationModel CreateApplication(Guid applicationGuid, ApplicationRequestDto requestDto)
     {
         return new ApplicationModel
@@ -44,21 +37,21 @@ public class ApplicationFactoryService : IApplicationFactoryService
         // Only update password if provided (not empty)
         if (!string.IsNullOrEmpty(requestDto.ConnectionSource.Password))
         {
-            conn.Password = _encryptionService.Encrypt(requestDto.ConnectionSource.Password);
+            conn.Password = encryptionService.Encrypt(requestDto.ConnectionSource.Password);
         }
         conn.AuthenticationDatabase = requestDto.ConnectionSource.AuthenticationDatabase;
         // Only update AWS credentials if provided
         if (!string.IsNullOrEmpty(requestDto.ConnectionSource.AwsAccessKeyId))
         {
-            conn.AwsAccessKeyId = _encryptionService.Encrypt(requestDto.ConnectionSource.AwsAccessKeyId);
+            conn.AwsAccessKeyId = encryptionService.Encrypt(requestDto.ConnectionSource.AwsAccessKeyId);
         }
         if (!string.IsNullOrEmpty(requestDto.ConnectionSource.AwsSecretAccessKey))
         {
-            conn.AwsSecretAccessKey = _encryptionService.Encrypt(requestDto.ConnectionSource.AwsSecretAccessKey);
+            conn.AwsSecretAccessKey = encryptionService.Encrypt(requestDto.ConnectionSource.AwsSecretAccessKey);
         }
         if (!string.IsNullOrEmpty(requestDto.ConnectionSource.AwsSessionToken))
         {
-            conn.AwsSessionToken = _encryptionService.Encrypt(requestDto.ConnectionSource.AwsSessionToken);
+            conn.AwsSessionToken = encryptionService.Encrypt(requestDto.ConnectionSource.AwsSessionToken);
         }
         conn.Principal = requestDto.ConnectionSource.Principal;
         conn.ServiceName = requestDto.ConnectionSource.ServiceName;

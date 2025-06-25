@@ -5,32 +5,25 @@ using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
 
-public class UserRoleService : IUserRoleService
+public class UserRoleService(SentinelContext context) : IUserRoleService
 {
-    private readonly SentinelContext _context;
-
-    public UserRoleService(SentinelContext context)
-    {
-        _context = context;
-    }
-
     public async Task<IEnumerable<UserRoleModel>> GetAllRolesAsync()
     {
-        return await _context.UserRoles
+        return await context.UserRoles
             .OrderByDescending(r => r.CreatedAt)
             .ToListAsync();
     }
 
     public async Task<UserRoleModel?> GetRoleByIdAsync(Guid roleId)
     {
-        return await _context.UserRoles
+        return await context.UserRoles
             .FirstOrDefaultAsync(r => r.UserRoleId == roleId);
     }
 
     public async Task<UserRoleModel> CreateRoleAsync(string roleName, string createdBy)
     {
         var role = await CreateRoleWithoutSaveAsync(roleName, createdBy);
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
         return role;
     }
     
@@ -44,7 +37,7 @@ public class UserRoleService : IUserRoleService
             CreatedBy = createdBy
         };
 
-        _context.UserRoles.Add(role);
+        context.UserRoles.Add(role);
         return Task.FromResult(role);
     }
 
@@ -52,13 +45,13 @@ public class UserRoleService : IUserRoleService
     {
         var role = await UpdateRoleWithoutSaveAsync(roleId, roleName);
         if (role != null)
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
         return role;
     }
     
     public async Task<UserRoleModel?> UpdateRoleWithoutSaveAsync(Guid roleId, string roleName)
     {
-        var role = await _context.UserRoles
+        var role = await context.UserRoles
             .FirstOrDefaultAsync(r => r.UserRoleId == roleId);
 
         if (role == null)
@@ -72,25 +65,25 @@ public class UserRoleService : IUserRoleService
     {
         var deleted = await DeleteRoleWithoutSaveAsync(roleId);
         if (deleted)
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
         return deleted;
     }
     
     public async Task<bool> DeleteRoleWithoutSaveAsync(Guid roleId)
     {
-        var role = await _context.UserRoles
+        var role = await context.UserRoles
             .FirstOrDefaultAsync(r => r.UserRoleId == roleId);
 
         if (role == null)
             return false;
 
-        _context.UserRoles.Remove(role);
+        context.UserRoles.Remove(role);
         return true;
     }
 
     public async Task<bool> RoleExistsAsync(string roleName)
     {
-        return await _context.UserRoles
+        return await context.UserRoles
             .AnyAsync(r => r.Role.ToLower() == roleName.ToLower());
     }
 }

@@ -7,20 +7,12 @@ using Prototype.Services;
 
 namespace Prototype.Database.Cloud;
 
-public class AzureBlobStorageConnectionStrategy : IFileConnectionStrategy
+public class AzureBlobStorageConnectionStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<AzureBlobStorageConnectionStrategy> logger)
+    : IFileConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<AzureBlobStorageConnectionStrategy> _logger;
-
     public DataSourceTypeEnum ConnectionType => DataSourceTypeEnum.AzureBlobStorage;
-
-    public AzureBlobStorageConnectionStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<AzureBlobStorageConnectionStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -63,7 +55,7 @@ public class AzureBlobStorageConnectionStrategy : IFileConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to read Azure Blob: {FilePath}", source.FilePath);
+            logger.LogError(ex, "Failed to read Azure Blob: {FilePath}", source.FilePath);
             throw;
         }
     }
@@ -114,12 +106,12 @@ public class AzureBlobStorageConnectionStrategy : IFileConnectionStrategy
         }
         catch (Azure.RequestFailedException azEx)
         {
-            _logger.LogError(azEx, "Azure Blob Storage connection test failed: {StatusCode} - {Message}", azEx.Status, azEx.Message);
+            logger.LogError(azEx, "Azure Blob Storage connection test failed: {StatusCode} - {Message}", azEx.Status, azEx.Message);
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Azure Blob Storage connection test failed: {Error}", ex.Message);
+            logger.LogError(ex, "Azure Blob Storage connection test failed: {Error}", ex.Message);
             return false;
         }
     }
@@ -210,10 +202,10 @@ public class AzureBlobStorageConnectionStrategy : IFileConnectionStrategy
             Url = source.Url,
             AuthenticationType = source.AuthenticationType,
             Username = source.Username,
-            Password = string.IsNullOrEmpty(source.Password) ? null : _encryptionService.Decrypt(source.Password),
+            Password = string.IsNullOrEmpty(source.Password) ? null : encryptionService.Decrypt(source.Password),
             AzureStorageAccountName = source.AzureStorageAccountName,
-            AzureStorageAccountKey = string.IsNullOrEmpty(source.AzureStorageAccountKey) ? null : _encryptionService.Decrypt(source.AzureStorageAccountKey),
-            AzureSasToken = string.IsNullOrEmpty(source.AzureSasToken) ? null : _encryptionService.Decrypt(source.AzureSasToken),
+            AzureStorageAccountKey = string.IsNullOrEmpty(source.AzureStorageAccountKey) ? null : encryptionService.Decrypt(source.AzureStorageAccountKey),
+            AzureSasToken = string.IsNullOrEmpty(source.AzureSasToken) ? null : encryptionService.Decrypt(source.AzureSasToken),
             FilePath = source.FilePath,
             FileFormat = source.FileFormat,
             Delimiter = source.Delimiter,

@@ -9,23 +9,13 @@ using Prototype.Services;
 
 namespace Prototype.Database.Api;
 
-public class RestApiConnectionStrategy : IApiConnectionStrategy
+public class RestApiConnectionStrategy(
+    HttpClient httpClient,
+    PasswordEncryptionService encryptionService,
+    ILogger<RestApiConnectionStrategy> logger)
+    : IApiConnectionStrategy
 {
-    private readonly HttpClient _httpClient;
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<RestApiConnectionStrategy> _logger;
-
     public DataSourceTypeEnum ConnectionType => DataSourceTypeEnum.RestApi;
-
-    public RestApiConnectionStrategy(
-        HttpClient httpClient,
-        PasswordEncryptionService encryptionService,
-        ILogger<RestApiConnectionStrategy> logger)
-    {
-        _httpClient = httpClient;
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -44,7 +34,7 @@ public class RestApiConnectionStrategy : IApiConnectionStrategy
     public async Task<object> ExecuteRequestAsync(ConnectionSourceDto source)
     {
         var request = CreateHttpRequest(source);
-        var response = await _httpClient.SendAsync(request);
+        var response = await httpClient.SendAsync(request);
         
         var content = await response.Content.ReadAsStringAsync();
         
@@ -70,12 +60,12 @@ public class RestApiConnectionStrategy : IApiConnectionStrategy
             var request = CreateHttpRequest(source, true);
             request.Method = HttpMethod.Head; // Use HEAD for testing
             
-            var response = await _httpClient.SendAsync(request);
+            var response = await httpClient.SendAsync(request);
             return response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "REST API connection test failed for {Endpoint}", source.ApiEndpoint);
+            logger.LogError(ex, "REST API connection test failed for {Endpoint}", source.ApiEndpoint);
             return false;
         }
     }
@@ -122,7 +112,7 @@ public class RestApiConnectionStrategy : IApiConnectionStrategy
             }
             catch (JsonException ex)
             {
-                _logger.LogWarning(ex, "Failed to parse headers JSON: {Headers}", source.Headers);
+                logger.LogWarning(ex, "Failed to parse headers JSON: {Headers}", source.Headers);
             }
         }
 
@@ -201,16 +191,16 @@ public class RestApiConnectionStrategy : IApiConnectionStrategy
             Url = source.Url,
             AuthenticationType = source.AuthenticationType,
             Username = source.Username,
-            Password = string.IsNullOrEmpty(source.Password) ? null : _encryptionService.Decrypt(source.Password),
+            Password = string.IsNullOrEmpty(source.Password) ? null : encryptionService.Decrypt(source.Password),
             ApiEndpoint = source.ApiEndpoint,
             HttpMethod = source.HttpMethod,
             Headers = source.Headers,
             RequestBody = source.RequestBody,
-            ApiKey = string.IsNullOrEmpty(source.ApiKey) ? null : _encryptionService.Decrypt(source.ApiKey),
-            BearerToken = string.IsNullOrEmpty(source.BearerToken) ? null : _encryptionService.Decrypt(source.BearerToken),
+            ApiKey = string.IsNullOrEmpty(source.ApiKey) ? null : encryptionService.Decrypt(source.ApiKey),
+            BearerToken = string.IsNullOrEmpty(source.BearerToken) ? null : encryptionService.Decrypt(source.BearerToken),
             ClientId = source.ClientId,
-            ClientSecret = string.IsNullOrEmpty(source.ClientSecret) ? null : _encryptionService.Decrypt(source.ClientSecret),
-            RefreshToken = string.IsNullOrEmpty(source.RefreshToken) ? null : _encryptionService.Decrypt(source.RefreshToken),
+            ClientSecret = string.IsNullOrEmpty(source.ClientSecret) ? null : encryptionService.Decrypt(source.ClientSecret),
+            RefreshToken = string.IsNullOrEmpty(source.RefreshToken) ? null : encryptionService.Decrypt(source.RefreshToken),
             AuthorizationUrl = source.AuthorizationUrl,
             TokenUrl = source.TokenUrl,
             Scope = source.Scope

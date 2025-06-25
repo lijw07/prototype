@@ -1,6 +1,8 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { MigrationProvider } from './context/MigrationContext';
+import { NotificationProvider } from './context/NotificationContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Accounts from './components/account/Accounts';
@@ -16,8 +18,9 @@ import ApplicationLogs from './components/application-logs/ApplicationLogs';
 import Roles from './components/roles/Roles';
 import SecurityDashboard from './components/security/SecurityDashboard';
 import SystemHealthDashboard from './components/health/SystemHealthDashboard';
-import ExecutiveDashboard from './components/executive/ExecutiveDashboard';
+import AnalyticsOverview from './components/analytics/AnalyticsOverview';
 import UserProvisioning from './components/provisioning/UserProvisioning';
+import UserRequests from './components/user-requests/UserRequests';
 import ComplianceDashboard from './components/compliance/ComplianceDashboard';
 import Home from './components/home/Home';
 import About from './components/pages/About';
@@ -43,7 +46,9 @@ function ConditionalRedirect() {
 export default function App() {
   return (
     <AuthProvider>
-      <Layout>
+      <MigrationProvider>
+        <NotificationProvider>
+          <Layout>
         <Routes>
           {/* Public routes */}
           <Route path="/home" element={<Home />} />
@@ -64,15 +69,24 @@ export default function App() {
               <SecurityDashboard />
             </ProtectedRoute>
           } />
-         
-          <Route path="/executive-dashboard" element={
+          <Route path="/system-health" element={
+            <ProtectedRoute>
+              <SystemHealthDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/analytics-overview" element={
             <ProtectedRoute allowedRoles={['User', 'Admin', 'Platform Admin']}>
-              <ExecutiveDashboard />
+              <AnalyticsOverview />
             </ProtectedRoute>
           } />
           <Route path="/user-provisioning" element={
             <ProtectedRoute allowedRoles={['User', 'Admin', 'Platform Admin']}>
               <UserProvisioning />
+            </ProtectedRoute>
+          } />
+          <Route path="/user-requests" element={
+            <ProtectedRoute>
+              <UserRequests />
             </ProtectedRoute>
           } />
           <Route path="/compliance" element={
@@ -125,7 +139,9 @@ export default function App() {
           <Route path="/" element={<ConditionalRedirect />} />
           <Route path="*" element={<ConditionalRedirect />} />
         </Routes>
-      </Layout>
+          </Layout>
+        </NotificationProvider>
+      </MigrationProvider>
     </AuthProvider>
   );
 }
