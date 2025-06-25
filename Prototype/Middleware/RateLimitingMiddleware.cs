@@ -3,21 +3,11 @@ using Prototype.Common.Responses;
 
 namespace Prototype.Middleware;
 
-public class RateLimitingMiddleware
+public class RateLimitingMiddleware(RequestDelegate next, ILogger<RateLimitingMiddleware> logger, IConfiguration config)
 {
-    private readonly RequestDelegate _next;
-    private readonly ILogger<RateLimitingMiddleware> _logger;
     private static readonly ConcurrentDictionary<string, List<DateTime>> _attempts = new();
-    private readonly int _maxAttempts;
-    private readonly int _windowMinutes;
-
-    public RateLimitingMiddleware(RequestDelegate next, ILogger<RateLimitingMiddleware> logger, IConfiguration config)
-    {
-        _next = next;
-        _logger = logger;
-        _maxAttempts = config.GetValue<int>("RateLimit:MaxAttempts", 5);
-        _windowMinutes = config.GetValue<int>("RateLimit:WindowMinutes", 15);
-    }
+    private readonly int _maxAttempts = config.GetValue<int>("RateLimit:MaxAttempts", 5);
+    private readonly int _windowMinutes = config.GetValue<int>("RateLimit:WindowMinutes", 15);
 
     public async Task InvokeAsync(HttpContext context)
     {
@@ -28,7 +18,7 @@ public class RateLimitingMiddleware
             
             if (IsRateLimited(clientId))
             {
-                _logger.LogWarning("Rate limit exceeded for client: {ClientId}, Path: {Path}", 
+                logger.LogWarning("Rate limit exceeded for client: {ClientId}, Path: {Path}", 
                     clientId, context.Request.Path);
                 
                 context.Response.StatusCode = 429;
@@ -43,7 +33,7 @@ public class RateLimitingMiddleware
             RecordAttempt(clientId);
         }
         
-        await _next(context);
+        await next(context);
     }
 
     private static bool ShouldApplyRateLimit(PathString path)

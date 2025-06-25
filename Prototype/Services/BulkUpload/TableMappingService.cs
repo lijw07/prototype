@@ -1,32 +1,26 @@
 using Prototype.Services.BulkUpload.Mappers;
 
-namespace Prototype.Services.BulkUpload
+namespace Prototype.Services.BulkUpload;
+
+public class TableMappingService(IServiceProvider serviceProvider) : ITableMappingService
 {
-    public class TableMappingService : ITableMappingService
+    private readonly Dictionary<string, ITableMapper> _mappers = new(StringComparer.OrdinalIgnoreCase)
     {
-        private readonly Dictionary<string, ITableMapper> _mappers;
+        ["Users"] = serviceProvider.GetRequiredService<UserTableMapper>(),
+        ["Applications"] = serviceProvider.GetRequiredService<ApplicationTableMapper>(),
+        ["UserApplications"] = serviceProvider.GetRequiredService<UserApplicationTableMapper>(),
+        ["TemporaryUsers"] = serviceProvider.GetRequiredService<TemporaryUserTableMapper>(),
+        ["UserRoles"] = serviceProvider.GetRequiredService<UserRoleTableMapper>()
+    };
 
-        public TableMappingService(IServiceProvider serviceProvider)
-        {
-            _mappers = new Dictionary<string, ITableMapper>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["Users"] = serviceProvider.GetRequiredService<UserTableMapper>(),
-                ["Applications"] = serviceProvider.GetRequiredService<ApplicationTableMapper>(),
-                ["UserApplications"] = serviceProvider.GetRequiredService<UserApplicationTableMapper>(),
-                ["TemporaryUsers"] = serviceProvider.GetRequiredService<TemporaryUserTableMapper>(),
-                ["UserRoles"] = serviceProvider.GetRequiredService<UserRoleTableMapper>()
-            };
-        }
+    public ITableMapper? GetMapper(string tableType)
+    {
+        _mappers.TryGetValue(tableType, out var mapper);
+        return mapper;
+    }
 
-        public ITableMapper? GetMapper(string tableType)
-        {
-            _mappers.TryGetValue(tableType, out var mapper);
-            return mapper;
-        }
-
-        public List<string> GetSupportedTableTypes()
-        {
-            return _mappers.Keys.ToList();
-        }
+    public List<string> GetSupportedTableTypes()
+    {
+        return _mappers.Keys.ToList();
     }
 }

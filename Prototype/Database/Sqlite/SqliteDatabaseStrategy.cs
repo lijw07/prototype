@@ -7,20 +7,12 @@ using Prototype.Services;
 
 namespace Prototype.Database.Sqlite;
 
-public class SqliteDatabaseStrategy : IDatabaseConnectionStrategy
+public class SqliteDatabaseStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<SqliteDatabaseStrategy> logger)
+    : IDatabaseConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<SqliteDatabaseStrategy> _logger;
-
     public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.Sqlite;
-
-    public SqliteDatabaseStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<SqliteDatabaseStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -100,7 +92,7 @@ public class SqliteDatabaseStrategy : IDatabaseConnectionStrategy
                 // SQLite with password (encryption) - not standard in ODBC
                 if (!string.IsNullOrEmpty(source.Password))
                 {
-                    var password = _encryptionService.Decrypt(source.Password);
+                    var password = encryptionService.Decrypt(source.Password);
                     connectionString += $"PWD={password};";
                 }
                 break;
@@ -130,7 +122,7 @@ public class SqliteDatabaseStrategy : IDatabaseConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SQLite ODBC connection test failed: {Error}", ex.Message);
+            logger.LogError(ex, "SQLite ODBC connection test failed: {Error}", ex.Message);
             return false;
         }
     }

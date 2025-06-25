@@ -2,21 +2,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 
-namespace Prototype.Controllers.Settings;
+namespace Prototype.Controllers.Navigation;
 
 [Route("[controller]")]
-public class ApplicationLogSettingsController : BaseSettingsController
+public class ApplicationLogNavigationController(
+    SentinelContext context,
+    ILogger<ApplicationLogNavigationController> logger)
+    : BaseNavigationController(logger)
 {
-    private readonly SentinelContext _context;
-
-    public ApplicationLogSettingsController(
-        SentinelContext context, 
-        ILogger<ApplicationLogSettingsController> logger)
-        : base(logger)
-    {
-        _context = context;
-    }
-
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
@@ -28,7 +21,7 @@ public class ApplicationLogSettingsController : BaseSettingsController
 
             var skip = (page - 1) * pageSize;
 
-            var logs = await _context.ApplicationLogs
+            var logs = await context.ApplicationLogs
                 .Include(log => log.Application)
                 .OrderByDescending(log => log.CreatedAt)
                 .Skip(skip)
@@ -45,7 +38,7 @@ public class ApplicationLogSettingsController : BaseSettingsController
                 })
                 .ToListAsync();
 
-            var totalCount = await _context.ApplicationLogs.CountAsync();
+            var totalCount = await context.ApplicationLogs.CountAsync();
 
             var result = CreatePaginatedResponse(logs, page, pageSize, totalCount);
 
@@ -53,7 +46,7 @@ public class ApplicationLogSettingsController : BaseSettingsController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving application logs");
+            Logger.LogError(ex, "Error retrieving application logs");
             return StatusCode(500, new { success = false, message = "An internal error occurred" });
         }
     }

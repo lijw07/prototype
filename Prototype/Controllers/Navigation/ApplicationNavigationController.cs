@@ -1,7 +1,8 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
-using Prototype.Database;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
 using Prototype.Enum;
@@ -9,65 +10,46 @@ using Prototype.Models;
 using Prototype.Services;
 using Prototype.Services.Interfaces;
 using Prototype.Utility;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
-namespace Prototype.Controllers.Settings;
+namespace Prototype.Controllers.Navigation;
 
 [Route("settings/applications")]
-public class ApplicationSettingsController : BaseSettingsController
+public class ApplicationNavigationController(
+    SentinelContext context,
+    IApplicationFactoryService applicationFactory,
+    IApplicationConnectionFactoryService connectionFactory,
+    IDatabaseConnectionFactory dbConnectionFactory,
+    IEnumerable<IApiConnectionStrategy> apiStrategies,
+    IEnumerable<IFileConnectionStrategy> fileStrategies,
+    IAuthenticatedUserAccessor userAccessor,
+    ValidationService validationService,
+    TransactionService transactionService,
+    ILogger<ApplicationNavigationController> logger)
+    : BaseNavigationController(logger, userAccessor, validationService, transactionService)
 {
-    private readonly SentinelContext _context;
-    private readonly IApplicationFactoryService _applicationFactory;
-    private readonly IApplicationConnectionFactoryService _connectionFactory;
-    private readonly IDatabaseConnectionFactory _dbConnectionFactory;
-    private readonly IEnumerable<IApiConnectionStrategy> _apiStrategies;
-    private readonly IEnumerable<IFileConnectionStrategy> _fileStrategies;
-
-    public ApplicationSettingsController(
-        SentinelContext context,
-        IApplicationFactoryService applicationFactory,
-        IApplicationConnectionFactoryService connectionFactory,
-        IDatabaseConnectionFactory dbConnectionFactory,
-        IEnumerable<IApiConnectionStrategy> apiStrategies,
-        IEnumerable<IFileConnectionStrategy> fileStrategies,
-        IAuthenticatedUserAccessor userAccessor,
-        ValidationService validationService,
-        TransactionService transactionService,
-        ILogger<ApplicationSettingsController> logger)
-        : base(logger, userAccessor, validationService, transactionService)
-    {
-        _context = context;
-        _applicationFactory = applicationFactory;
-        _connectionFactory = connectionFactory;
-        _dbConnectionFactory = dbConnectionFactory;
-        _apiStrategies = apiStrategies;
-        _fileStrategies = fileStrategies;
-    }
-
     [HttpPost("new-application-connection")]
     public async Task<IActionResult> CreateApplication([FromBody] ApplicationRequestDto dto)
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return new { success = false, message = "User not authenticated" };
 
             // Check if the application name already exists for this user
-            var existingApp = await _context.Applications
+            var existingApp = await context.Applications
                 .FirstOrDefaultAsync(a => a.ApplicationName == dto.ApplicationName);
             if (existingApp != null)
                 return new { success = false, message = "Application name already exists" };
 
-            return await _transactionService!.ExecuteInTransactionAsync(async () =>
+            return await TransactionService!.ExecuteInTransactionAsync(async () =>
             {
                 // Create application
                 var applicationId = Guid.NewGuid();
-                var application = _applicationFactory.CreateApplication(applicationId, dto);
+                var application = applicationFactory.CreateApplication(applicationId, dto);
                 
                 // Create connection
-                var connection = _connectionFactory.CreateApplicationConnection(applicationId, dto.ConnectionSource);
+                var connection = connectionFactory.CreateApplicationConnection(applicationId, dto.ConnectionSource);
                 
                 // Create a user-application relationship
                 var userApplication = new UserApplicationModel
@@ -82,9 +64,9 @@ public class ApplicationSettingsController : BaseSettingsController
                     CreatedAt = DateTime.UtcNow
                 };
 
-                _context.Applications.Add(application);
-                _context.ApplicationConnections.Add(connection);
-                _context.UserApplications.Add(userApplication);
+                context.Applications.Add(application);
+                context.ApplicationConnections.Add(connection);
+                context.UserApplications.Add(userApplication);
 
                 // Log activity
                 var activityLog = new UserActivityLogModel
@@ -98,7 +80,7 @@ public class ApplicationSettingsController : BaseSettingsController
                     Description = $"User created application: {dto.ApplicationName}",
                     Timestamp = DateTime.UtcNow
                 };
-                _context.UserActivityLogs.Add(activityLog);
+                context.UserActivityLogs.Add(activityLog);
 
                 // Also create application log
                 var applicationLog = new ApplicationLogModel
@@ -111,11 +93,11 @@ public class ApplicationSettingsController : BaseSettingsController
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
-                _context.ApplicationLogs.Add(applicationLog);
+                context.ApplicationLogs.Add(applicationLog);
                 
-                _logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", applicationId, ActionTypeEnum.ApplicationAdded);
+                Logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", applicationId, ActionTypeEnum.ApplicationAdded);
 
-                await _context.SaveChangesAsync();
+                await context.SaveChangesAsync();
 
                 return new { success = true, message = "Application created successfully", applicationId = applicationId };
             });
@@ -127,15 +109,15 @@ public class ApplicationSettingsController : BaseSettingsController
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return new { success = false, message = "User not authenticated" };
 
             var (validPage, validPageSize, skip) = ValidatePaginationParameters(page, pageSize);
 
-            var query = from ua in _context.UserApplications
-                       join app in _context.Applications on ua.ApplicationId equals app.ApplicationId
-                       join conn in _context.ApplicationConnections on ua.ApplicationConnectionId equals conn.ApplicationConnectionId
+            var query = from ua in context.UserApplications
+                       join app in context.Applications on ua.ApplicationId equals app.ApplicationId
+                       join conn in context.ApplicationConnections on ua.ApplicationConnectionId equals conn.ApplicationConnectionId
                        where ua.UserId == currentUser.UserId
                        select new
                        {
@@ -181,31 +163,31 @@ public class ApplicationSettingsController : BaseSettingsController
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return new { success = false, message = "User not authenticated" };
 
             if (!Guid.TryParse(applicationId, out var appGuid))
                 return new { success = false, message = "Invalid application ID" };
 
-            return await _transactionService!.ExecuteInTransactionAsync(async () =>
+            return await TransactionService!.ExecuteInTransactionAsync(async () =>
             {
                 // Check if user has access to this application
-                var userApplication = await _context.UserApplications
+                var userApplication = await context.UserApplications
                     .FirstOrDefaultAsync(ua => ua.ApplicationId == appGuid && ua.UserId == currentUser.UserId);
                 if (userApplication == null)
                     return new { success = false, message = "Application not found or access denied" };
 
-                var application = await _context.Applications
+                var application = await context.Applications
                     .FirstOrDefaultAsync(a => a.ApplicationId == appGuid);
-                var connection = await _context.ApplicationConnections
+                var connection = await context.ApplicationConnections
                     .FirstOrDefaultAsync(ac => ac.ApplicationId == appGuid);
 
                 if (application == null || connection == null)
                     return new { success = false, message = "Application or connection not found" };
 
                 // Update application and connection
-                _applicationFactory.UpdateApplication(application, connection, dto);
+                applicationFactory.UpdateApplication(application, connection, dto);
 
                 // Log activity
                 var activityLog = new UserActivityLogModel
@@ -219,7 +201,7 @@ public class ApplicationSettingsController : BaseSettingsController
                     Description = $"User updated application: {dto.ApplicationName}",
                     Timestamp = DateTime.UtcNow
                 };
-                _context.UserActivityLogs.Add(activityLog);
+                context.UserActivityLogs.Add(activityLog);
 
                 // Also create application log
                 var applicationLog = new ApplicationLogModel
@@ -232,11 +214,11 @@ public class ApplicationSettingsController : BaseSettingsController
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
-                _context.ApplicationLogs.Add(applicationLog);
+                context.ApplicationLogs.Add(applicationLog);
                 
-                _logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", appGuid, ActionTypeEnum.ApplicationUpdated);
+                Logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", appGuid, ActionTypeEnum.ApplicationUpdated);
 
-                await _context.SaveChangesAsync();
+                await context.SaveChangesAsync();
 
                 return new { success = true, message = "Application updated successfully" };
             });
@@ -248,35 +230,35 @@ public class ApplicationSettingsController : BaseSettingsController
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return new { success = false, message = "User not authenticated" };
 
             if (!Guid.TryParse(applicationId, out var appGuid))
                 return new { success = false, message = "Invalid application ID" };
 
-            return await _transactionService!.ExecuteInTransactionAsync(async () =>
+            return await TransactionService!.ExecuteInTransactionAsync(async () =>
             {
                 // Check if a user has access to this application
-                var userApplication = await _context.UserApplications
+                var userApplication = await context.UserApplications
                     .FirstOrDefaultAsync(ua => ua.ApplicationId == appGuid && ua.UserId == currentUser.UserId);
                 if (userApplication == null)
                     return new { success = false, message = "Application not found or access denied" };
 
                 // Check if any other users are still using this application connection
-                var otherUsersUsingConnection = await _context.UserApplications
+                var otherUsersUsingConnection = await context.UserApplications
                     .Where(ua => ua.ApplicationConnectionId == userApplication.ApplicationConnectionId && ua.UserId != currentUser.UserId)
                     .CountAsync();
 
-                var otherUsersUsingApp = await _context.UserApplications
+                var otherUsersUsingApp = await context.UserApplications
                     .Where(ua => ua.ApplicationId == appGuid && ua.UserId != currentUser.UserId)
                     .CountAsync();
 
-                _logger.LogInformation("Found {OtherUsersConnection} other users using connection, {OtherUsersApp} other users using application {AppId}", 
+                Logger.LogInformation("Found {OtherUsersConnection} other users using connection, {OtherUsersApp} other users using application {AppId}", 
                     otherUsersUsingConnection, otherUsersUsingApp, appGuid);
 
                 // Store the application name for logging before potential deletion
-                var application = await _context.Applications
+                var application = await context.Applications
                     .FirstOrDefaultAsync(a => a.ApplicationId == appGuid);
                 var applicationName = application?.ApplicationName ?? "Unknown";
 
@@ -292,7 +274,7 @@ public class ApplicationSettingsController : BaseSettingsController
                     Description = $"User deleted application: {applicationName}",
                     Timestamp = DateTime.UtcNow
                 };
-                _context.UserActivityLogs.Add(activityLog);
+                context.UserActivityLogs.Add(activityLog);
 
                 // Create audit log for application deletion
                 var auditLog = new AuditLogModel
@@ -306,9 +288,9 @@ public class ApplicationSettingsController : BaseSettingsController
                         : $"User {currentUser.Username} permanently deleted application: {applicationName}",
                     CreatedAt = DateTime.UtcNow
                 };
-                _context.AuditLogs.Add(auditLog);
+                context.AuditLogs.Add(auditLog);
                 
-                _logger.LogInformation("Added audit log for application {ApplicationId} deletion by user {UserId}", appGuid, currentUser.UserId);
+                Logger.LogInformation("Added audit log for application {ApplicationId} deletion by user {UserId}", appGuid, currentUser.UserId);
 
                 // Create application log only if we're not going to delete the application
                 // (If we're deleting the application, the audit log and activity log will suffice)
@@ -324,22 +306,22 @@ public class ApplicationSettingsController : BaseSettingsController
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     };
-                    _context.ApplicationLogs.Add(applicationLog);
+                    context.ApplicationLogs.Add(applicationLog);
                     
-                    _logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", appGuid, ActionTypeEnum.ApplicationRemoved);
+                    Logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", appGuid, ActionTypeEnum.ApplicationRemoved);
                 }
 
                 // Now remove the current user's relationship
-                _context.UserApplications.Remove(userApplication);
+                context.UserApplications.Remove(userApplication);
 
                 // Only delete the connection if no other users are using it
                 if (otherUsersUsingConnection == 0)
                 {
-                    var connection = await _context.ApplicationConnections
+                    var connection = await context.ApplicationConnections
                         .FirstOrDefaultAsync(ac => ac.ApplicationConnectionId == userApplication.ApplicationConnectionId);
                     if (connection != null)
                     {
-                        _context.ApplicationConnections.Remove(connection);
+                        context.ApplicationConnections.Remove(connection);
                     }
                 }
 
@@ -347,26 +329,26 @@ public class ApplicationSettingsController : BaseSettingsController
                 if (otherUsersUsingApp == 0)
                 {
                     // First, we need to delete all application logs for this application
-                    var applicationLogs = await _context.ApplicationLogs
+                    var applicationLogs = await context.ApplicationLogs
                         .Where(al => al.ApplicationId == appGuid)
                         .ToListAsync();
                     
                     if (applicationLogs.Any())
                     {
-                        _context.ApplicationLogs.RemoveRange(applicationLogs);
-                        _logger.LogInformation("Removing {LogCount} application logs before deleting application {ApplicationId}", 
+                        context.ApplicationLogs.RemoveRange(applicationLogs);
+                        Logger.LogInformation("Removing {LogCount} application logs before deleting application {ApplicationId}", 
                             applicationLogs.Count, appGuid);
                     }
                     
                     if (application != null)
                     {
-                        _context.Applications.Remove(application);
-                        _logger.LogInformation("Application {ApplicationId} permanently deleted from database as no other users were using it", appGuid);
+                        context.Applications.Remove(application);
+                        Logger.LogInformation("Application {ApplicationId} permanently deleted from database as no other users were using it", appGuid);
                     }
                 }
                 else
                 {
-                    _logger.LogInformation("Application {ApplicationId} kept in database as {OtherUsersCount} other users are still using it", appGuid, otherUsersUsingApp);
+                    Logger.LogInformation("Application {ApplicationId} kept in database as {OtherUsersCount} other users are still using it", appGuid, otherUsersUsingApp);
                 }
 
                 var message = otherUsersUsingApp > 0 
@@ -389,7 +371,7 @@ public class ApplicationSettingsController : BaseSettingsController
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return new { success = false, message = "User not authenticated" };
 
@@ -404,7 +386,7 @@ public class ApplicationSettingsController : BaseSettingsController
                 
                 // Check if this is a request by applicationId or full data
                 var jsonElement = (System.Text.Json.JsonElement)requestData;
-                _logger.LogInformation("Received connection test request: {JsonData}", jsonElement.GetRawText());
+                Logger.LogInformation("Received connection test request: {JsonData}", jsonElement.GetRawText());
                 
                 if (jsonElement.TryGetProperty("applicationId", out var appIdProperty) && appIdProperty.ValueKind == System.Text.Json.JsonValueKind.String)
                 {
@@ -413,7 +395,7 @@ public class ApplicationSettingsController : BaseSettingsController
                     testingApplicationId = applicationId;
                     
                     // Get the application and its connection
-                    var userApp = await _context.UserApplications
+                    var userApp = await context.UserApplications
                         .Include(ua => ua.Application)
                         .Include(ua => ua.ApplicationConnection)
                         .FirstOrDefaultAsync(ua => ua.ApplicationId == applicationId && ua.UserId == currentUser.UserId);
@@ -431,7 +413,7 @@ public class ApplicationSettingsController : BaseSettingsController
                 }
                 else
                 {
-                    _logger.LogInformation("Testing new application with full connection data");
+                    Logger.LogInformation("Testing new application with full connection data");
                     
                     // Testing new application with full connection data
                     var options = new JsonSerializerOptions
@@ -444,12 +426,12 @@ public class ApplicationSettingsController : BaseSettingsController
                     try
                     {
                         var dto = System.Text.Json.JsonSerializer.Deserialize<ApplicationRequestDto>(jsonElement.GetRawText(), options);
-                        _logger.LogInformation("Deserialized DTO: ApplicationName={ApplicationName}, DataSourceType={DataSourceType}, ConnectionSource null={ConnectionSourceNull}", 
+                        Logger.LogInformation("Deserialized DTO: ApplicationName={ApplicationName}, DataSourceType={DataSourceType}, ConnectionSource null={ConnectionSourceNull}", 
                             dto?.ApplicationName, dto?.DataSourceType, dto?.ConnectionSource == null);
                         
                         if (dto?.ConnectionSource == null)
                         {
-                            _logger.LogWarning("ConnectionSource is null in deserialized DTO");
+                            Logger.LogWarning("ConnectionSource is null in deserialized DTO");
                             return new { success = false, message = "Invalid connection data" };
                         }
                         
@@ -459,12 +441,12 @@ public class ApplicationSettingsController : BaseSettingsController
                         description = $"tested connection to new application {dto.ApplicationName}";
                         dataSourceType = dto.DataSourceType;
                         
-                        _logger.LogInformation("Parsed connection data: Host={Host}, Port={Port}, DataSourceType={DataSourceType}", 
+                        Logger.LogInformation("Parsed connection data: Host={Host}, Port={Port}, DataSourceType={DataSourceType}", 
                             host, port, dataSourceType);
                     }
                     catch (Exception deserializeEx)
                     {
-                        _logger.LogError(deserializeEx, "Failed to deserialize connection test request");
+                        Logger.LogError(deserializeEx, "Failed to deserialize connection test request");
                         return new { success = false, message = "Failed to parse connection data" };
                     }
                     
@@ -477,40 +459,40 @@ public class ApplicationSettingsController : BaseSettingsController
                 }
 
                 // Perform the actual connection test based on the data source type
-                _logger.LogInformation("Testing connection for data source type: {DataSourceType}", dataSourceType);
+                Logger.LogInformation("Testing connection for data source type: {DataSourceType}", dataSourceType);
                 
                 try
                 {
                     if (IsDatabaseType(dataSourceType))
                     {
-                        _logger.LogInformation("Testing database connection for {DataSourceType}", dataSourceType);
+                        Logger.LogInformation("Testing database connection for {DataSourceType}", dataSourceType);
                         
                         // Test database connection
                         string connectionString;
                         if (existingConnection != null)
                         {
-                            _logger.LogInformation("Building connection string from existing connection");
-                            connectionString = _dbConnectionFactory.BuildConnectionString(dataSourceType, existingConnection);
+                            Logger.LogInformation("Building connection string from existing connection");
+                            connectionString = dbConnectionFactory.BuildConnectionString(dataSourceType, existingConnection);
                         }
                         else if (newConnectionSource != null)
                         {
-                            _logger.LogInformation("Building connection string from new connection source");
-                            connectionString = _dbConnectionFactory.BuildConnectionString(dataSourceType, newConnectionSource);
+                            Logger.LogInformation("Building connection string from new connection source");
+                            connectionString = dbConnectionFactory.BuildConnectionString(dataSourceType, newConnectionSource);
                         }
                         else
                         {
-                            _logger.LogWarning("No connection data available for testing");
+                            Logger.LogWarning("No connection data available for testing");
                             return new { success = false, message = "No connection data available" };
                         }
                         
-                        _logger.LogInformation("Built connection string, testing connection...");
-                        connectionTestResult = await _dbConnectionFactory.TestConnectionAsync(dataSourceType, connectionString);
-                        _logger.LogInformation("Database connection test result: {Result}", connectionTestResult);
+                        Logger.LogInformation("Built connection string, testing connection...");
+                        connectionTestResult = await dbConnectionFactory.TestConnectionAsync(dataSourceType, connectionString);
+                        Logger.LogInformation("Database connection test result: {Result}", connectionTestResult);
                     }
                     else if (IsApiType(dataSourceType))
                     {
                         // Test API connection
-                        var apiStrategy = _apiStrategies.FirstOrDefault(s => s.ConnectionType == dataSourceType);
+                        var apiStrategy = apiStrategies.FirstOrDefault(s => s.ConnectionType == dataSourceType);
                         if (apiStrategy == null)
                         {
                             return new { success = false, message = $"API connection type '{dataSourceType}' is not supported" };
@@ -532,7 +514,7 @@ public class ApplicationSettingsController : BaseSettingsController
                     else if (IsFileType(dataSourceType))
                     {
                         // Test file connection
-                        var fileStrategy = _fileStrategies.FirstOrDefault(s => s.ConnectionType == dataSourceType);
+                        var fileStrategy = fileStrategies.FirstOrDefault(s => s.ConnectionType == dataSourceType);
                         if (fileStrategy == null)
                         {
                             return new { success = false, message = $"File connection type '{dataSourceType}' is not supported" };
@@ -558,11 +540,11 @@ public class ApplicationSettingsController : BaseSettingsController
                 }
                 catch (Exception testEx)
                 {
-                    _logger.LogError(testEx, "Connection test failed for {DataSourceType}: {Error}", dataSourceType, testEx.Message);
+                    Logger.LogError(testEx, "Connection test failed for {DataSourceType}: {Error}", dataSourceType, testEx.Message);
                     connectionTestResult = false;
                 }
                 
-                _logger.LogInformation("Final connection test result for {DataSourceType}: {Result}", dataSourceType, connectionTestResult);
+                Logger.LogInformation("Final connection test result for {DataSourceType}: {Result}", dataSourceType, connectionTestResult);
 
                 // Log connection test attempt
                 var activityLog = new UserActivityLogModel
@@ -576,7 +558,7 @@ public class ApplicationSettingsController : BaseSettingsController
                     Description = $"User {description} - Result: {(connectionTestResult ? "Success" : "Failed")}",
                     Timestamp = DateTime.UtcNow
                 };
-                _context.UserActivityLogs.Add(activityLog);
+                context.UserActivityLogs.Add(activityLog);
 
                 // Add application log if testing existing application
                 if (testingApplicationId.HasValue)
@@ -591,19 +573,19 @@ public class ApplicationSettingsController : BaseSettingsController
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     };
-                    _context.ApplicationLogs.Add(applicationLog);
+                    context.ApplicationLogs.Add(applicationLog);
                     
-                    _logger.LogInformation("Added application log for connection test on application {ApplicationId} with result {Result}", testingApplicationId.Value, connectionTestResult);
+                    Logger.LogInformation("Added application log for connection test on application {ApplicationId} with result {Result}", testingApplicationId.Value, connectionTestResult);
                 }
 
-                await _context.SaveChangesAsync();
+                await context.SaveChangesAsync();
 
                 var message = connectionTestResult ? "Connection test successful" : "Connection test failed";
                 return new { success = connectionTestResult, message = message, connectionValid = connectionTestResult };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Connection test failed: {Error}", ex.Message);
+                Logger.LogError(ex, "Connection test failed: {Error}", ex.Message);
                 return new { success = false, message = "Connection test failed", error = ex.Message };
             }
         }, "testing application connection");
@@ -612,16 +594,16 @@ public class ApplicationSettingsController : BaseSettingsController
     [HttpPost("test-application-connection-old")]
     public async Task<IActionResult> TestApplicationConnectionOld([FromBody] object requestData)
     {
-        _logger.LogCritical("=== CONNECTION TEST METHOD CALLED ===");
+        Logger.LogCritical("=== CONNECTION TEST METHOD CALLED ===");
         
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            _logger.LogCritical("=== INSIDE CONNECTION TEST EXECUTION ===");
+            Logger.LogCritical("=== INSIDE CONNECTION TEST EXECUTION ===");
             
-            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
             {
-                _logger.LogCritical("=== USER NOT AUTHENTICATED ===");
+                Logger.LogCritical("=== USER NOT AUTHENTICATED ===");
                 return new { success = false, message = "User not authenticated" };
             }
 
@@ -636,7 +618,7 @@ public class ApplicationSettingsController : BaseSettingsController
                 
                 // Check if this is a request by applicationId or full data
                 var jsonElement = (System.Text.Json.JsonElement)requestData;
-                _logger.LogInformation("Received connection test request: {JsonData}", jsonElement.GetRawText());
+                Logger.LogInformation("Received connection test request: {JsonData}", jsonElement.GetRawText());
                 
                 if (jsonElement.TryGetProperty("applicationId", out var appIdProperty) && appIdProperty.ValueKind == System.Text.Json.JsonValueKind.String)
                 {
@@ -645,7 +627,7 @@ public class ApplicationSettingsController : BaseSettingsController
                     testingApplicationId = applicationId;
                     
                     // Get the application and its connection
-                    var userApp = await _context.UserApplications
+                    var userApp = await context.UserApplications
                         .Include(ua => ua.Application)
                         .Include(ua => ua.ApplicationConnection)
                         .FirstOrDefaultAsync(ua => ua.ApplicationId == applicationId && ua.UserId == currentUser.UserId);
@@ -663,7 +645,7 @@ public class ApplicationSettingsController : BaseSettingsController
                 }
                 else
                 {
-                    _logger.LogInformation("Testing new application with full connection data");
+                    Logger.LogInformation("Testing new application with full connection data");
                     
                     // Testing new application with full connection data
                     var options = new JsonSerializerOptions
@@ -676,12 +658,12 @@ public class ApplicationSettingsController : BaseSettingsController
                     try
                     {
                         var dto = System.Text.Json.JsonSerializer.Deserialize<ApplicationRequestDto>(jsonElement.GetRawText(), options);
-                        _logger.LogInformation("Deserialized DTO: ApplicationName={ApplicationName}, DataSourceType={DataSourceType}, ConnectionSource null={ConnectionSourceNull}", 
+                        Logger.LogInformation("Deserialized DTO: ApplicationName={ApplicationName}, DataSourceType={DataSourceType}, ConnectionSource null={ConnectionSourceNull}", 
                             dto?.ApplicationName, dto?.DataSourceType, dto?.ConnectionSource == null);
                         
                         if (dto?.ConnectionSource == null)
                         {
-                            _logger.LogWarning("ConnectionSource is null in deserialized DTO");
+                            Logger.LogWarning("ConnectionSource is null in deserialized DTO");
                             return new { success = false, message = "Invalid connection data" };
                         }
                         
@@ -691,12 +673,12 @@ public class ApplicationSettingsController : BaseSettingsController
                         description = $"tested connection to new application {dto.ApplicationName}";
                         dataSourceType = dto.DataSourceType;
                         
-                        _logger.LogInformation("Parsed connection data: Host={Host}, Port={Port}, DataSourceType={DataSourceType}", 
+                        Logger.LogInformation("Parsed connection data: Host={Host}, Port={Port}, DataSourceType={DataSourceType}", 
                             host, port, dataSourceType);
                     }
                     catch (Exception deserializeEx)
                     {
-                        _logger.LogError(deserializeEx, "Failed to deserialize connection test request");
+                        Logger.LogError(deserializeEx, "Failed to deserialize connection test request");
                         return new { success = false, message = "Failed to parse connection data" };
                     }
                     
@@ -709,9 +691,9 @@ public class ApplicationSettingsController : BaseSettingsController
                 }
 
                 // Perform the actual connection test based on the data source type
-                _logger.LogCritical("=== TESTING CONNECTION FOR DATA SOURCE TYPE: {DataSourceType} ===", dataSourceType);
+                Logger.LogCritical("=== TESTING CONNECTION FOR DATA SOURCE TYPE: {DataSourceType} ===", dataSourceType);
                 
-                _logger.LogInformation("Final connection test result for {DataSourceType}: {Result}", dataSourceType, connectionTestResult);
+                Logger.LogInformation("Final connection test result for {DataSourceType}: {Result}", dataSourceType, connectionTestResult);
 
                 // Log connection test attempt
                 var activityLog = new UserActivityLogModel
@@ -725,7 +707,7 @@ public class ApplicationSettingsController : BaseSettingsController
                     Description = $"User {description} - Result: {(connectionTestResult ? "Success" : "Failed")}",
                     Timestamp = DateTime.UtcNow
                 };
-                _context.UserActivityLogs.Add(activityLog);
+                context.UserActivityLogs.Add(activityLog);
 
                 // Add application log if testing existing application
                 if (testingApplicationId.HasValue)
@@ -740,19 +722,19 @@ public class ApplicationSettingsController : BaseSettingsController
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     };
-                    _context.ApplicationLogs.Add(applicationLog);
+                    context.ApplicationLogs.Add(applicationLog);
                     
-                    _logger.LogInformation("Added application log for connection test on application {ApplicationId} with result {Result}", testingApplicationId.Value, connectionTestResult);
+                    Logger.LogInformation("Added application log for connection test on application {ApplicationId} with result {Result}", testingApplicationId.Value, connectionTestResult);
                 }
 
-                await _context.SaveChangesAsync();
+                await context.SaveChangesAsync();
 
                 var message = connectionTestResult ? "Connection test successful" : "Connection test failed";
                 return new { success = connectionTestResult, message = message, connectionValid = connectionTestResult };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Connection test failed: {Error}", ex.Message);
+                Logger.LogError(ex, "Connection test failed: {Error}", ex.Message);
                 return new { success = false, message = "Connection test failed", error = ex.Message };
             }
         }, "testing application connection");

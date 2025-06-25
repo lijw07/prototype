@@ -1,41 +1,29 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.Enum;
-using Prototype.Services.Interfaces;
 using Prototype.Utility;
 
-namespace Prototype.Controllers;
+namespace Prototype.Controllers.Navigation;
 
 [Route("[controller]")]
-public class DashboardController : ControllerBase
+public class DashboardNavigationController(
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    ILogger<DashboardNavigationController> logger)
+    : ControllerBase
 {
-    private readonly SentinelContext _context;
-    private readonly IAuthenticatedUserAccessor _userAccessor;
-    private readonly ILogger<DashboardController> _logger;
-
-    public DashboardController(
-        SentinelContext context,
-        IAuthenticatedUserAccessor userAccessor,
-        ILogger<DashboardController> logger)
-    {
-        _context = context;
-        _userAccessor = userAccessor;
-        _logger = logger;
-    }
-
     [HttpGet("statistics")]
     public async Task<IActionResult> GetDashboardStatistics()
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
             // Get user's applications (the ones they have access to)
-            var userApplications = await _context.UserApplications
+            var userApplications = await context.UserApplications
                 .Where(ua => ua.UserId == currentUser.UserId)
                 .Include(ua => ua.Application)
                 .Include(ua => ua.ApplicationConnection)
@@ -46,7 +34,7 @@ public class DashboardController : ControllerBase
 
             // Count active connections (assuming active means recently used - within last 30 days)
             var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
-            var activeConnections = await _context.UserActivityLogs
+            var activeConnections = await context.UserActivityLogs
                 .Where(log => log.UserId == currentUser.UserId && 
                              log.Timestamp >= thirtyDaysAgo &&
                              (log.ActionType == ActionTypeEnum.ApplicationAdded || 
@@ -56,21 +44,21 @@ public class DashboardController : ControllerBase
                 .CountAsync();
 
             // Get user statistics breakdown
-            var totalVerifiedUsers = await _context.Users.CountAsync();
-            var totalTemporaryUsers = await _context.TemporaryUsers.CountAsync();
+            var totalVerifiedUsers = await context.Users.CountAsync();
+            var totalTemporaryUsers = await context.TemporaryUsers.CountAsync();
             var totalUsers = totalVerifiedUsers + totalTemporaryUsers;
             
             // Get total roles in the system
-            var totalRoles = await _context.UserRoles.CountAsync();
+            var totalRoles = await context.UserRoles.CountAsync();
 
             // Get recent activity count (last 24 hours for this user)
             var twentyFourHoursAgo = DateTime.UtcNow.AddHours(-24);
-            var recentActivity = await _context.UserActivityLogs
+            var recentActivity = await context.UserActivityLogs
                 .Where(log => log.UserId == currentUser.UserId && log.Timestamp >= twentyFourHoursAgo)
                 .CountAsync();
 
             // Get recent activity details (last 10 activities for this user)
-            var recentActivities = await _context.UserActivityLogs
+            var recentActivities = await context.UserActivityLogs
                 .Where(log => log.UserId == currentUser.UserId)
                 .OrderByDescending(log => log.Timestamp)
                 .Take(10)
@@ -106,12 +94,12 @@ public class DashboardController : ControllerBase
                 }
             };
 
-            _logger.LogInformation("Dashboard statistics retrieved for user: {Username}", currentUser.Username);
+            logger.LogInformation("Dashboard statistics retrieved for user: {Username}", currentUser.Username);
             return Ok(statistics);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving dashboard statistics");
+            logger.LogError(ex, "Error retrieving dashboard statistics");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }

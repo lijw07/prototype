@@ -1,74 +1,58 @@
 using System.Collections.Concurrent;
 
-namespace Prototype.Services.BulkUpload
+namespace Prototype.Services.BulkUpload;
+
+public class JobCancellationService(ILogger<JobCancellationService> logger) : IJobCancellationService
 {
-    public interface IJobCancellationService
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _activeJobs = new();
+
+    public CancellationTokenSource CreateJobCancellation(string jobId)
     {
-        CancellationTokenSource CreateJobCancellation(string jobId);
-        bool CancelJob(string jobId);
-        CancellationToken GetCancellationToken(string jobId);
-        void RemoveJob(string jobId);
-        bool IsJobCancelled(string jobId);
+        var cts = new CancellationTokenSource();
+        _activeJobs.TryAdd(jobId, cts);
+        logger.LogInformation("Created cancellation token for job {JobId}", jobId);
+        return cts;
     }
 
-    public class JobCancellationService : IJobCancellationService
+    public bool CancelJob(string jobId)
     {
-        private readonly ConcurrentDictionary<string, CancellationTokenSource> _activeJobs = new();
-        private readonly ILogger<JobCancellationService> _logger;
-
-        public JobCancellationService(ILogger<JobCancellationService> logger)
+        if (_activeJobs.TryGetValue(jobId, out var cts))
         {
-            _logger = logger;
-        }
-
-        public CancellationTokenSource CreateJobCancellation(string jobId)
-        {
-            var cts = new CancellationTokenSource();
-            _activeJobs.TryAdd(jobId, cts);
-            _logger.LogInformation("Created cancellation token for job {JobId}", jobId);
-            return cts;
-        }
-
-        public bool CancelJob(string jobId)
-        {
-            if (_activeJobs.TryGetValue(jobId, out var cts))
+            try
             {
-                try
-                {
-                    _logger.LogWarning("🚨 CANCELLING job {JobId} - requesting cancellation now", jobId);
-                    cts.Cancel();
-                    _logger.LogWarning("🚨 CANCELLED job {JobId} - cancellation token triggered", jobId);
-                    return true;
-                }
-                catch (ObjectDisposedException)
-                {
-                    // Token was already disposed
-                    _logger.LogWarning("Attempted to cancel already disposed job {JobId}", jobId);
-                    return false;
-                }
+                logger.LogWarning("🚨 CANCELLING job {JobId} - requesting cancellation now", jobId);
+                cts.Cancel();
+                logger.LogWarning("🚨 CANCELLED job {JobId} - cancellation token triggered", jobId);
+                return true;
             }
-
-            _logger.LogWarning("⚠️ Attempted to cancel non-existent job {JobId} - job not found in active jobs", jobId);
-            return false;
-        }
-
-        public CancellationToken GetCancellationToken(string jobId)
-        {
-            return _activeJobs.TryGetValue(jobId, out var cts) ? cts.Token : CancellationToken.None;
-        }
-
-        public void RemoveJob(string jobId)
-        {
-            if (_activeJobs.TryRemove(jobId, out var cts))
+            catch (ObjectDisposedException)
             {
-                cts.Dispose();
-                _logger.LogInformation("Removed job {JobId}", jobId);
+                // Token was already disposed
+                logger.LogWarning("Attempted to cancel already disposed job {JobId}", jobId);
+                return false;
             }
         }
 
-        public bool IsJobCancelled(string jobId)
+        logger.LogWarning("⚠️ Attempted to cancel non-existent job {JobId} - job not found in active jobs", jobId);
+        return false;
+    }
+
+    public CancellationToken GetCancellationToken(string jobId)
+    {
+        return _activeJobs.TryGetValue(jobId, out var cts) ? cts.Token : CancellationToken.None;
+    }
+
+    public void RemoveJob(string jobId)
+    {
+        if (_activeJobs.TryRemove(jobId, out var cts))
         {
-            return _activeJobs.TryGetValue(jobId, out var cts) && cts.Token.IsCancellationRequested;
+            cts.Dispose();
+            logger.LogInformation("Removed job {JobId}", jobId);
         }
+    }
+
+    public bool IsJobCancelled(string jobId)
+    {
+        return _activeJobs.TryGetValue(jobId, out var cts) && cts.Token.IsCancellationRequested;
     }
 }

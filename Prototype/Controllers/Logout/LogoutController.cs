@@ -12,28 +12,18 @@ namespace Prototype.Controllers.Logout;
 [Authorize]
 [ApiController]
 [Route("[controller]")]
-public class LogoutController : ControllerBase
+public class LogoutController(
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    ILogger<LogoutController> logger)
+    : ControllerBase
 {
-    private readonly SentinelContext _context;
-    private readonly IAuthenticatedUserAccessor _userAccessor;
-    private readonly ILogger<LogoutController> _logger;
-
-    public LogoutController(
-        SentinelContext context,
-        IAuthenticatedUserAccessor userAccessor,
-        ILogger<LogoutController> logger)
-    {
-        _context = context;
-        _userAccessor = userAccessor;
-        _logger = logger;
-    }
-
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
     {
         try
         {
-            var user = await _userAccessor.GetCurrentUserAsync();
+            var user = await userAccessor.GetCurrentUserAsync();
             if (user != null)
             {
                 var userActivityLog = new UserActivityLogModel
@@ -48,10 +38,10 @@ public class LogoutController : ControllerBase
                     Timestamp = DateTime.UtcNow
                 };
                 
-                _context.UserActivityLogs.Add(userActivityLog);
-                await _context.SaveChangesAsync();
+                context.UserActivityLogs.Add(userActivityLog);
+                await context.SaveChangesAsync();
                 
-                _logger.LogInformation("User {Username} logged out successfully", user.Username);
+                logger.LogInformation("User {Username} logged out successfully", user.Username);
             }
 
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -59,7 +49,7 @@ public class LogoutController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during logout");
+            logger.LogError(ex, "Error during logout");
             return StatusCode(500, new { message = "An internal error occurred" });
         }
     }

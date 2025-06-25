@@ -1,4 +1,3 @@
-using Elasticsearch.Net;
 using Nest;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
@@ -8,20 +7,12 @@ using Prototype.Services;
 
 namespace Prototype.Database.ElasticSearch;
 
-public class ElasticSearchDatabaseStrategy : IDatabaseConnectionStrategy
+public class ElasticSearchDatabaseStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<ElasticSearchDatabaseStrategy> logger)
+    : IDatabaseConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<ElasticSearchDatabaseStrategy> _logger;
-
     public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.ElasticSearch;
-
-    public ElasticSearchDatabaseStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<ElasticSearchDatabaseStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -57,7 +48,7 @@ public class ElasticSearchDatabaseStrategy : IDatabaseConnectionStrategy
             Host = source.Host,
             Port = source.Port,
             Username = source.Username,
-            Password = string.IsNullOrEmpty(source.Password) ? null : _encryptionService.Decrypt(source.Password),
+            Password = string.IsNullOrEmpty(source.Password) ? null : encryptionService.Decrypt(source.Password),
             AuthenticationType = source.AuthenticationType,
             Index = source.DatabaseName
         };
@@ -103,7 +94,7 @@ public class ElasticSearchDatabaseStrategy : IDatabaseConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ElasticSearch connection test failed");
+            logger.LogError(ex, "ElasticSearch connection test failed");
             return false;
         }
     }

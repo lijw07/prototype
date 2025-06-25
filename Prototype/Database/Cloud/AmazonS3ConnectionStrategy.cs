@@ -8,20 +8,12 @@ using Prototype.Services;
 
 namespace Prototype.Database.Cloud;
 
-public class AmazonS3ConnectionStrategy : IFileConnectionStrategy
+public class AmazonS3ConnectionStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<AmazonS3ConnectionStrategy> logger)
+    : IFileConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<AmazonS3ConnectionStrategy> _logger;
-
     public DataSourceTypeEnum ConnectionType => DataSourceTypeEnum.AmazonS3;
-
-    public AmazonS3ConnectionStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<AmazonS3ConnectionStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -65,7 +57,7 @@ public class AmazonS3ConnectionStrategy : IFileConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to read S3 object: {FilePath}", source.FilePath);
+            logger.LogError(ex, "Failed to read S3 object: {FilePath}", source.FilePath);
             throw;
         }
     }
@@ -107,12 +99,12 @@ public class AmazonS3ConnectionStrategy : IFileConnectionStrategy
         }
         catch (AmazonS3Exception s3Ex)
         {
-            _logger.LogError(s3Ex, "S3 connection test failed: {ErrorCode} - {Message}", s3Ex.ErrorCode, s3Ex.Message);
+            logger.LogError(s3Ex, "S3 connection test failed: {ErrorCode} - {Message}", s3Ex.ErrorCode, s3Ex.Message);
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "S3 connection test failed: {Error}", ex.Message);
+            logger.LogError(ex, "S3 connection test failed: {Error}", ex.Message);
             return false;
         }
     }
@@ -153,7 +145,7 @@ public class AmazonS3ConnectionStrategy : IFileConnectionStrategy
             }
             catch (System.Text.Json.JsonException ex)
             {
-                _logger.LogWarning(ex, "Failed to parse S3 custom properties: {Properties}", source.CustomProperties);
+                logger.LogWarning(ex, "Failed to parse S3 custom properties: {Properties}", source.CustomProperties);
             }
         }
 
@@ -223,10 +215,10 @@ public class AmazonS3ConnectionStrategy : IFileConnectionStrategy
             Url = source.Url,
             AuthenticationType = source.AuthenticationType,
             Username = source.Username,
-            Password = string.IsNullOrEmpty(source.Password) ? null : _encryptionService.Decrypt(source.Password),
+            Password = string.IsNullOrEmpty(source.Password) ? null : encryptionService.Decrypt(source.Password),
             AwsAccessKeyId = source.AwsAccessKeyId,
-            AwsSecretAccessKey = string.IsNullOrEmpty(source.AwsSecretAccessKey) ? null : _encryptionService.Decrypt(source.AwsSecretAccessKey),
-            AwsSessionToken = string.IsNullOrEmpty(source.AwsSessionToken) ? null : _encryptionService.Decrypt(source.AwsSessionToken),
+            AwsSecretAccessKey = string.IsNullOrEmpty(source.AwsSecretAccessKey) ? null : encryptionService.Decrypt(source.AwsSecretAccessKey),
+            AwsSessionToken = string.IsNullOrEmpty(source.AwsSessionToken) ? null : encryptionService.Decrypt(source.AwsSessionToken),
             FilePath = source.FilePath,
             FileFormat = source.FileFormat,
             Delimiter = source.Delimiter,

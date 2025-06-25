@@ -6,25 +6,17 @@ namespace Prototype.Controllers.Login;
 
 [ApiController]
 [Route("ForgotUser")]
-public class ForgotUserController : ControllerBase
+public class ForgotUserController(
+    IUserAccountService userAccountService,
+    ILogger<ForgotUserController> logger)
+    : ControllerBase
 {
-    private readonly IUserAccountService _userAccountService;
-    private readonly ILogger<ForgotUserController> _logger;
-
-    public ForgotUserController(
-        IUserAccountService userAccountService,
-        ILogger<ForgotUserController> logger)
-    {
-        _userAccountService = userAccountService;
-        _logger = logger;
-    }
-
     [HttpPost]
     public async Task<IActionResult> ForgotUser([FromBody] ForgotUserRequestDto requestDto)
     {
         try
         {
-            var result = await _userAccountService.ForgotPasswordAsync(requestDto);
+            var result = await userAccountService.ForgotPasswordAsync(requestDto);
             
             if (!result.Success)
                 return BadRequest(result);
@@ -33,7 +25,7 @@ public class ForgotUserController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing forgot user request for email: {Email}", requestDto.Email);
+            logger.LogError(ex, "Error processing forgot user request for email: {Email}", requestDto.Email);
             return StatusCode(500, new { message = "An internal error occurred" });
         }
     }

@@ -8,20 +8,12 @@ using Prototype.Services;
 
 namespace Prototype.Database.Cassandra;
 
-public class CassandraDatabaseStrategy : IDatabaseConnectionStrategy
+public class CassandraDatabaseStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<CassandraDatabaseStrategy> logger)
+    : IDatabaseConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<CassandraDatabaseStrategy> _logger;
-
     public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.Cassandra;
-
-    public CassandraDatabaseStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<CassandraDatabaseStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -67,7 +59,7 @@ public class CassandraDatabaseStrategy : IDatabaseConnectionStrategy
             Port = port,
             Keyspace = keyspace,
             Username = source.Username,
-            Password = string.IsNullOrEmpty(source.Password) ? null : _encryptionService.Decrypt(source.Password),
+            Password = string.IsNullOrEmpty(source.Password) ? null : encryptionService.Decrypt(source.Password),
             AuthenticationType = source.AuthenticationType
         };
 
@@ -125,7 +117,7 @@ public class CassandraDatabaseStrategy : IDatabaseConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Cassandra connection test failed");
+            logger.LogError(ex, "Cassandra connection test failed");
             return false;
         }
     }

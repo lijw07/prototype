@@ -2,37 +2,27 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
-using Prototype.Models;
 using Prototype.Enum;
+using Prototype.Models;
 using Prototype.Utility;
 
-namespace Prototype.Controllers;
+namespace Prototype.Controllers.Navigation;
 
 [Authorize]
 [Route("api/user-provisioning")]
 [ApiController]
-public class UserProvisioningController : ControllerBase
+public class UserProvisioningNavigationController(
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    ILogger<UserProvisioningNavigationController> logger)
+    : ControllerBase
 {
-    private readonly SentinelContext _context;
-    private readonly IAuthenticatedUserAccessor _userAccessor;
-    private readonly ILogger<UserProvisioningController> _logger;
-
-    public UserProvisioningController(
-        SentinelContext context,
-        IAuthenticatedUserAccessor userAccessor,
-        ILogger<UserProvisioningController> logger)
-    {
-        _context = context;
-        _userAccessor = userAccessor;
-        _logger = logger;
-    }
-
     [HttpGet("overview")]
     public async Task<IActionResult> GetProvisioningOverview()
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -41,7 +31,7 @@ public class UserProvisioningController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving provisioning overview");
+            logger.LogError(ex, "Error retrieving provisioning overview");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -51,7 +41,7 @@ public class UserProvisioningController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -60,7 +50,7 @@ public class UserProvisioningController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving pending requests");
+            logger.LogError(ex, "Error retrieving pending requests");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -70,7 +60,7 @@ public class UserProvisioningController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -79,7 +69,7 @@ public class UserProvisioningController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing auto-provisioning");
+            logger.LogError(ex, "Error processing auto-provisioning");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -89,7 +79,7 @@ public class UserProvisioningController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -98,7 +88,7 @@ public class UserProvisioningController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving provisioning templates");
+            logger.LogError(ex, "Error retrieving provisioning templates");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -117,18 +107,18 @@ public class UserProvisioningController : ControllerBase
             var cancellationToken = cancellationTokenSource.Token;
 
             // Run COUNT queries sequentially to avoid DbContext concurrency issues
-            var totalUsers = await _context.Users.CountAsync(cancellationToken);
-            var pendingUsers = await _context.TemporaryUsers.CountAsync(cancellationToken);
-            var recentlyProvisioned = await _context.Users
+            var totalUsers = await context.Users.CountAsync(cancellationToken);
+            var pendingUsers = await context.TemporaryUsers.CountAsync(cancellationToken);
+            var recentlyProvisioned = await context.Users
                 .Where(u => u.CreatedAt >= last7Days)
                 .CountAsync(cancellationToken);
-            var totalApplications = await _context.Applications.CountAsync(cancellationToken);
-            var usersWithAccess = await _context.UserApplications
+            var totalApplications = await context.Applications.CountAsync(cancellationToken);
+            var usersWithAccess = await context.UserApplications
                 .Select(ua => ua.UserId)
                 .Distinct()
                 .CountAsync(cancellationToken);
-            var totalRoles = await _context.UserRoles.CountAsync(cancellationToken);
-            var usersWithRoles = await _context.Users
+            var totalRoles = await context.UserRoles.CountAsync(cancellationToken);
+            var usersWithRoles = await context.Users
                 .Where(u => !string.IsNullOrEmpty(u.Role))
                 .CountAsync(cancellationToken);
 
@@ -183,7 +173,7 @@ public class UserProvisioningController : ControllerBase
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("Provisioning metrics collection timed out, returning cached/estimated values");
+            logger.LogWarning("Provisioning metrics collection timed out, returning cached/estimated values");
             // Return estimated/cached values when timeout occurs
             return new
             {
@@ -226,7 +216,7 @@ public class UserProvisioningController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error collecting provisioning metrics");
+            logger.LogError(ex, "Error collecting provisioning metrics");
             throw;
         }
     }
@@ -235,7 +225,7 @@ public class UserProvisioningController : ControllerBase
     {
         var skip = (page - 1) * pageSize;
         
-        var pendingUsersData = await _context.TemporaryUsers
+        var pendingUsersData = await context.TemporaryUsers
             .OrderBy(tu => tu.CreatedAt)
             .Skip(skip)
             .Take(pageSize)
@@ -256,7 +246,7 @@ public class UserProvisioningController : ControllerBase
             })
             .ToList();
 
-        var totalCount = await _context.TemporaryUsers.CountAsync();
+        var totalCount = await context.TemporaryUsers.CountAsync();
 
         return new
         {
@@ -287,7 +277,7 @@ public class UserProvisioningController : ControllerBase
             ? now.AddDays(-request.Criteria.MaxDaysWaiting.Value)
             : DateTime.MinValue;
 
-        var eligibleUsers = await _context.TemporaryUsers
+        var eligibleUsers = await context.TemporaryUsers
             .Where(tu => request.Criteria.MaxDaysWaiting == null || 
                         tu.CreatedAt >= cutoffDate)
             .Take(request.MaxUsers ?? 50)
@@ -312,8 +302,8 @@ public class UserProvisioningController : ControllerBase
                     PasswordHash = tempUser.PasswordHash
                 };
 
-                _context.Users.Add(newUser);
-                _context.TemporaryUsers.Remove(tempUser);
+                context.Users.Add(newUser);
+                context.TemporaryUsers.Remove(tempUser);
 
                 processed.Add(new
                 {
@@ -330,11 +320,11 @@ public class UserProvisioningController : ControllerBase
             catch (Exception ex)
             {
                 errors.Add($"Failed to provision {tempUser.Username}: {ex.Message}");
-                _logger.LogError(ex, "Auto-provisioning failed for user {Username}", tempUser.Username);
+                logger.LogError(ex, "Auto-provisioning failed for user {Username}", tempUser.Username);
             }
         }
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
         return new
         {
@@ -349,7 +339,7 @@ public class UserProvisioningController : ControllerBase
     private async Task<List<object>> GetTemplates()
     {
         // Role-based templates
-        var roles = await _context.UserRoles
+        var roles = await context.UserRoles
             .Select(r => r.Role)
             .Distinct()
             .ToListAsync();
@@ -404,7 +394,7 @@ public class UserProvisioningController : ControllerBase
             // Add timeout protection for trends query
             using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             
-            var rawMonthlyData = await _context.Users
+            var rawMonthlyData = await context.Users
                 .Where(u => u.CreatedAt >= last6Months)
                 .GroupBy(u => new { u.CreatedAt.Year, u.CreatedAt.Month })
                 .Select(g => new
@@ -431,7 +421,7 @@ public class UserProvisioningController : ControllerBase
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("Provisioning trends query timed out");
+            logger.LogWarning("Provisioning trends query timed out");
             return new
             {
                 monthlyProvisioning = new List<object>(),
@@ -440,7 +430,7 @@ public class UserProvisioningController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving provisioning trends");
+            logger.LogError(ex, "Error retrieving provisioning trends");
             return new
             {
                 monthlyProvisioning = new List<object>(),
@@ -460,7 +450,7 @@ public class UserProvisioningController : ControllerBase
             Metadata = $"{action}: User {user.Username} provisioned by {currentUser.Username}",
             CreatedAt = DateTime.UtcNow
         };
-        _context.AuditLogs.Add(auditLog);
+        context.AuditLogs.Add(auditLog);
     }
 
 }

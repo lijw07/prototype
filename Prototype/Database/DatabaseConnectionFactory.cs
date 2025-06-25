@@ -5,26 +5,11 @@ using Prototype.Models;
 
 namespace Prototype.Database;
 
-public interface IDatabaseConnectionFactory
+public class DatabaseConnectionFactory(
+    IEnumerable<IDatabaseConnectionStrategy> strategies,
+    ILogger<DatabaseConnectionFactory> logger)
+    : IDatabaseConnectionFactory
 {
-    string BuildConnectionString(DataSourceTypeEnum databaseType, ConnectionSourceDto source);
-    string BuildConnectionString(DataSourceTypeEnum databaseType, ApplicationConnectionModel source);
-    Task<bool> TestConnectionAsync(DataSourceTypeEnum databaseType, string connectionString);
-}
-
-public class DatabaseConnectionFactory : IDatabaseConnectionFactory
-{
-    private readonly IEnumerable<IDatabaseConnectionStrategy> _strategies;
-    private readonly ILogger<DatabaseConnectionFactory> _logger;
-
-    public DatabaseConnectionFactory(
-        IEnumerable<IDatabaseConnectionStrategy> strategies,
-        ILogger<DatabaseConnectionFactory> logger)
-    {
-        _strategies = strategies;
-        _logger = logger;
-    }
-
     public string BuildConnectionString(DataSourceTypeEnum databaseType, ConnectionSourceDto source)
     {
         var strategy = GetStrategy(databaseType);
@@ -46,14 +31,14 @@ public class DatabaseConnectionFactory : IDatabaseConnectionFactory
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to test connection for {DatabaseType}", databaseType);
+            logger.LogError(ex, "Failed to test connection for {DatabaseType}", databaseType);
             return false;
         }
     }
 
     private IDatabaseConnectionStrategy GetStrategy(DataSourceTypeEnum databaseType)
     {
-        var strategy = _strategies.FirstOrDefault(s => s.DatabaseType == databaseType);
+        var strategy = strategies.FirstOrDefault(s => s.DatabaseType == databaseType);
         if (strategy == null)
         {
             throw new NotSupportedException($"Database type '{databaseType}' is not supported.");

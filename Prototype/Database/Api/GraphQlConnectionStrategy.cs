@@ -9,23 +9,13 @@ using Prototype.Services;
 
 namespace Prototype.Database.Api;
 
-public class GraphQLConnectionStrategy : IApiConnectionStrategy
+public class GraphQlConnectionStrategy(
+    HttpClient httpClient,
+    PasswordEncryptionService encryptionService,
+    ILogger<GraphQlConnectionStrategy> logger)
+    : IApiConnectionStrategy
 {
-    private readonly HttpClient _httpClient;
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<GraphQLConnectionStrategy> _logger;
-
     public DataSourceTypeEnum ConnectionType => DataSourceTypeEnum.GraphQL;
-
-    public GraphQLConnectionStrategy(
-        HttpClient httpClient,
-        PasswordEncryptionService encryptionService,
-        ILogger<GraphQLConnectionStrategy> logger)
-    {
-        _httpClient = httpClient;
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -44,7 +34,7 @@ public class GraphQLConnectionStrategy : IApiConnectionStrategy
     public async Task<object> ExecuteRequestAsync(ConnectionSourceDto source)
     {
         var request = CreateGraphQLRequest(source);
-        var response = await _httpClient.SendAsync(request);
+        var response = await httpClient.SendAsync(request);
         
         var content = await response.Content.ReadAsStringAsync();
         
@@ -96,7 +86,7 @@ public class GraphQLConnectionStrategy : IApiConnectionStrategy
             };
 
             var request = CreateGraphQLRequest(testSource);
-            var response = await _httpClient.SendAsync(request);
+            var response = await httpClient.SendAsync(request);
             
             if (!response.IsSuccessStatusCode)
                 return false;
@@ -109,7 +99,7 @@ public class GraphQLConnectionStrategy : IApiConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GraphQL connection test failed for {Endpoint}", source.ApiEndpoint ?? source.Url);
+            logger.LogError(ex, "GraphQL connection test failed for {Endpoint}", source.ApiEndpoint ?? source.Url);
             return false;
         }
     }
@@ -159,7 +149,7 @@ public class GraphQLConnectionStrategy : IApiConnectionStrategy
             }
             catch (JsonException ex)
             {
-                _logger.LogWarning(ex, "Failed to parse headers JSON: {Headers}", source.Headers);
+                logger.LogWarning(ex, "Failed to parse headers JSON: {Headers}", source.Headers);
             }
         }
 
@@ -234,16 +224,16 @@ public class GraphQLConnectionStrategy : IApiConnectionStrategy
             Url = source.Url,
             AuthenticationType = source.AuthenticationType,
             Username = source.Username,
-            Password = string.IsNullOrEmpty(source.Password) ? null : _encryptionService.Decrypt(source.Password),
+            Password = string.IsNullOrEmpty(source.Password) ? null : encryptionService.Decrypt(source.Password),
             ApiEndpoint = source.ApiEndpoint,
             HttpMethod = source.HttpMethod,
             Headers = source.Headers,
             RequestBody = source.RequestBody,
-            ApiKey = string.IsNullOrEmpty(source.ApiKey) ? null : _encryptionService.Decrypt(source.ApiKey),
-            BearerToken = string.IsNullOrEmpty(source.BearerToken) ? null : _encryptionService.Decrypt(source.BearerToken),
+            ApiKey = string.IsNullOrEmpty(source.ApiKey) ? null : encryptionService.Decrypt(source.ApiKey),
+            BearerToken = string.IsNullOrEmpty(source.BearerToken) ? null : encryptionService.Decrypt(source.BearerToken),
             ClientId = source.ClientId,
-            ClientSecret = string.IsNullOrEmpty(source.ClientSecret) ? null : _encryptionService.Decrypt(source.ClientSecret),
-            RefreshToken = string.IsNullOrEmpty(source.RefreshToken) ? null : _encryptionService.Decrypt(source.RefreshToken),
+            ClientSecret = string.IsNullOrEmpty(source.ClientSecret) ? null : encryptionService.Decrypt(source.ClientSecret),
+            RefreshToken = string.IsNullOrEmpty(source.RefreshToken) ? null : encryptionService.Decrypt(source.RefreshToken),
             AuthorizationUrl = source.AuthorizationUrl,
             TokenUrl = source.TokenUrl,
             Scope = source.Scope

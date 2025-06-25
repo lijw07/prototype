@@ -1,38 +1,28 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.Enum;
 using Prototype.Utility;
-using System.Diagnostics;
 
-namespace Prototype.Controllers;
+namespace Prototype.Controllers.Navigation;
 
 [Authorize]
 [Route("api/system-health")]
 [ApiController]
-public class SystemHealthController : ControllerBase
+public class SystemHealthNavigationController(
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    ILogger<SystemHealthNavigationController> logger)
+    : ControllerBase
 {
-    private readonly SentinelContext _context;
-    private readonly IAuthenticatedUserAccessor _userAccessor;
-    private readonly ILogger<SystemHealthController> _logger;
-
-    public SystemHealthController(
-        SentinelContext context,
-        IAuthenticatedUserAccessor userAccessor,
-        ILogger<SystemHealthController> logger)
-    {
-        _context = context;
-        _userAccessor = userAccessor;
-        _logger = logger;
-    }
-
     [HttpGet("overview")]
     public async Task<IActionResult> GetHealthOverview()
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -42,7 +32,7 @@ public class SystemHealthController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving system health overview");
+            logger.LogError(ex, "Error retrieving system health overview");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -52,7 +42,7 @@ public class SystemHealthController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -62,7 +52,7 @@ public class SystemHealthController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error testing database connections");
+            logger.LogError(ex, "Error testing database connections");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -72,7 +62,7 @@ public class SystemHealthController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -82,7 +72,7 @@ public class SystemHealthController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving performance metrics");
+            logger.LogError(ex, "Error retrieving performance metrics");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -95,7 +85,7 @@ public class SystemHealthController : ControllerBase
         var dbHealthy = await TestMainDatabaseHealth();
         
         // Get application connection counts (simplified to avoid dynamic object issues)
-        var totalConnections = await _context.ApplicationConnections.CountAsync();
+        var totalConnections = await context.ApplicationConnections.CountAsync();
         var healthyConnections = Math.Max(0, totalConnections - Random.Shared.Next(0, 2)); // Simulate mostly healthy connections
         
         // Calculate error rates from recent logs
@@ -138,7 +128,7 @@ public class SystemHealthController : ControllerBase
         try
         {
             var stopwatch = Stopwatch.StartNew();
-            await _context.Database.ExecuteSqlRawAsync("SELECT 1");
+            await context.Database.ExecuteSqlRawAsync("SELECT 1");
             stopwatch.Stop();
             
             // Consider healthy if response time is under 1 second
@@ -146,14 +136,14 @@ public class SystemHealthController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Main database health check failed");
+            logger.LogError(ex, "Main database health check failed");
             return false;
         }
     }
 
     private async Task<List<object>> TestDatabaseConnections()
     {
-        var connections = await _context.ApplicationConnections
+        var connections = await context.ApplicationConnections
             .Include(ac => ac.Application)
             .Select(ac => new
             {
@@ -200,7 +190,7 @@ public class SystemHealthController : ControllerBase
             {
                 status = "Unhealthy";
                 errorMessage = ex.Message;
-                _logger.LogError(ex, "Connection test failed for application {ApplicationName}", connection.ApplicationName);
+                logger.LogError(ex, "Connection test failed for application {ApplicationName}", connection.ApplicationName);
             }
             
             stopwatch.Stop();
@@ -230,11 +220,11 @@ public class SystemHealthController : ControllerBase
         var last7Days = now.AddDays(-7);
 
         // Get recent log activity as performance indicator
-        var recentLogActivity = await _context.UserActivityLogs
+        var recentLogActivity = await context.UserActivityLogs
             .Where(log => log.Timestamp >= last24Hours)
             .CountAsync();
 
-        var recentApplicationLogs = await _context.ApplicationLogs
+        var recentApplicationLogs = await context.ApplicationLogs
             .Where(log => log.CreatedAt >= last24Hours)
             .CountAsync();
 
@@ -307,11 +297,11 @@ public class SystemHealthController : ControllerBase
 
         try
         {
-            var totalLogs = await _context.UserActivityLogs
+            var totalLogs = await context.UserActivityLogs
                 .Where(log => log.Timestamp >= last24Hours)
                 .CountAsync();
 
-            var errorLogs = await _context.UserActivityLogs
+            var errorLogs = await context.UserActivityLogs
                 .Where(log => log.Timestamp >= last24Hours && 
                              log.ActionType == ActionTypeEnum.FailedLogin)
                 .CountAsync();

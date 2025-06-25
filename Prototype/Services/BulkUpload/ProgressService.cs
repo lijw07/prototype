@@ -2,78 +2,69 @@ using Microsoft.AspNetCore.SignalR;
 using Prototype.DTOs.BulkUpload;
 using Prototype.Hubs;
 
-namespace Prototype.Services.BulkUpload
+namespace Prototype.Services.BulkUpload;
+
+public class ProgressService(IHubContext<ProgressHub> hubContext, ILogger<ProgressService> logger)
+    : IProgressService
 {
-    public class ProgressService : IProgressService
+    public async Task NotifyJobStarted(string jobId, JobStartDto jobStart)
     {
-        private readonly IHubContext<ProgressHub> _hubContext;
-        private readonly ILogger<ProgressService> _logger;
-
-        public ProgressService(IHubContext<ProgressHub> hubContext, ILogger<ProgressService> logger)
+        try
         {
-            _hubContext = hubContext;
-            _logger = logger;
+            logger.LogInformation("Notifying job started: {JobId}", jobId);
+            await hubContext.Clients.Group($"progress_{jobId}")
+                .SendAsync("JobStarted", jobStart);
         }
-
-        public async Task NotifyJobStarted(string jobId, JobStartDto jobStart)
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogInformation("Notifying job started: {JobId}", jobId);
-                await _hubContext.Clients.Group($"progress_{jobId}")
-                    .SendAsync("JobStarted", jobStart);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error notifying job started for {JobId}", jobId);
-            }
+            logger.LogError(ex, "Error notifying job started for {JobId}", jobId);
         }
+    }
 
-        public async Task NotifyProgress(string jobId, ProgressUpdateDto progress)
+    public async Task NotifyProgress(string jobId, ProgressUpdateDto progress)
+    {
+        try
         {
-            try
-            {
-                _logger.LogInformation("Notifying progress: {JobId} - {Progress}% - {Status}", jobId, progress.ProgressPercentage, progress.Status);
-                await _hubContext.Clients.Group($"progress_{jobId}")
-                    .SendAsync("ProgressUpdate", progress);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error notifying progress for {JobId}", jobId);
-            }
+            logger.LogInformation("Notifying progress: {JobId} - {Progress}% - {Status}", jobId, progress.ProgressPercentage, progress.Status);
+            await hubContext.Clients.Group($"progress_{jobId}")
+                .SendAsync("ProgressUpdate", progress);
         }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error notifying progress for {JobId}", jobId);
+        }
+    }
 
-        public async Task NotifyJobCompleted(string jobId, JobCompleteDto jobComplete)
+    public async Task NotifyJobCompleted(string jobId, JobCompleteDto jobComplete)
+    {
+        try
         {
-            try
-            {
-                _logger.LogInformation("Notifying job completed: {JobId}", jobId);
-                await _hubContext.Clients.Group($"progress_{jobId}")
-                    .SendAsync("JobCompleted", jobComplete);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error notifying job completed for {JobId}", jobId);
-            }
+            logger.LogInformation("Notifying job completed: {JobId}", jobId);
+            await hubContext.Clients.Group($"progress_{jobId}")
+                .SendAsync("JobCompleted", jobComplete);
         }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error notifying job completed for {JobId}", jobId);
+        }
+    }
 
-        public async Task NotifyError(string jobId, string error)
+    public async Task NotifyError(string jobId, string error)
+    {
+        try
         {
-            try
-            {
-                _logger.LogWarning("Notifying error for job {JobId}: {Error}", jobId, error);
-                await _hubContext.Clients.Group($"progress_{jobId}")
-                    .SendAsync("JobError", new { JobId = jobId, Error = error, Timestamp = DateTime.UtcNow });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error notifying job error for {JobId}", jobId);
-            }
+            logger.LogWarning("Notifying error for job {JobId}: {Error}", jobId, error);
+            await hubContext.Clients.Group($"progress_{jobId}")
+                .SendAsync("JobError", new { JobId = jobId, Error = error, Timestamp = DateTime.UtcNow });
         }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error notifying job error for {JobId}", jobId);
+        }
+    }
 
-        public string GenerateJobId()
-        {
-            return $"job_{Guid.NewGuid():N}_{DateTime.UtcNow:yyyyMMddHHmmss}";
-        }
+    public string GenerateJobId()
+    {
+        return $"job_{Guid.NewGuid():N}_{DateTime.UtcNow:yyyyMMddHHmmss}";
     }
 }

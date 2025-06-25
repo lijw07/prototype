@@ -7,20 +7,12 @@ using Prototype.Services;
 
 namespace Prototype.Database.Cloud;
 
-public class AzureSqlDatabaseStrategy : IDatabaseConnectionStrategy
+public class AzureSqlDatabaseStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<AzureSqlDatabaseStrategy> logger)
+    : IDatabaseConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<AzureSqlDatabaseStrategy> _logger;
-
     public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.MicrosoftSqlServer;
-
-    public AzureSqlDatabaseStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<AzureSqlDatabaseStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -110,14 +102,14 @@ public class AzureSqlDatabaseStrategy : IDatabaseConnectionStrategy
                 if (string.IsNullOrEmpty(source.Username) || string.IsNullOrEmpty(source.Password))
                     throw new ArgumentException("Username and password are required for UserPassword authentication.");
                 builder.UserID = source.Username;
-                builder.Password = _encryptionService.Decrypt(source.Password);
+                builder.Password = encryptionService.Decrypt(source.Password);
                 break;
 
             case AuthenticationTypeEnum.AzureAdPassword:
                 if (string.IsNullOrEmpty(source.Username) || string.IsNullOrEmpty(source.Password))
                     throw new ArgumentException("Username and password are required for Azure AD Password authentication.");
                 builder.UserID = source.Username;
-                builder.Password = _encryptionService.Decrypt(source.Password);
+                builder.Password = encryptionService.Decrypt(source.Password);
                 builder.Authentication = SqlAuthenticationMethod.ActiveDirectoryPassword;
                 break;
 
@@ -150,7 +142,7 @@ public class AzureSqlDatabaseStrategy : IDatabaseConnectionStrategy
 
     public async Task<bool> TestConnectionAsync(string connectionString)
     {
-        _logger.LogInformation("Azure SQL: Testing connection...");
+        logger.LogInformation("Azure SQL: Testing connection...");
         
         try
         {
@@ -161,12 +153,12 @@ public class AzureSqlDatabaseStrategy : IDatabaseConnectionStrategy
             var result = await command.ExecuteScalarAsync();
             
             var success = result != null && result.ToString() == "1";
-            _logger.LogInformation("Azure SQL: Test query result: {Result}, success: {Success}", result, success);
+            logger.LogInformation("Azure SQL: Test query result: {Result}, success: {Success}", result, success);
             return success;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Azure SQL Database connection test failed: {Error}", ex.Message);
+            logger.LogError(ex, "Azure SQL Database connection test failed: {Error}", ex.Message);
             return false;
         }
     }

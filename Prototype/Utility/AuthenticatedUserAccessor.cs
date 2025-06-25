@@ -7,22 +7,13 @@ using static BCrypt.Net.BCrypt;
 
 namespace Prototype.Utility;
 
-public class AuthenticatedUserAccessor : IAuthenticatedUserAccessor
+public class AuthenticatedUserAccessor(
+    SentinelContext context,
+    IMemoryCache cache,
+    ILogger<AuthenticatedUserAccessor> logger)
+    : IAuthenticatedUserAccessor
 {
-    private readonly SentinelContext _context;
-    private readonly IMemoryCache _cache;
-    private readonly ILogger<AuthenticatedUserAccessor> _logger;
     private readonly TimeSpan _cacheExpiry = TimeSpan.FromMinutes(5);
-
-    public AuthenticatedUserAccessor(
-        SentinelContext context, 
-        IMemoryCache cache, 
-        ILogger<AuthenticatedUserAccessor> logger)
-    {
-        _context = context;
-        _cache = cache;
-        _logger = logger;
-    }
 
     public Task<UserModel?> GetCurrentUserAsync()
     {
@@ -33,14 +24,14 @@ public class AuthenticatedUserAccessor : IAuthenticatedUserAccessor
     public async Task<UserModel?> GetUserByIdAsync(Guid userId)
     {
         var cacheKey = $"user:{userId}";
-        if (_cache.TryGetValue(cacheKey, out UserModel? cachedUser))
+        if (cache.TryGetValue(cacheKey, out UserModel? cachedUser))
             return cachedUser;
 
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+        var user = await context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
         
         if (user != null)
         {
-            _cache.Set(cacheKey, user, _cacheExpiry);
+            cache.Set(cacheKey, user, _cacheExpiry);
         }
 
         return user;
@@ -48,12 +39,12 @@ public class AuthenticatedUserAccessor : IAuthenticatedUserAccessor
 
     public async Task<UserModel?> GetUserByEmailAsync(string email)
     {
-        return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+        return await context.Users.FirstOrDefaultAsync(u => u.Email == email);
     }
 
     public async Task<UserModel?> GetUserByUsernameAsync(string username)
     {
-        return await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+        return await context.Users.FirstOrDefaultAsync(u => u.Username == username);
     }
 
     public async Task<UserModel?> GetCurrentUserAsync(ClaimsPrincipal? user)
@@ -66,14 +57,14 @@ public class AuthenticatedUserAccessor : IAuthenticatedUserAccessor
             return null;
 
         var cacheKey = $"user:{userId}";
-        if (_cache.TryGetValue(cacheKey, out UserModel? cachedUser))
+        if (cache.TryGetValue(cacheKey, out UserModel? cachedUser))
             return cachedUser;
 
-        var userFromDb = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+        var userFromDb = await context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
         
         if (userFromDb != null)
         {
-            _cache.Set(cacheKey, userFromDb, _cacheExpiry);
+            cache.Set(cacheKey, userFromDb, _cacheExpiry);
         }
 
         return userFromDb;
@@ -81,13 +72,13 @@ public class AuthenticatedUserAccessor : IAuthenticatedUserAccessor
 
     public async Task<UserModel?> GetUser(string username, string password)
     {
-        var user = await _context.Users
+        var user = await context.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Username == username);
 
         if (user == null)
         {
-            _logger.LogWarning("User not found: {Username}", username);
+            logger.LogWarning("User not found: {Username}", username);
             return null;
         }
 
@@ -97,7 +88,7 @@ public class AuthenticatedUserAccessor : IAuthenticatedUserAccessor
     
     public async Task<bool> ValidateUser(string username, string password)
     {
-        var user = await _context.Users
+        var user = await context.Users
             .AsNoTracking()
             .Select(u => new { u.Username, u.PasswordHash })
             .FirstOrDefaultAsync(u => u.Username == username);
@@ -110,35 +101,35 @@ public class AuthenticatedUserAccessor : IAuthenticatedUserAccessor
     
     public async Task<bool> UsernameExistsAsync(string username)
     {
-        return await _context.Users.AnyAsync(u => u.Username == username);
+        return await context.Users.AnyAsync(u => u.Username == username);
     }
     
     public async Task<bool> EmailExistsAsync(string email)
     {
-        return await _context.Users.AnyAsync(u => u.Email == email);
+        return await context.Users.AnyAsync(u => u.Email == email);
     }
 
     public async Task<TemporaryUserModel?> FindTemporaryUserByEmail(string email)
     {
-        return await _context.TemporaryUsers.FirstOrDefaultAsync(u => u.Email == email);
+        return await context.TemporaryUsers.FirstOrDefaultAsync(u => u.Email == email);
     }
 
     public async Task<UserModel?> FindUserByEmail(string email)
     {
-        return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+        return await context.Users.FirstOrDefaultAsync(u => u.Email == email);
     }
 
     public async Task<UserModel?> FindUserById(Guid userId)
     {
         var cacheKey = $"user:{userId}";
-        if (_cache.TryGetValue(cacheKey, out UserModel? cachedUser))
+        if (cache.TryGetValue(cacheKey, out UserModel? cachedUser))
             return cachedUser;
 
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+        var user = await context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
         
         if (user != null)
         {
-            _cache.Set(cacheKey, user, _cacheExpiry);
+            cache.Set(cacheKey, user, _cacheExpiry);
         }
 
         return user;
@@ -146,7 +137,7 @@ public class AuthenticatedUserAccessor : IAuthenticatedUserAccessor
 
     public async Task<UserRecoveryRequestModel?> FindUserRecoveryRequest(Guid userId)
     {
-        return await _context.UserRecoveryRequests
+        return await context.UserRecoveryRequests
             .Where(u => u.UserId == userId && !u.IsUsed && u.ExpiresAt > DateTime.UtcNow)
             .OrderByDescending(u => u.RequestedAt)
             .FirstOrDefaultAsync();
@@ -154,11 +145,11 @@ public class AuthenticatedUserAccessor : IAuthenticatedUserAccessor
 
     public async Task<bool> TemporaryEmailExistsAsync(string email)
     {
-        return await _context.TemporaryUsers.AnyAsync(u => u.Email == email);
+        return await context.TemporaryUsers.AnyAsync(u => u.Email == email);
     }
 
     public async Task<bool> TemporaryUsernameExistsAsync(string username)
     {
-        return await _context.TemporaryUsers.AnyAsync(u => u.Username == username);
+        return await context.TemporaryUsers.AnyAsync(u => u.Username == username);
     }
 }

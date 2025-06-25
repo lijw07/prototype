@@ -6,37 +6,27 @@ using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Utility;
 
-namespace Prototype.Controllers;
+namespace Prototype.Controllers.Navigation;
 
 [Authorize]
 [Route("api/user-requests")]
 [ApiController]
-public class UserRequestsController : ControllerBase
+public class UserRequestsNavigationController(
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    ILogger<UserRequestsNavigationController> logger)
+    : ControllerBase
 {
-    private readonly SentinelContext _context;
-    private readonly IAuthenticatedUserAccessor _userAccessor;
-    private readonly ILogger<UserRequestsController> _logger;
-
-    public UserRequestsController(
-        SentinelContext context,
-        IAuthenticatedUserAccessor userAccessor,
-        ILogger<UserRequestsController> logger)
-    {
-        _context = context;
-        _userAccessor = userAccessor;
-        _logger = logger;
-    }
-
     [HttpGet]
     public async Task<IActionResult> GetUserRequests()
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
-            var userRequests = await _context.UserRequests
+            var userRequests = await context.UserRequests
                 .Where(ur => ur.UserId == currentUser.UserId)
                 .OrderByDescending(ur => ur.RequestedAt)
                 .Select(ur => new
@@ -59,7 +49,7 @@ public class UserRequestsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving user requests");
+            logger.LogError(ex, "Error retrieving user requests");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -69,7 +59,7 @@ public class UserRequestsController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -96,8 +86,8 @@ public class UserRequestsController : ControllerBase
                 UpdatedAt = DateTime.UtcNow
             };
 
-            _context.UserRequests.Add(userRequest);
-            await _context.SaveChangesAsync();
+            context.UserRequests.Add(userRequest);
+            await context.SaveChangesAsync();
 
             // Log the request for audit purposes
             await LogUserActivity(currentUser.UserId, ActionTypeEnum.ApplicationAdded, 
@@ -119,7 +109,7 @@ public class UserRequestsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating user request");
+            logger.LogError(ex, "Error creating user request");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -129,14 +119,14 @@ public class UserRequestsController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
             if (!Guid.TryParse(id, out var requestId))
                 return BadRequest(new { success = false, message = "Invalid request ID" });
 
-            var userRequest = await _context.UserRequests
+            var userRequest = await context.UserRequests
                 .Where(ur => ur.UserRequestId == requestId && ur.UserId == currentUser.UserId)
                 .Select(ur => new
                 {
@@ -161,7 +151,7 @@ public class UserRequestsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving request by ID");
+            logger.LogError(ex, "Error retrieving request by ID");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -171,7 +161,7 @@ public class UserRequestsController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -185,7 +175,7 @@ public class UserRequestsController : ControllerBase
             if (!System.Enum.TryParse<UserRequestStatusEnum>(request.Status, true, out var status))
                 return BadRequest(new { success = false, message = "Invalid status" });
 
-            var userRequest = await _context.UserRequests
+            var userRequest = await context.UserRequests
                 .FirstOrDefaultAsync(ur => ur.UserRequestId == requestId);
 
             if (userRequest == null)
@@ -197,7 +187,7 @@ public class UserRequestsController : ControllerBase
             userRequest.Comments = request.Comments;
             userRequest.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
 
             await LogUserActivity(currentUser.UserId, ActionTypeEnum.Update, 
                 $"Updated request {id} status to {request.Status}");
@@ -215,7 +205,7 @@ public class UserRequestsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating request status");
+            logger.LogError(ex, "Error updating request status");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -225,7 +215,7 @@ public class UserRequestsController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -268,7 +258,7 @@ public class UserRequestsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving available tools");
+            logger.LogError(ex, "Error retrieving available tools");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -278,14 +268,14 @@ public class UserRequestsController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
             if (!Guid.TryParse(id, out var requestId))
                 return BadRequest(new { success = false, message = "Invalid request ID" });
 
-            var userRequest = await _context.UserRequests
+            var userRequest = await context.UserRequests
                 .FirstOrDefaultAsync(ur => ur.UserRequestId == requestId && ur.UserId == currentUser.UserId);
 
             if (userRequest == null)
@@ -298,7 +288,7 @@ public class UserRequestsController : ControllerBase
             userRequest.Status = UserRequestStatusEnum.Cancelled;
             userRequest.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
 
             await LogUserActivity(currentUser.UserId, ActionTypeEnum.ApplicationRemoved, 
                 $"Cancelled request {id}");
@@ -307,7 +297,7 @@ public class UserRequestsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error cancelling request");
+            logger.LogError(ex, "Error cancelling request");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -327,12 +317,12 @@ public class UserRequestsController : ControllerBase
                 Timestamp = DateTime.UtcNow
             };
 
-            _context.UserActivityLogs.Add(activityLog);
-            await _context.SaveChangesAsync();
+            context.UserActivityLogs.Add(activityLog);
+            await context.SaveChangesAsync();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to log user activity");
+            logger.LogError(ex, "Failed to log user activity");
         }
     }
 }

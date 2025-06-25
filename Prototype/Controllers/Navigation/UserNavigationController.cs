@@ -1,38 +1,28 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Services;
 using Prototype.Services.Interfaces;
 using Prototype.Utility;
-using Prototype.Data;
-using System.Linq;
 
-namespace Prototype.Controllers.Settings;
+namespace Prototype.Controllers.Navigation;
 
 [Route("settings/user")]
-public class UserSettingsController : BaseSettingsController
+public class UserNavigationController(
+    IAuthenticatedUserAccessor userAccessor,
+    ValidationService validationService,
+    TransactionService transactionService,
+    IUserAccountService userAccountService,
+    SentinelContext context,
+    ILogger<UserNavigationController> logger)
+    : BaseNavigationController(logger, userAccessor, validationService, transactionService)
 {
-    private readonly IUserAccountService _userAccountService;
-    private readonly SentinelContext _context;
-
-    public UserSettingsController(
-        IAuthenticatedUserAccessor userAccessor,
-        ValidationService validationService,
-        TransactionService transactionService,
-        IUserAccountService userAccountService,
-        SentinelContext context,
-        ILogger<UserSettingsController> logger)
-        : base(logger, userAccessor, validationService, transactionService)
-    {
-        _userAccountService = userAccountService;
-        _context = context;
-    }
-
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto dto)
     {
         // Log the incoming request for debugging
-        _logger.LogInformation("Password change request received. ModelState.IsValid: {IsValid}", ModelState.IsValid);
+        Logger.LogInformation("Password change request received. ModelState.IsValid: {IsValid}", ModelState.IsValid);
         
         if (!ModelState.IsValid)
         {
@@ -41,7 +31,7 @@ public class UserSettingsController : BaseSettingsController
                 .Select(x => new { Field = x.Key, Errors = x.Value!.Errors.Select(e => e.ErrorMessage) })
                 .ToList();
             
-            _logger.LogWarning("Password change validation failed: {Errors}", System.Text.Json.JsonSerializer.Serialize(errors));
+            Logger.LogWarning("Password change validation failed: {Errors}", System.Text.Json.JsonSerializer.Serialize(errors));
             
             return BadRequest(new 
             { 
@@ -53,25 +43,25 @@ public class UserSettingsController : BaseSettingsController
         
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return new { success = false, message = "User not authenticated" };
 
-            _logger.LogInformation("Verifying password for user: {Username}", currentUser.Username);
-            _logger.LogInformation("Provided password length: {Length}", dto.CurrentPassword?.Length ?? 0);
+            Logger.LogInformation("Verifying password for user: {Username}", currentUser.Username);
+            Logger.LogInformation("Provided password length: {Length}", dto.CurrentPassword?.Length ?? 0);
             
             if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, currentUser.PasswordHash))
             {
-                _logger.LogWarning("Password verification failed for user: {Username}", currentUser.Username);
+                Logger.LogWarning("Password verification failed for user: {Username}", currentUser.Username);
                 return new { success = false, message = "Current password is incorrect" };
             }
             
-            _logger.LogInformation("Password verification successful for user: {Username}", currentUser.Username);
+            Logger.LogInformation("Password verification successful for user: {Username}", currentUser.Username);
 
-            return await _transactionService!.ExecuteInTransactionAsync(async () =>
+            return await TransactionService!.ExecuteInTransactionAsync(async () =>
             {
                 // Get a fresh copy of the user from database to ensure EF tracking
-                var trackedUser = await _context.Users.FirstOrDefaultAsync(u => u.UserId == currentUser.UserId);
+                var trackedUser = await context.Users.FirstOrDefaultAsync(u => u.UserId == currentUser.UserId);
                 if (trackedUser == null)
                     throw new InvalidOperationException("User not found");
 
@@ -80,7 +70,7 @@ public class UserSettingsController : BaseSettingsController
                 trackedUser.UpdatedAt = DateTime.UtcNow;
 
                 // Save changes to database
-                await _context.SaveChangesAsync();
+                await context.SaveChangesAsync();
 
                 // Create audit log for password change
                 var auditLog = new Models.AuditLogModel
@@ -105,9 +95,9 @@ public class UserSettingsController : BaseSettingsController
                     Timestamp = DateTime.UtcNow
                 };
 
-                _context.AuditLogs.Add(auditLog);
-                _context.UserActivityLogs.Add(activityLog);
-                await _context.SaveChangesAsync();
+                context.AuditLogs.Add(auditLog);
+                context.UserActivityLogs.Add(activityLog);
+                await context.SaveChangesAsync();
 
                 return new { success = true, message = "Password changed successfully" };
             });
@@ -119,14 +109,14 @@ public class UserSettingsController : BaseSettingsController
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return new { success = false, message = "User not authenticated" };
 
-            return await _transactionService!.ExecuteInTransactionAsync(async () =>
+            return await TransactionService!.ExecuteInTransactionAsync(async () =>
             {
                 // Get a fresh copy of the user from database to ensure EF tracking
-                var trackedUser = await _context.Users.FirstOrDefaultAsync(u => u.UserId == currentUser.UserId);
+                var trackedUser = await context.Users.FirstOrDefaultAsync(u => u.UserId == currentUser.UserId);
                 if (trackedUser == null)
                     throw new InvalidOperationException("User not found");
 
@@ -142,7 +132,7 @@ public class UserSettingsController : BaseSettingsController
                 trackedUser.UpdatedAt = DateTime.UtcNow;
 
                 // Save changes to database
-                await _context.SaveChangesAsync();
+                await context.SaveChangesAsync();
 
                 // Create audit log for profile update
                 var changeDetails = new List<string>();
@@ -179,9 +169,9 @@ public class UserSettingsController : BaseSettingsController
                         Timestamp = DateTime.UtcNow
                     };
 
-                    _context.AuditLogs.Add(auditLog);
-                    _context.UserActivityLogs.Add(activityLog);
-                    await _context.SaveChangesAsync();
+                    context.AuditLogs.Add(auditLog);
+                    context.UserActivityLogs.Add(activityLog);
+                    await context.SaveChangesAsync();
                 }
 
                 var userDto = new UserDto
@@ -208,12 +198,12 @@ public class UserSettingsController : BaseSettingsController
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return new { success = false, message = "User not authenticated" };
 
             // Get fresh data from database to avoid cached values
-            var freshUser = await _context.Users.FirstOrDefaultAsync(u => u.UserId == currentUser.UserId);
+            var freshUser = await context.Users.FirstOrDefaultAsync(u => u.UserId == currentUser.UserId);
             if (freshUser == null)
                 return new { success = false, message = "User not found" };
 
@@ -240,8 +230,8 @@ public class UserSettingsController : BaseSettingsController
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var totalVerifiedUsers = await _context.Users.CountAsync();
-            var totalTemporaryUsers = await _context.TemporaryUsers.CountAsync();
+            var totalVerifiedUsers = await context.Users.CountAsync();
+            var totalTemporaryUsers = await context.TemporaryUsers.CountAsync();
             var totalUsers = totalVerifiedUsers + totalTemporaryUsers;
 
             return new { 
@@ -263,7 +253,7 @@ public class UserSettingsController : BaseSettingsController
             var (validPage, validPageSize, skip) = ValidatePaginationParameters(page, pageSize);
 
             // Get verified users
-            var users = await _context.Users
+            var users = await context.Users
                 .Select(user => new UserDto
                 {
                     UserId = user.UserId,
@@ -281,7 +271,7 @@ public class UserSettingsController : BaseSettingsController
                 .ToListAsync();
 
             // Get temporary (unverified) users
-            var tempUsers = await _context.TemporaryUsers
+            var tempUsers = await context.TemporaryUsers
                 .Select(tempUser => new UserDto
                 {
                     UserId = tempUser.TemporaryUserId,
@@ -319,11 +309,11 @@ public class UserSettingsController : BaseSettingsController
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return new { success = false, message = "User not authenticated" };
 
-            var result = await _userAccountService.UpdateUserAsync(dto);
+            var result = await userAccountService.UpdateUserAsync(dto);
             
             if (!result.Success)
             {
@@ -331,7 +321,7 @@ public class UserSettingsController : BaseSettingsController
             }
             
             // Log the user modification activity for the current user (administrator)
-            var targetUser = await _userAccountService.GetUserByIdAsync(dto.UserId);
+            var targetUser = await userAccountService.GetUserByIdAsync(dto.UserId);
             if (targetUser != null)
             {
                 var metadata = $"Administrator updated user account: {targetUser.FirstName} {targetUser.LastName} (ID: {targetUser.UserId}, Username: {dto.Username}, Email: {dto.Email}, Role: {dto.Role}, Active: {dto.IsActive})";
@@ -361,13 +351,13 @@ public class UserSettingsController : BaseSettingsController
                 };
 
                 // Add logs to database context and save
-                _context.AuditLogs.Add(auditLog);
-                _context.UserActivityLogs.Add(activityLog);
-                await _context.SaveChangesAsync();
+                context.AuditLogs.Add(auditLog);
+                context.UserActivityLogs.Add(activityLog);
+                await context.SaveChangesAsync();
             }
 
             // Return updated user data
-            var updatedUser = await _userAccountService.GetUserByIdAsync(dto.UserId);
+            var updatedUser = await userAccountService.GetUserByIdAsync(dto.UserId);
             if (updatedUser != null)
             {
                 var userDto = new UserDto
@@ -396,12 +386,12 @@ public class UserSettingsController : BaseSettingsController
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return new { success = false, message = "User not authenticated" };
 
             // Get the target user before deletion for logging
-            var targetUser = await _userAccountService.GetUserByIdAsync(userId);
+            var targetUser = await userAccountService.GetUserByIdAsync(userId);
             if (targetUser == null)
                 return new { success = false, message = "User not found" };
 
@@ -409,7 +399,7 @@ public class UserSettingsController : BaseSettingsController
             if (currentUser.UserId == userId)
                 return new { success = false, message = "Cannot delete your own account" };
 
-            var result = await _userAccountService.DeleteUserAsync(userId);
+            var result = await userAccountService.DeleteUserAsync(userId);
             
             if (!result.Success)
             {
@@ -444,9 +434,9 @@ public class UserSettingsController : BaseSettingsController
             };
 
             // Add logs to the database context and save
-            _context.AuditLogs.Add(auditLog);
-            _context.UserActivityLogs.Add(activityLog);
-            await _context.SaveChangesAsync();
+            context.AuditLogs.Add(auditLog);
+            context.UserActivityLogs.Add(activityLog);
+            await context.SaveChangesAsync();
 
             return new { success = true, message = "User deleted successfully" };
         }, "deleting user");
@@ -457,11 +447,11 @@ public class UserSettingsController : BaseSettingsController
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return new { success = false, message = "User not authenticated" };
 
-            var tempUser = await _context.TemporaryUsers.FindAsync(dto.TemporaryUserId);
+            var tempUser = await context.TemporaryUsers.FindAsync(dto.TemporaryUserId);
             if (tempUser == null)
                 return new { success = false, message = "Temporary user not found" };
 
@@ -479,7 +469,7 @@ public class UserSettingsController : BaseSettingsController
             tempUser.Username = dto.Username;
             tempUser.PhoneNumber = dto.PhoneNumber ?? tempUser.PhoneNumber;
 
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
 
             // Create change details for audit log
             var changeDetails = new List<string>();
@@ -523,9 +513,9 @@ public class UserSettingsController : BaseSettingsController
                 };
 
                 // Add logs to database context and save
-                _context.AuditLogs.Add(auditLog);
-                _context.UserActivityLogs.Add(activityLog);
-                await _context.SaveChangesAsync();
+                context.AuditLogs.Add(auditLog);
+                context.UserActivityLogs.Add(activityLog);
+                await context.SaveChangesAsync();
             }
 
             return new { success = true, message = "Temporary user updated successfully", user = new {
@@ -545,14 +535,14 @@ public class UserSettingsController : BaseSettingsController
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            var currentUser = await _userAccessor!.GetCurrentUserAsync(User);
+            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return new { success = false, message = "User not authenticated" };
 
-            var tempUser = await _context.TemporaryUsers.FindAsync(temporaryUserId);
+            var tempUser = await context.TemporaryUsers.FindAsync(temporaryUserId);
             if (tempUser == null)
             {
-                _logger.LogWarning("Attempted to delete temporary user {TemporaryUserId} but user was not found in TemporaryUsers table", temporaryUserId);
+                Logger.LogWarning("Attempted to delete temporary user {TemporaryUserId} but user was not found in TemporaryUsers table", temporaryUserId);
                 return new { success = false, message = $"Temporary user with ID {temporaryUserId} not found in TemporaryUsers table" };
             }
 
@@ -560,8 +550,8 @@ public class UserSettingsController : BaseSettingsController
             var deletedUserInfo = $"{tempUser.FirstName} {tempUser.LastName} (ID: {tempUser.TemporaryUserId}, Username: {tempUser.Username}, Email: {tempUser.Email})";
 
             // Remove the temporary user
-            _context.TemporaryUsers.Remove(tempUser);
-            await _context.SaveChangesAsync();
+            context.TemporaryUsers.Remove(tempUser);
+            await context.SaveChangesAsync();
 
             // Create audit log for the administrator who deleted the temporary user
             var metadata = $"Administrator deleted temporary user account: {deletedUserInfo}";
@@ -590,9 +580,9 @@ public class UserSettingsController : BaseSettingsController
             };
 
             // Add logs to the database context and save
-            _context.AuditLogs.Add(auditLog);
-            _context.UserActivityLogs.Add(activityLog);
-            await _context.SaveChangesAsync();
+            context.AuditLogs.Add(auditLog);
+            context.UserActivityLogs.Add(activityLog);
+            await context.SaveChangesAsync();
 
             return new { success = true, message = "Temporary user deleted successfully" };
         }, "deleting temporary user");

@@ -10,20 +10,12 @@ using System.Text;
 
 namespace Prototype.Database.Cloud;
 
-public class GoogleCloudStorageConnectionStrategy : IFileConnectionStrategy
+public class GoogleCloudStorageConnectionStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<GoogleCloudStorageConnectionStrategy> logger)
+    : IFileConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<GoogleCloudStorageConnectionStrategy> _logger;
-
     public DataSourceTypeEnum ConnectionType => DataSourceTypeEnum.GoogleCloudStorage;
-
-    public GoogleCloudStorageConnectionStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<GoogleCloudStorageConnectionStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -63,7 +55,7 @@ public class GoogleCloudStorageConnectionStrategy : IFileConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to read GCS object: {FilePath}", source.FilePath);
+            logger.LogError(ex, "Failed to read GCS object: {FilePath}", source.FilePath);
             throw;
         }
     }
@@ -121,12 +113,12 @@ public class GoogleCloudStorageConnectionStrategy : IFileConnectionStrategy
         }
         catch (GoogleApiException gcsEx)
         {
-            _logger.LogError(gcsEx, "Google Cloud Storage connection test failed: {StatusCode} - {Message}", gcsEx.HttpStatusCode, gcsEx.Message);
+            logger.LogError(gcsEx, "Google Cloud Storage connection test failed: {StatusCode} - {Message}", gcsEx.HttpStatusCode, gcsEx.Message);
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Google Cloud Storage connection test failed: {Error}", ex.Message);
+            logger.LogError(ex, "Google Cloud Storage connection test failed: {Error}", ex.Message);
             return false;
         }
     }
@@ -215,7 +207,7 @@ public class GoogleCloudStorageConnectionStrategy : IFileConnectionStrategy
             }
             catch (System.Text.Json.JsonException ex)
             {
-                _logger.LogWarning(ex, "Failed to parse GCS custom properties: {Properties}", source.CustomProperties);
+                logger.LogWarning(ex, "Failed to parse GCS custom properties: {Properties}", source.CustomProperties);
             }
         }
 
@@ -232,7 +224,7 @@ public class GoogleCloudStorageConnectionStrategy : IFileConnectionStrategy
             }
             catch (System.Text.Json.JsonException ex)
             {
-                _logger.LogWarning(ex, "Failed to parse GCS service account JSON for project ID");
+                logger.LogWarning(ex, "Failed to parse GCS service account JSON for project ID");
             }
         }
 
@@ -248,10 +240,10 @@ public class GoogleCloudStorageConnectionStrategy : IFileConnectionStrategy
             Url = source.Url,
             AuthenticationType = source.AuthenticationType,
             Username = source.Username,
-            Password = string.IsNullOrEmpty(source.Password) ? null : _encryptionService.Decrypt(source.Password),
-            GcpServiceAccountJson = string.IsNullOrEmpty(source.GcpServiceAccountJson) ? null : _encryptionService.Decrypt(source.GcpServiceAccountJson),
+            Password = string.IsNullOrEmpty(source.Password) ? null : encryptionService.Decrypt(source.Password),
+            GcpServiceAccountJson = string.IsNullOrEmpty(source.GcpServiceAccountJson) ? null : encryptionService.Decrypt(source.GcpServiceAccountJson),
             GcpAccessKeyId = source.GcpAccessKeyId,
-            GcpSecretAccessKey = string.IsNullOrEmpty(source.GcpSecretAccessKey) ? null : _encryptionService.Decrypt(source.GcpSecretAccessKey),
+            GcpSecretAccessKey = string.IsNullOrEmpty(source.GcpSecretAccessKey) ? null : encryptionService.Decrypt(source.GcpSecretAccessKey),
             FilePath = source.FilePath,
             FileFormat = source.FileFormat,
             Delimiter = source.Delimiter,

@@ -3,36 +3,25 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.Enum;
-using Prototype.Models;
 using Prototype.Utility;
 
-namespace Prototype.Controllers;
+namespace Prototype.Controllers.Navigation;
 
 [Authorize]
 [Route("api/security-dashboard")]
 [ApiController]
-public class SecurityDashboardController : ControllerBase
+public class SecurityDashboardNavigationController(
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    ILogger<SecurityDashboardNavigationController> logger)
+    : ControllerBase
 {
-    private readonly SentinelContext _context;
-    private readonly IAuthenticatedUserAccessor _userAccessor;
-    private readonly ILogger<SecurityDashboardController> _logger;
-
-    public SecurityDashboardController(
-        SentinelContext context,
-        IAuthenticatedUserAccessor userAccessor,
-        ILogger<SecurityDashboardController> logger)
-    {
-        _context = context;
-        _userAccessor = userAccessor;
-        _logger = logger;
-    }
-
     [HttpGet("overview")]
     public async Task<IActionResult> GetSecurityOverview()
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -42,16 +31,16 @@ public class SecurityDashboardController : ControllerBase
             var last30Days = now.AddDays(-30);
 
             // Security metrics from the last 24 hours
-            var failedLoginsToday = await _context.UserActivityLogs
+            var failedLoginsToday = await context.UserActivityLogs
                 .Where(log => log.ActionType == ActionTypeEnum.FailedLogin && log.Timestamp >= last24Hours)
                 .CountAsync();
 
-            var successfulLoginsToday = await _context.UserActivityLogs
+            var successfulLoginsToday = await context.UserActivityLogs
                 .Where(log => log.ActionType == ActionTypeEnum.Login && log.Timestamp >= last24Hours)
                 .CountAsync();
 
             // Failed logins by location (IP-based)
-            var failedLoginsByIp = await _context.UserActivityLogs
+            var failedLoginsByIp = await context.UserActivityLogs
                 .Where(log => log.ActionType == ActionTypeEnum.FailedLogin && log.Timestamp >= last7Days)
                 .GroupBy(log => log.IpAddress)
                 .Select(g => new { IpAddress = g.Key, Count = g.Count() })
@@ -60,7 +49,7 @@ public class SecurityDashboardController : ControllerBase
                 .ToListAsync();
 
             // Security events in last 7 days
-            var securityEvents = await _context.UserActivityLogs
+            var securityEvents = await context.UserActivityLogs
                 .Where(log => log.Timestamp >= last7Days && 
                              (log.ActionType == ActionTypeEnum.FailedLogin ||
                               log.ActionType == ActionTypeEnum.Login ||
@@ -80,17 +69,17 @@ public class SecurityDashboardController : ControllerBase
                 .ToListAsync();
 
             // Active sessions (approximation based on recent activity)
-            var activeSessions = await _context.UserActivityLogs
+            var activeSessions = await context.UserActivityLogs
                 .Where(log => log.Timestamp >= last24Hours)
                 .Select(log => log.UserId)
                 .Distinct()
                 .CountAsync();
 
             // Unverified users
-            var unverifiedUsers = await _context.TemporaryUsers.CountAsync();
+            var unverifiedUsers = await context.TemporaryUsers.CountAsync();
 
             // Application access patterns
-            var applicationChanges = await _context.ApplicationLogs
+            var applicationChanges = await context.ApplicationLogs
                 .Where(log => log.CreatedAt >= last7Days)
                 .CountAsync();
 
@@ -130,7 +119,7 @@ public class SecurityDashboardController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving security overview");
+            logger.LogError(ex, "Error retrieving security overview");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -140,13 +129,13 @@ public class SecurityDashboardController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
             var cutoffDate = DateTime.UtcNow.AddDays(-days);
 
-            var failedLogins = await _context.UserActivityLogs
+            var failedLogins = await context.UserActivityLogs
                 .Where(log => log.ActionType == ActionTypeEnum.FailedLogin && log.Timestamp >= cutoffDate)
                 .OrderByDescending(log => log.Timestamp)
                 .Select(log => new {
@@ -163,7 +152,7 @@ public class SecurityDashboardController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving failed logins");
+            logger.LogError(ex, "Error retrieving failed logins");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -197,7 +186,7 @@ public class SecurityDashboardController : ControllerBase
 
     private async Task<List<object>> GetFailedLoginsTrend(DateTime startDate)
     {
-        var dailyData = await _context.UserActivityLogs
+        var dailyData = await context.UserActivityLogs
             .Where(log => log.ActionType == ActionTypeEnum.FailedLogin && log.Timestamp >= startDate)
             .GroupBy(log => log.Timestamp.Date)
             .Select(g => new { Date = g.Key, Count = g.Count() })
@@ -209,7 +198,7 @@ public class SecurityDashboardController : ControllerBase
 
     private async Task<List<object>> GetSuccessfulLoginsTrend(DateTime startDate)
     {
-        var dailyData = await _context.UserActivityLogs
+        var dailyData = await context.UserActivityLogs
             .Where(log => log.ActionType == ActionTypeEnum.Login && log.Timestamp >= startDate)
             .GroupBy(log => log.Timestamp.Date)
             .Select(g => new { Date = g.Key, Count = g.Count() })

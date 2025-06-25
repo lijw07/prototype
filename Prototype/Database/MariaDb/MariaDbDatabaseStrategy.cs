@@ -7,20 +7,12 @@ using Prototype.Services;
 
 namespace Prototype.Database.MariaDb;
 
-public class MariaDbDatabaseStrategy : IDatabaseConnectionStrategy
+public class MariaDbDatabaseStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<MariaDbDatabaseStrategy> logger)
+    : IDatabaseConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<MariaDbDatabaseStrategy> _logger;
-
     public DataSourceTypeEnum DatabaseType => DataSourceTypeEnum.MariaDb;
-
-    public MariaDbDatabaseStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<MariaDbDatabaseStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -65,7 +57,7 @@ public class MariaDbDatabaseStrategy : IDatabaseConnectionStrategy
         switch (source.AuthenticationType)
         {
             case AuthenticationTypeEnum.UserPassword:
-                var password = string.IsNullOrEmpty(source.Password) ? "" : _encryptionService.Decrypt(source.Password);
+                var password = string.IsNullOrEmpty(source.Password) ? "" : encryptionService.Decrypt(source.Password);
                 connectionString += $"UID={source.Username};PWD={password};";
                 break;
                 
@@ -96,7 +88,7 @@ public class MariaDbDatabaseStrategy : IDatabaseConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "MariaDB ODBC connection test failed: {Error}", ex.Message);
+            logger.LogError(ex, "MariaDB ODBC connection test failed: {Error}", ex.Message);
             return false;
         }
     }

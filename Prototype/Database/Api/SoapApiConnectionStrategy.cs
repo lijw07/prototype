@@ -9,23 +9,13 @@ using Prototype.Services;
 
 namespace Prototype.Database.Api;
 
-public class SoapApiConnectionStrategy : IApiConnectionStrategy
+public class SoapApiConnectionStrategy(
+    HttpClient httpClient,
+    PasswordEncryptionService encryptionService,
+    ILogger<SoapApiConnectionStrategy> logger)
+    : IApiConnectionStrategy
 {
-    private readonly HttpClient _httpClient;
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<SoapApiConnectionStrategy> _logger;
-
     public DataSourceTypeEnum ConnectionType => DataSourceTypeEnum.SoapApi;
-
-    public SoapApiConnectionStrategy(
-        HttpClient httpClient,
-        PasswordEncryptionService encryptionService,
-        ILogger<SoapApiConnectionStrategy> logger)
-    {
-        _httpClient = httpClient;
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -42,7 +32,7 @@ public class SoapApiConnectionStrategy : IApiConnectionStrategy
     public async Task<object> ExecuteRequestAsync(ConnectionSourceDto source)
     {
         var request = CreateSoapRequest(source);
-        var response = await _httpClient.SendAsync(request);
+        var response = await httpClient.SendAsync(request);
         
         var content = await response.Content.ReadAsStringAsync();
         
@@ -71,7 +61,7 @@ public class SoapApiConnectionStrategy : IApiConnectionStrategy
             var wsdlRequest = new HttpRequestMessage(HttpMethod.Get, wsdlUri);
             AddAuthentication(wsdlRequest, source);
 
-            var wsdlResponse = await _httpClient.SendAsync(wsdlRequest);
+            var wsdlResponse = await httpClient.SendAsync(wsdlRequest);
             
             if (wsdlResponse.IsSuccessStatusCode)
             {
@@ -98,7 +88,7 @@ public class SoapApiConnectionStrategy : IApiConnectionStrategy
             };
 
             var request = CreateSoapRequest(testSource);
-            var response = await _httpClient.SendAsync(request);
+            var response = await httpClient.SendAsync(request);
             
             // SOAP endpoints might return 500 with valid SOAP fault, which is still a valid response
             return response.IsSuccessStatusCode || 
@@ -107,7 +97,7 @@ public class SoapApiConnectionStrategy : IApiConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SOAP API connection test failed for {Endpoint}", source.ApiEndpoint ?? source.Url);
+            logger.LogError(ex, "SOAP API connection test failed for {Endpoint}", source.ApiEndpoint ?? source.Url);
             return false;
         }
     }
@@ -165,7 +155,7 @@ public class SoapApiConnectionStrategy : IApiConnectionStrategy
             }
             catch (System.Text.Json.JsonException ex)
             {
-                _logger.LogWarning(ex, "Failed to parse headers JSON: {Headers}", source.Headers);
+                logger.LogWarning(ex, "Failed to parse headers JSON: {Headers}", source.Headers);
             }
         }
 
@@ -306,15 +296,15 @@ public class SoapApiConnectionStrategy : IApiConnectionStrategy
             Url = source.Url,
             AuthenticationType = source.AuthenticationType,
             Username = source.Username,
-            Password = string.IsNullOrEmpty(source.Password) ? null : _encryptionService.Decrypt(source.Password),
+            Password = string.IsNullOrEmpty(source.Password) ? null : encryptionService.Decrypt(source.Password),
             ApiEndpoint = source.ApiEndpoint,
             HttpMethod = source.HttpMethod,
             Headers = source.Headers,
             RequestBody = source.RequestBody,
-            ApiKey = string.IsNullOrEmpty(source.ApiKey) ? null : _encryptionService.Decrypt(source.ApiKey),
-            BearerToken = string.IsNullOrEmpty(source.BearerToken) ? null : _encryptionService.Decrypt(source.BearerToken),
+            ApiKey = string.IsNullOrEmpty(source.ApiKey) ? null : encryptionService.Decrypt(source.ApiKey),
+            BearerToken = string.IsNullOrEmpty(source.BearerToken) ? null : encryptionService.Decrypt(source.BearerToken),
             ClientId = source.ClientId,
-            ClientSecret = string.IsNullOrEmpty(source.ClientSecret) ? null : _encryptionService.Decrypt(source.ClientSecret)
+            ClientSecret = string.IsNullOrEmpty(source.ClientSecret) ? null : encryptionService.Decrypt(source.ClientSecret)
         };
     }
 }

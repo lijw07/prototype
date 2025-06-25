@@ -10,20 +10,14 @@ using Prototype.Services;
 
 namespace Prototype.Database.File;
 
-public class CsvFileConnectionStrategy : IFileConnectionStrategy
+public class CsvFileConnectionStrategy(
+    PasswordEncryptionService encryptionService,
+    ILogger<CsvFileConnectionStrategy> logger)
+    : IFileConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService;
-    private readonly ILogger<CsvFileConnectionStrategy> _logger;
+    private readonly PasswordEncryptionService _encryptionService = encryptionService;
 
     public DataSourceTypeEnum ConnectionType => DataSourceTypeEnum.CsvFile;
-
-    public CsvFileConnectionStrategy(
-        PasswordEncryptionService encryptionService,
-        ILogger<CsvFileConnectionStrategy> logger)
-    {
-        _encryptionService = encryptionService;
-        _logger = logger;
-    }
 
     public Dictionary<AuthenticationTypeEnum, bool> GetSupportedAuthTypes()
     {
@@ -102,7 +96,7 @@ public class CsvFileConnectionStrategy : IFileConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to read CSV file: {FilePath}", source.FilePath);
+            logger.LogError(ex, "Failed to read CSV file: {FilePath}", source.FilePath);
             throw;
         }
     }
@@ -152,7 +146,7 @@ public class CsvFileConnectionStrategy : IFileConnectionStrategy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "CSV connection test failed for {FilePath}", source.FilePath);
+            logger.LogError(ex, "CSV connection test failed for {FilePath}", source.FilePath);
             return false;
         }
     }

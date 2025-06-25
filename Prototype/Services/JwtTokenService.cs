@@ -9,20 +9,12 @@ using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
 
-public class JwtTokenService : IJwtTokenService
+public class JwtTokenService(IConfiguration config) : IJwtTokenService
 {
-    private readonly string _key;
-    private readonly string _issuer;
-    private readonly string _audience;
-    private readonly double _defaultExpiry;
-
-    public JwtTokenService(IConfiguration config)
-    {
-        _key = config["JwtSettings:Key"] ?? throw new InvalidOperationException("JwtSettings:Key is missing");
-        _issuer = config["JwtSettings:Issuer"] ?? throw new InvalidOperationException("JwtSettings:Issuer is missing");
-        _audience = config["JwtSettings:Audience"] ?? throw new InvalidOperationException("JwtSettings:Audience is missing");
-        _defaultExpiry = double.Parse(config["JwtSettings:ExpiresInMinutes"] ?? "60");
-    }
+    private readonly string _key = config["JwtSettings:Key"] ?? throw new InvalidOperationException("JwtSettings:Key is missing");
+    private readonly string _issuer = config["JwtSettings:Issuer"] ?? throw new InvalidOperationException("JwtSettings:Issuer is missing");
+    private readonly string _audience = config["JwtSettings:Audience"] ?? throw new InvalidOperationException("JwtSettings:Audience is missing");
+    private readonly double _defaultExpiry = double.Parse(config["JwtSettings:ExpiresInMinutes"] ?? "60");
 
     public string GenerateToken(IEnumerable<Claim> claims, double? expiresInMinutes = null)
     {

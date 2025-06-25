@@ -5,33 +5,23 @@ using Prototype.Data;
 using Prototype.Enum;
 using Prototype.Utility;
 
-namespace Prototype.Controllers;
+namespace Prototype.Controllers.Navigation;
 
 [Authorize]
 [Route("api/analytics-overview")]
 [ApiController]
-public class AnalyticsOverviewController : ControllerBase
+public class AnalyticsOverviewNavigationController(
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    ILogger<AnalyticsOverviewNavigationController> logger)
+    : ControllerBase
 {
-    private readonly SentinelContext _context;
-    private readonly IAuthenticatedUserAccessor _userAccessor;
-    private readonly ILogger<AnalyticsOverviewController> _logger;
-
-    public AnalyticsOverviewController(
-        SentinelContext context,
-        IAuthenticatedUserAccessor userAccessor,
-        ILogger<AnalyticsOverviewController> logger)
-    {
-        _context = context;
-        _userAccessor = userAccessor;
-        _logger = logger;
-    }
-
     [HttpGet("overview")]
     public async Task<IActionResult> GetOverview()
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -41,7 +31,7 @@ public class AnalyticsOverviewController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving analytics overview");
+            logger.LogError(ex, "Error retrieving analytics overview");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -51,7 +41,7 @@ public class AnalyticsOverviewController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -61,7 +51,7 @@ public class AnalyticsOverviewController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving business metrics");
+            logger.LogError(ex, "Error retrieving business metrics");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -71,7 +61,7 @@ public class AnalyticsOverviewController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -81,7 +71,7 @@ public class AnalyticsOverviewController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving growth trends");
+            logger.LogError(ex, "Error retrieving growth trends");
             return StatusCode(500, new { success = false, message = "Internal server error" });
         }
     }
@@ -94,41 +84,41 @@ public class AnalyticsOverviewController : ControllerBase
         var lastYear = now.AddYears(-1);
 
         // User Growth Metrics
-        var totalUsers = await _context.Users.CountAsync();
-        var verifiedUsers = await _context.Users.CountAsync();
-        var unverifiedUsers = await _context.TemporaryUsers.CountAsync();
-        var newUsersLast30Days = await _context.Users
+        var totalUsers = await context.Users.CountAsync();
+        var verifiedUsers = await context.Users.CountAsync();
+        var unverifiedUsers = await context.TemporaryUsers.CountAsync();
+        var newUsersLast30Days = await context.Users
             .Where(u => u.CreatedAt >= last30Days)
             .CountAsync();
 
         // Application Portfolio Metrics
-        var totalApplications = await _context.Applications.CountAsync();
-        var activeApplications = await _context.UserApplications
+        var totalApplications = await context.Applications.CountAsync();
+        var activeApplications = await context.UserApplications
             .Select(ua => ua.ApplicationId)
             .Distinct()
             .CountAsync();
         var applicationUtilization = totalApplications > 0 ? (double)activeApplications / totalApplications * 100 : 0;
 
         // Security Metrics
-        var securityEvents = await _context.UserActivityLogs
+        var securityEvents = await context.UserActivityLogs
             .Where(log => log.Timestamp >= last30Days && 
                          (log.ActionType == ActionTypeEnum.FailedLogin ||
                           log.ActionType == ActionTypeEnum.ApplicationRemoved ||
                           log.ActionType == ActionTypeEnum.RoleDeleted))
             .CountAsync();
 
-        var successfulLogins = await _context.UserActivityLogs
+        var successfulLogins = await context.UserActivityLogs
             .Where(log => log.Timestamp >= last30Days && log.ActionType == ActionTypeEnum.Login)
             .CountAsync();
 
-        var failedLogins = await _context.UserActivityLogs
+        var failedLogins = await context.UserActivityLogs
             .Where(log => log.Timestamp >= last30Days && log.ActionType == ActionTypeEnum.FailedLogin)
             .CountAsync();
 
         var securityScore = CalculateSecurityScore(failedLogins, successfulLogins, securityEvents);
 
         // Operational Efficiency
-        var totalRoles = await _context.UserRoles.CountAsync();
+        var totalRoles = await context.UserRoles.CountAsync();
         var systemHealth = await CalculateSystemHealthScore();
         var averageUserSessions = await CalculateAverageUserSessions();
 
@@ -160,9 +150,9 @@ public class AnalyticsOverviewController : ControllerBase
                 total = totalApplications,
                 active = activeApplications,
                 utilizationRate = Math.Round(applicationUtilization, 1),
-                totalConnections = await _context.ApplicationConnections.CountAsync(),
+                totalConnections = await context.ApplicationConnections.CountAsync(),
                 averageConnectionsPerApp = totalApplications > 0 ? 
-                    Math.Round((double)await _context.ApplicationConnections.CountAsync() / totalApplications, 1) : 0
+                    Math.Round((double)await context.ApplicationConnections.CountAsync() / totalApplications, 1) : 0
             },
             securityMetrics = new
             {
@@ -198,25 +188,25 @@ public class AnalyticsOverviewController : ControllerBase
         var last90Days = now.AddDays(-90);
 
         // Access Control Efficiency
-        var totalAccessRequests = await _context.UserActivityLogs
+        var totalAccessRequests = await context.UserActivityLogs
             .Where(log => log.Timestamp >= last30Days)
             .CountAsync();
 
-        var rolesTotalCount = await _context.UserRoles.CountAsync();
+        var rolesTotalCount = await context.UserRoles.CountAsync();
         var applicationsPerUser = await CalculateAverageApplicationsPerUser();
 
         // System Adoption Metrics
-        var activeUsers = await _context.UserActivityLogs
+        var activeUsers = await context.UserActivityLogs
             .Where(log => log.Timestamp >= last30Days)
             .Select(log => log.UserId)
             .Distinct()
             .CountAsync();
 
-        var totalUsers = await _context.Users.CountAsync();
+        var totalUsers = await context.Users.CountAsync();
         var adoptionRate = totalUsers > 0 ? (double)activeUsers / totalUsers * 100 : 0;
 
         // Governance Metrics
-        var auditLogsLast30Days = await _context.AuditLogs
+        var auditLogsLast30Days = await context.AuditLogs
             .Where(log => log.CreatedAt >= last30Days)
             .CountAsync();
 
@@ -263,15 +253,15 @@ public class AnalyticsOverviewController : ControllerBase
             var monthStart = now.AddMonths(-i).Date;
             var monthEnd = monthStart.AddMonths(1).AddDays(-1);
 
-            var usersCreated = await _context.Users
+            var usersCreated = await context.Users
                 .Where(u => u.CreatedAt >= monthStart && u.CreatedAt <= monthEnd)
                 .CountAsync();
 
-            var applicationsAdded = await _context.Applications
+            var applicationsAdded = await context.Applications
                 .Where(a => a.CreatedAt >= monthStart && a.CreatedAt <= monthEnd)
                 .CountAsync();
 
-            var activityCount = await _context.UserActivityLogs
+            var activityCount = await context.UserActivityLogs
                 .Where(log => log.Timestamp >= monthStart && log.Timestamp <= monthEnd)
                 .CountAsync();
 
@@ -282,8 +272,8 @@ public class AnalyticsOverviewController : ControllerBase
                 usersAdded = usersCreated,
                 applicationsAdded = applicationsAdded,
                 totalActivity = activityCount,
-                cumulativeUsers = await _context.Users.Where(u => u.CreatedAt <= monthEnd).CountAsync(),
-                cumulativeApplications = await _context.Applications.Where(a => a.CreatedAt <= monthEnd).CountAsync()
+                cumulativeUsers = await context.Users.Where(u => u.CreatedAt <= monthEnd).CountAsync(),
+                cumulativeApplications = await context.Applications.Where(a => a.CreatedAt <= monthEnd).CountAsync()
             });
         }
 
@@ -327,7 +317,7 @@ public class AnalyticsOverviewController : ControllerBase
     private async Task<int> CalculateSystemHealthScore()
     {
         var dbHealthy = await TestDatabaseConnection();
-        var connectionsCount = await _context.ApplicationConnections.CountAsync();
+        var connectionsCount = await context.ApplicationConnections.CountAsync();
         
         // Simplified health calculation
         int score = dbHealthy ? 85 : 60;
@@ -340,7 +330,7 @@ public class AnalyticsOverviewController : ControllerBase
     {
         try
         {
-            await _context.Database.ExecuteSqlRawAsync("SELECT 1");
+            await context.Database.ExecuteSqlRawAsync("SELECT 1");
             return true;
         }
         catch
@@ -352,11 +342,11 @@ public class AnalyticsOverviewController : ControllerBase
     private async Task<double> CalculateAverageUserSessions()
     {
         var last30Days = DateTime.UtcNow.AddDays(-30);
-        var sessionCount = await _context.UserActivityLogs
+        var sessionCount = await context.UserActivityLogs
             .Where(log => log.Timestamp >= last30Days && log.ActionType == ActionTypeEnum.Login)
             .CountAsync();
         
-        var activeUsers = await _context.UserActivityLogs
+        var activeUsers = await context.UserActivityLogs
             .Where(log => log.Timestamp >= last30Days)
             .Select(log => log.UserId)
             .Distinct()
@@ -368,11 +358,11 @@ public class AnalyticsOverviewController : ControllerBase
     private async Task<double> CalculateUserGrowthRate()
     {
         var now = DateTime.UtcNow;
-        var currentMonth = await _context.Users
+        var currentMonth = await context.Users
             .Where(u => u.CreatedAt >= now.AddDays(-30))
             .CountAsync();
         
-        var previousMonth = await _context.Users
+        var previousMonth = await context.Users
             .Where(u => u.CreatedAt >= now.AddDays(-60) && u.CreatedAt < now.AddDays(-30))
             .CountAsync();
         
@@ -381,8 +371,8 @@ public class AnalyticsOverviewController : ControllerBase
 
     private async Task<double> CalculateAverageApplicationsPerUser()
     {
-        var totalUserApps = await _context.UserApplications.CountAsync();
-        var totalUsers = await _context.Users.CountAsync();
+        var totalUserApps = await context.UserApplications.CountAsync();
+        var totalUsers = await context.Users.CountAsync();
         
         return totalUsers > 0 ? Math.Round((double)totalUserApps / totalUsers, 1) : 0;
     }

@@ -5,32 +5,32 @@ using Prototype.Models;
 using Prototype.Services;
 using Prototype.Utility;
 
-namespace Prototype.Controllers.Settings;
+namespace Prototype.Controllers.Navigation;
 
 [Authorize]
 [ApiController]
-public abstract class BaseSettingsController : ControllerBase
+public abstract class BaseNavigationController : ControllerBase
 {
-    protected readonly ILogger _logger;
-    protected readonly IAuthenticatedUserAccessor? _userAccessor;
-    protected readonly ValidationService? _validationService;
-    protected readonly TransactionService? _transactionService;
+    protected readonly ILogger Logger;
+    protected readonly IAuthenticatedUserAccessor? UserAccessor;
+    protected readonly ValidationService? ValidationService;
+    protected readonly TransactionService? TransactionService;
 
-    protected BaseSettingsController(ILogger logger)
+    protected BaseNavigationController(ILogger logger)
     {
-        _logger = logger;
+        Logger = logger;
     }
 
-    protected BaseSettingsController(
+    protected BaseNavigationController(
         ILogger logger,
         IAuthenticatedUserAccessor userAccessor,
         ValidationService validationService,
         TransactionService transactionService)
     {
-        _logger = logger;
-        _userAccessor = userAccessor;
-        _validationService = validationService;
-        _transactionService = transactionService;
+        Logger = logger;
+        UserAccessor = userAccessor;
+        ValidationService = validationService;
+        TransactionService = transactionService;
     }
 
     protected async Task<IActionResult> ExecuteWithErrorHandlingAsync<T>(
@@ -44,7 +44,7 @@ public abstract class BaseSettingsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in {ErrorContext}", errorContext);
+            Logger.LogError(ex, "Error in {ErrorContext}", errorContext);
             
             // In development, return the actual error message
             #if DEBUG
@@ -57,8 +57,8 @@ public abstract class BaseSettingsController : ControllerBase
 
     protected async Task<UserModel?> GetCurrentUserAsync()
     {
-        if (_userAccessor == null) return null;
-        return await _userAccessor.GetCurrentUserAsync();
+        if (UserAccessor == null) return null;
+        return await UserAccessor.GetCurrentUserAsync();
     }
 
     protected IActionResult HandleUserNotAuthenticated()
@@ -94,10 +94,10 @@ public abstract class BaseSettingsController : ControllerBase
         Func<Task<T>> operation,
         string successMessage = "Operation completed successfully")
     {
-        if (_transactionService == null)
+        if (TransactionService == null)
             throw new InvalidOperationException("Transaction service not available");
 
-        var result = await _transactionService.ExecuteInTransactionAsync(operation);
+        var result = await TransactionService.ExecuteInTransactionAsync(operation);
         return Ok(result);
     }
 }
