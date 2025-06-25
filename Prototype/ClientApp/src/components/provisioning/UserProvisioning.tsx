@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
   UserPlus, 
@@ -9,7 +9,6 @@ import {
   Zap,
   FileText,
   Upload,
-  Download,
   RefreshCw,
   ArrowUpRight,
   ArrowDownRight,
@@ -182,8 +181,8 @@ export default function UserProvisioning() {
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(() => {
-    // If there's an active migration, start with bulk tab
-    const savedState = localStorage.getItem('cams_migration_state');
+    
+  const savedState = localStorage.getItem('cams_migration_state');
     if (savedState) {
       try {
         const parsed = JSON.parse(savedState);
@@ -198,30 +197,24 @@ export default function UserProvisioning() {
   });
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   
-  // Bulk migration state - now managed by context but keeping local state for UI
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [allMigrationData, setAllMigrationData] = useState<any[]>([]);
   const [fileDataMap, setFileDataMap] = useState<Map<string, any[]>>(new Map());
   const [showPreview, setShowPreview] = useState(false);
   
-  // Use context state for migration status and results
   const migrationProgress = migrationState?.progress || 0;
   const migrationStatus = migrationState?.status || 'idle';
   const migrationResults = migrationState?.results;
   
-  // Track if we're in the middle of a page refresh/session restoration
   const [isSessionRestoration, setIsSessionRestoration] = useState(false);
   
-  // Pagination state for preview
   const [previewCurrentPage, setPreviewCurrentPage] = useState(1);
   const [previewPageSize, setPreviewPageSize] = useState(10);
   
-  // Drag and drop state
   const [isDragging, setIsDragging] = useState(false);
   const [dragError, setDragError] = useState<string | null>(null);
   const [dragCounter, setDragCounter] = useState(0);
   
-  // SignalR state
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [progressDetails, setProgressDetails] = useState<ProgressUpdate | null>(null);
   const [isRestoringSession, setIsRestoringSession] = useState(false);
@@ -252,7 +245,7 @@ export default function UserProvisioning() {
   };
 
   // Periodic status checking for when SignalR reconnection fails
-  const startPeriodicStatusCheck = (jobId: string) => {
+  const startPeriodicStatusCheck = useCallback((jobId: string) => {
     
     // Clear any existing interval
     if (statusCheckInterval) {
@@ -323,7 +316,7 @@ export default function UserProvisioning() {
     }, 15000); // Check every 15 seconds
     
     setStatusCheckInterval(interval);
-  };
+  }, [statusCheckInterval, updateMigrationState]);
 
   useEffect(() => {
     fetchData();
@@ -337,7 +330,7 @@ export default function UserProvisioning() {
     setIsOnBulkTab(isOnBulk);
   }, []); // Run once on mount
 
-  // Restore migration state and reconnect to SignalR if migration is in progress
+  // Restore the migration state and reconnect to SignalR if migration is in progress
   useEffect(() => {
     if (migrationState?.status === 'processing' && migrationState.jobId) {
       setCurrentJobId(migrationState.jobId);
@@ -354,7 +347,7 @@ export default function UserProvisioning() {
         setActiveTab('bulk');
         setIsOnBulkTab(true); // Immediately update the bulk tab state
       } else {
-        // If already on bulk tab, make sure the state is correct
+        // If already on the bulk tab, make sure the state is correct
         setIsOnBulkTab(true);
       }
       
@@ -367,14 +360,12 @@ export default function UserProvisioning() {
         // Update UI to show we're monitoring an active job
         updateMigrationState({
           status: 'processing', // Keep as processing
-          progress: Math.min((migrationState.progress || 0) + 5, 95) // Increment slightly but don't reach 100%
+          progress: Math.min((migrationState?.progress || 0) + 5, 95) // Increment slightly but don't reach 100%
         });
-        
-        // Update notification to show monitoring state
         
         // Set up periodic checking
         startPeriodicStatusCheck(migrationState.jobId!);
-      }, 45000); // 45 second timeout (longer for backend processing)
+      }, 45000); // 45-second timeout (longer for backend processing)
       
       // Reconnect to SignalR progress group
       progressService.ensureConnection()
@@ -395,7 +386,7 @@ export default function UserProvisioning() {
           // Update UI to show monitoring state
           updateMigrationState({
             status: 'processing', // Keep as processing
-            progress: Math.min((migrationState.progress || 0) + 5, 95)
+            progress: Math.min((migrationState?.progress || 0) + 5, 95)
           });
           
           // Update notification to show monitoring state
@@ -408,7 +399,7 @@ export default function UserProvisioning() {
     } else if (migrationState?.status === 'error') {
       // Show error notification
     }
-  }, [migrationState]);
+  }, [migrationState?.jobId, migrationState?.status, activeTab, updateMigrationState, startPeriodicStatusCheck]); // Include all dependencies
 
   // Handle navigation to bulk tab from global indicator
   useEffect(() => {
@@ -458,115 +449,77 @@ export default function UserProvisioning() {
   }, []);
 
   // SignalR event handlers
-  useEffect(() => {
-    const handleJobStarted = (jobStart: JobStart) => {
-      setCurrentJobId(jobStart.jobId);
-      updateMigrationState({
-        status: 'processing',
-        progress: 10,
-        jobId: jobStart.jobId
-      });
-      
-      // Show notification
-    };
+  // Stable SignalR event handlers using useCallback to prevent infinite loops
+  const handleJobStarted = useCallback((jobStart: JobStart) => {
+    setCurrentJobId(jobStart.jobId);
+    updateMigrationState({
+      status: 'processing',
+      progress: 10,
+      jobId: jobStart.jobId
+    });
+    
+    // Show notification
+  }, [updateMigrationState]);
 
-    const handleProgressUpdate = (progress: ProgressUpdate) => {
-      setProgressDetails({
-        ...progress,
-        timestamp: new Date().toISOString() // Add timestamp to track when we received this update
-      });
+  const handleProgressUpdate = useCallback((progress: ProgressUpdate) => {
+    setProgressDetails({
+      ...progress,
+      timestamp: new Date().toISOString() // Add timestamp to track when we received this update
+    });
+    updateMigrationState({
+      progress: progress.progressPercentage
+    });
+    
+    // Update notification
+  }, [updateMigrationState]);
+
+  const handleJobCompleted = useCallback((result: JobComplete) => {
+    
+    // Add a delay to ensure users see the progress bar working
+    setTimeout(() => {
+      const results = result.success && result.data ? {
+        successful: result.data.processedRecords || 0,
+        failed: result.data.failedRecords || 0,
+        errors: result.data.errors || [],
+        processedFiles: result.data.processedFiles || 1,
+        totalFiles: result.data.totalFiles || 1
+      } : null;
+
       updateMigrationState({
-        progress: progress.progressPercentage
+        status: result.success ? 'completed' : 'error',
+        progress: 100,
+        results,
+        endTime: new Date().toISOString()
       });
       
       // Update notification
-    };
-
-    const handleJobCompleted = (result: JobComplete) => {
       
-      // Add a delay to ensure users see the progress bar working
-      setTimeout(() => {
-        const results = result.success && result.data ? {
-          successful: result.data.processedRecords || 0,
-          failed: result.data.failedRecords || 0,
-          errors: result.data.errors || [],
-          processedFiles: result.data.processedFiles || 1,
-          totalFiles: result.data.totalFiles || 1
-        } : null;
+      setCurrentJobId(null);
+      setProgressDetails(null);
+    }, 1500); // Show progress for 1.5 seconds minimum
+  }, [updateMigrationState]);
 
-        updateMigrationState({
-          status: result.success ? 'completed' : 'error',
-          progress: 100,
-          results,
-          endTime: new Date().toISOString()
-        });
-        
-        // Update notification
-        
-        setCurrentJobId(null);
-        setProgressDetails(null);
-      }, 1500); // Show progress for 1.5 seconds minimum
-    };
-
-    const handleJobError = (error: JobError) => {
-      
-      // Check if this is a "Load failed" error which commonly happens during page refresh/reconnection
-      if (error.error === "Load failed") {
-        
-        // If we're restoring session or just refreshed the page, this is expected
-        if (isRestoringSession || isSessionRestoration) {
-          setIsRestoringSession(false);
-          setIsSessionRestoration(false);
-          
-          // Start monitoring mode instead of marking as error
-          updateMigrationState({
-            status: 'processing',
-            progress: Math.min((migrationState?.progress || 0) + 5, 95)
-          });
-          
-          
-          // Start periodic checking to reconnect
-          if (currentJobId) {
-            startPeriodicStatusCheck(currentJobId);
-          }
-          
-          return;
-        } else {
-          // Keep processing state and start monitoring
-          updateMigrationState({
-            status: 'processing',
-            progress: Math.min((migrationState?.progress || 0) + 5, 95)
-          });
-          
-          
-          // Start periodic checking to reconnect
-          if (currentJobId) {
-            startPeriodicStatusCheck(currentJobId);
-          }
-          
-          return;
-        }
-      } else {
-        // Handle genuine errors (not "Load failed")
-        const errorResults = {
+  const handleJobError = useCallback((error: JobError) => {
+    console.error('Job error:', error);
+    
+    if (error.error !== "Load failed") {
+      updateMigrationState({
+        status: 'error',
+        results: {
           successful: 0,
           failed: 1,
           errors: [error.error],
           processedFiles: 0,
           totalFiles: 1
-        };
-        
-        updateMigrationState({
-          status: 'error',
-          results: errorResults
-        });
-        
-        // Update notification
-        
-        setCurrentJobId(null);
-        setProgressDetails(null);
-      }
-    };
+        }
+      });
+      
+      setCurrentJobId(null);
+      setProgressDetails(null);
+    }
+  }, [updateMigrationState]);
+
+  useEffect(() => {
 
     // Set up event listeners
     progressService.onJobStarted(handleJobStarted);
@@ -596,7 +549,7 @@ export default function UserProvisioning() {
         clearInterval(statusCheckInterval);
       }
     };
-  }, [currentJobId]);
+  }, [handleJobStarted, handleProgressUpdate, handleJobCompleted, handleJobError]); // Stable handlers prevent infinite loops
 
   const handleAutoProvision = async () => {
     try {
@@ -704,12 +657,7 @@ export default function UserProvisioning() {
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
       
       // For Excel files, we'll process them on the backend
-      if (fileExtension === 'xlsx' || fileExtension === 'xls') {
-        newFileDataMap.set(file.name, []); // Empty data for Excel files
-        continue;
-      }
-      
-      // For text-based formats, parse for preview
+      // Parse all supported formats for preview
       try {
         const fileData = await parseFile(file);
         newFileDataMap.set(file.name, fileData);
@@ -785,22 +733,29 @@ export default function UserProvisioning() {
 
   const parseFile = async (file: File): Promise<any[]> => {
     try {
-      const text = await file.text();
       let parsedData: any[] = [];
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
 
       switch (fileExtension) {
         case 'csv':
-          parsedData = parseCSV(text);
+          const csvText = await file.text();
+          parsedData = parseCSV(csvText);
           break;
         case 'json':
-          parsedData = JSON.parse(text);
+          const jsonText = await file.text();
+          parsedData = JSON.parse(jsonText);
           if (!Array.isArray(parsedData)) {
             parsedData = [parsedData];
           }
           break;
         case 'xml':
-          parsedData = parseXML(text);
+          const xmlText = await file.text();
+          parsedData = parseXML(xmlText);
+          break;
+        case 'xlsx':
+        case 'xls':
+          // For Excel files, we'll return empty array and process on backend
+          parsedData = [];
           break;
         default:
           throw new Error(`Unsupported format: ${fileExtension}`);
@@ -857,6 +812,7 @@ export default function UserProvisioning() {
     
     return users;
   };
+
 
   const processBulkMigration = async () => {
     if (uploadedFiles.length === 0 && allMigrationData.length === 0) return;
@@ -1972,7 +1928,7 @@ export default function UserProvisioning() {
                                               <small className="text-muted">
                                                 {(file.size / 1024).toFixed(1)} KB • 
                                                 {fileExtension?.toUpperCase()} • 
-                                                {fileData.length > 0 ? `${fileData.length} records` : 'Server processing required'}
+                                                {fileData.length > 0 ? `${fileData.length} records` : (fileExtension === 'xlsx' || fileExtension === 'xls' ? 'Excel files processed on server' : 'Processing...')}
                                               </small>
                                             </div>
                                           </div>

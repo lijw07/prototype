@@ -303,14 +303,32 @@ namespace Prototype.Services.BulkUpload
 
         public bool CancelQueue(string jobId)
         {
+            _logger.LogInformation("Attempting to cancel queue for job {JobId}", jobId);
+            
+            // First try to cancel via the cancellation service (this works even if queue is not in _activeQueues yet)
+            bool wasCancelled = _jobCancellationService.CancelJob(jobId);
+            
+            // Update queue status if it exists in _activeQueues
             if (_activeQueues.TryGetValue(jobId, out var queue))
             {
-                _logger.LogInformation("Cancelling queue for job {JobId}", jobId);
-                return _jobCancellationService.CancelJob(jobId);
+                _logger.LogInformation("Found queue in active queues for job {JobId}, marking as cancelled", jobId);
+                queue.Status = QueueStatus.Cancelled;
+                queue.CompletedAt = DateTime.UtcNow;
+                
+                // Mark any still-processing files as cancelled
+                foreach (var file in queue.Files.Where(f => f.Status == QueuedFileStatus.Processing || f.Status == QueuedFileStatus.Queued))
+                {
+                    file.Status = QueuedFileStatus.Cancelled;
+                    file.CompletedAt = DateTime.UtcNow;
+                }
+            }
+            else
+            {
+                _logger.LogInformation("Queue not found in active queues for job {JobId}, but cancellation token was {Status}", 
+                    jobId, wasCancelled ? "found and cancelled" : "not found");
             }
             
-            _logger.LogWarning("Attempted to cancel non-existent queue for job {JobId}", jobId);
-            return false;
+            return wasCancelled; // Return true if cancellation token was found and cancelled
         }
 
         private async Task<byte[]> ReadFileDataAsync(IFormFile file)
