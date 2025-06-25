@@ -172,7 +172,7 @@ public class UserRoleTableMapper(
 
                     // Check for duplicates in existing data
                     if (existingRoles.Contains(role.ToLower()))
-                        result.Errors.Add($"Row {rowNumber}: Role '{role}' already exists");
+                        result.Errors.Add($"Row {rowNumber}: Role '{role}' already exists (DUPLICATE)");
 
                     // Check for duplicates within batch
                     if (rolesInBatch.Contains(role))

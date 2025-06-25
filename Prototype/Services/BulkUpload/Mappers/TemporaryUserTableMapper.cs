@@ -235,10 +235,10 @@ public class TemporaryUserTableMapper(
                         result.Errors.Add($"Row {rowNumber}: Invalid email format");
 
                     if (existingTempUsers.Contains(email.ToLower()))
-                        result.Errors.Add($"Row {rowNumber}: Email '{email}' already has a temporary user request");
+                        result.Errors.Add($"Row {rowNumber}: Email '{email}' already has a temporary user request (DUPLICATE)");
 
                     if (existingUsers.Contains(email.ToLower()))
-                        result.Errors.Add($"Row {rowNumber}: Email '{email}' already exists as an active user");
+                        result.Errors.Add($"Row {rowNumber}: Email '{email}' already exists as an active user (DUPLICATE)");
 
                     if (emailsInBatch.Contains(email))
                         result.Errors.Add($"Row {rowNumber}: Email '{email}' appears multiple times in this batch");
