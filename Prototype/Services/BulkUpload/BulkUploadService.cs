@@ -587,6 +587,7 @@ namespace Prototype.Services.BulkUpload
                 // Progress tracking variables
                 var processedRecords = 0;
                 var validationErrors = new List<BulkUploadError>();
+                var validationResults = new Dictionary<int, ValidationResult>();
                 
                 // Phase 1: Validation (takes about 30% of time)
                 await _progressService.NotifyProgress(jobId, new ProgressUpdateDto
@@ -604,7 +605,7 @@ namespace Prototype.Services.BulkUpload
 
                 _logger.LogInformation("Starting validation for {TotalRecords} records", totalRecords);
 
-                // Validate all rows first
+                // Validate all rows first and store results
                 var rowNumber = 1;
                 foreach (DataRow row in dataTable.Rows)
                 {
@@ -615,6 +616,8 @@ namespace Prototype.Services.BulkUpload
                     try
                     {
                         var validationResult = await mapper.ValidateRowAsync(row, rowNumber, cancellationToken);
+                        validationResults[rowNumber] = validationResult;
+                        
                         if (!validationResult.IsValid)
                         {
                             foreach (var error in validationResult.Errors)
@@ -634,6 +637,8 @@ namespace Prototype.Services.BulkUpload
                     }
                     catch (Exception ex)
                     {
+                        // Store failed validation result
+                        validationResults[rowNumber] = new ValidationResult { IsValid = false, Errors = new List<string> { $"Validation error - {ex.Message}" } };
                         validationErrors.Add(new BulkUploadError
                         {
                             RowNumber = rowNumber,
@@ -709,7 +714,7 @@ namespace Prototype.Services.BulkUpload
 
                 _logger.LogInformation("Starting to process {TotalRecords} rows", totalRecords);
 
-                // Process and save data
+                // Process and save data using stored validation results
                 var successfullyProcessed = 0;
                 rowNumber = 1;
                 foreach (DataRow row in dataTable.Rows)
@@ -721,7 +726,7 @@ namespace Prototype.Services.BulkUpload
                     try
                     {
                         // Skip rows that failed validation if not ignoring errors
-                        var validationResult = await mapper.ValidateRowAsync(row, rowNumber, cancellationToken);
+                        var validationResult = validationResults.ContainsKey(rowNumber) ? validationResults[rowNumber] : new ValidationResult { IsValid = false };
                         if (!validationResult.IsValid && !ignoreErrors)
                         {
                             rowNumber++;

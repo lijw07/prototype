@@ -9,13 +9,15 @@ namespace Prototype.Services.BulkUpload.Mappers
 {
     public class ApplicationTableMapper : ITableMapper
     {
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly SentinelContext _context;
         private readonly ILogger<ApplicationTableMapper> _logger;
 
         public string TableType => "Applications";
 
-        public ApplicationTableMapper(SentinelContext context, ILogger<ApplicationTableMapper> logger)
+        public ApplicationTableMapper(IServiceScopeFactory scopeFactory, SentinelContext context, ILogger<ApplicationTableMapper> logger)
         {
+            _scopeFactory = scopeFactory;
             _context = context;
             _logger = logger;
         }
@@ -47,11 +49,14 @@ namespace Prototype.Services.BulkUpload.Mappers
                 if (!string.IsNullOrWhiteSpace(dataSourceType) && !IsValidDataSourceType(dataSourceType))
                     result.Errors.Add($"Row {rowNumber}: Invalid ApplicationDataSourceType. Must be Database, API, File, or Cloud");
 
-                // Check for duplicates
+                // Check for duplicates using fresh DbContext scope
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<SentinelContext>();
+                
                 if (!string.IsNullOrWhiteSpace(applicationName))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var existingApp = await _context.Applications
+                    var existingApp = await context.Applications
                         .FirstOrDefaultAsync(a => a.ApplicationName == applicationName, cancellationToken);
                     if (existingApp != null)
                         result.Errors.Add($"Row {rowNumber}: ApplicationName '{applicationName}' already exists");

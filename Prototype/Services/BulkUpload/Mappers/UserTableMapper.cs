@@ -10,6 +10,7 @@ namespace Prototype.Services.BulkUpload.Mappers
 {
     public class UserTableMapper : ITableMapper
     {
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly SentinelContext _context;
         private readonly PasswordEncryptionService _passwordEncryption;
         private readonly ILogger<UserTableMapper> _logger;
@@ -17,10 +18,12 @@ namespace Prototype.Services.BulkUpload.Mappers
         public string TableType => "Users";
 
         public UserTableMapper(
+            IServiceScopeFactory scopeFactory,
             SentinelContext context,
             PasswordEncryptionService passwordEncryption,
             ILogger<UserTableMapper> logger)
         {
+            _scopeFactory = scopeFactory;
             _context = context;
             _passwordEncryption = passwordEncryption;
             _logger = logger;
@@ -61,11 +64,14 @@ namespace Prototype.Services.BulkUpload.Mappers
                 if (!string.IsNullOrWhiteSpace(role) && !IsValidRole(role))
                     result.Errors.Add($"Row {rowNumber}: Invalid role. Must be Admin, User, or PlatformAdmin");
 
-                // Check for duplicates
+                // Check for duplicates using fresh DbContext scope
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<SentinelContext>();
+                
                 if (!string.IsNullOrWhiteSpace(username))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var existingUser = await _context.Users
+                    var existingUser = await context.Users
                         .FirstOrDefaultAsync(u => u.Username == username, cancellationToken);
                     if (existingUser != null)
                         result.Errors.Add($"Row {rowNumber}: Username '{username}' already exists");
@@ -74,7 +80,7 @@ namespace Prototype.Services.BulkUpload.Mappers
                 if (!string.IsNullOrWhiteSpace(email))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var existingEmail = await _context.Users
+                    var existingEmail = await context.Users
                         .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
                     if (existingEmail != null)
                         result.Errors.Add($"Row {rowNumber}: Email '{email}' already exists");
@@ -125,8 +131,8 @@ namespace Prototype.Services.BulkUpload.Mappers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error saving user row");
-                return Task.FromResult(Result<bool>.Failure($"Error saving user: {ex.Message}"));
+                _logger.LogError(ex, "Error creating user row");
+                return Task.FromResult(Result<bool>.Failure($"Error creating user: {ex.Message}"));
             }
         }
 

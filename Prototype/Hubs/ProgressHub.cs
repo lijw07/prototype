@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace Prototype.Hubs
 {
-    // [Authorize] // Temporarily disabled for testing, enable in production
+    [Authorize]
     public class ProgressHub : Hub
     {
         private readonly ILogger<ProgressHub> _logger;

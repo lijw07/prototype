@@ -495,7 +495,10 @@ export default function UserProvisioning() {
 
     const handleProgressUpdate = (progress: ProgressUpdate) => {
       console.log('📈 SignalR: Progress update:', progress);
-      setProgressDetails(progress);
+      setProgressDetails({
+        ...progress,
+        timestamp: new Date().toISOString() // Add timestamp to track when we received this update
+      });
       updateMigrationState({
         progress: progress.progressPercentage
       });
@@ -1386,25 +1389,47 @@ export default function UserProvisioning() {
           const queueData = response.data;
           
           // Calculate overall progress based on completed files
-          const progress = (queueData.completedFiles / queueData.totalFiles) * 100;
+          // Only use this calculation if we don't have more accurate progress from SignalR
+          const fallbackProgress = (queueData.completedFiles / queueData.totalFiles) * 100;
           
-          updateMigrationState({ 
-            progress: Math.min(progress, 95) // Don't show 100% until actually complete
-          });
+          // Check if we have recent SignalR data
+          const hasRecentSignalRData = progressDetails?.timestamp && 
+            (new Date().getTime() - new Date(progressDetails.timestamp).getTime() < 3000);
+          
+          // Only update migration state if we don't have recent SignalR data
+          if (!hasRecentSignalRData || !progressDetails || progressDetails.jobId !== jobId) {
+            updateMigrationState({ 
+              progress: Math.min(fallbackProgress, 95) // Don't show 100% until actually complete
+            });
+          }
           
           // Update progress details with queue information
-          setProgressDetails({
-            jobId: jobId,
-            progressPercentage: progress,
-            status: queueData.status,
-            currentOperation: queueData.processingFile || `Processing file ${queueData.completedFiles + 1} of ${queueData.totalFiles}`,
-            processedRecords: 0,
-            totalRecords: 0,
-            currentFileName: queueData.processingFile,
-            processedFiles: queueData.completedFiles,
-            totalFiles: queueData.totalFiles,
-            timestamp: new Date().toISOString(),
-            errors: []
+          // Preserve more accurate SignalR data when available
+          setProgressDetails(prevDetails => {
+            // If we have recent SignalR data (within last 3 seconds), preserve its detailed progress
+            const hasRecentSignalRData = prevDetails?.timestamp && 
+              (new Date().getTime() - new Date(prevDetails.timestamp).getTime() < 3000);
+            
+            const shouldUseSignalRProgress = hasRecentSignalRData && 
+              prevDetails?.progressPercentage && 
+              prevDetails.progressPercentage > fallbackProgress;
+            
+            return {
+              jobId: jobId,
+              // Use SignalR's more accurate progress if available and recent
+              progressPercentage: shouldUseSignalRProgress ? prevDetails.progressPercentage : fallbackProgress,
+              status: queueData.status,
+              currentOperation: (hasRecentSignalRData && prevDetails?.currentOperation) || 
+                queueData.processingFile || 
+                `Processing file ${queueData.completedFiles + 1} of ${queueData.totalFiles}`,
+              processedRecords: (hasRecentSignalRData && prevDetails?.processedRecords) || 0,
+              totalRecords: (hasRecentSignalRData && prevDetails?.totalRecords) || 0,
+              currentFileName: queueData.processingFile,
+              processedFiles: queueData.completedFiles,
+              totalFiles: queueData.totalFiles,
+              timestamp: new Date().toISOString(),
+              errors: (hasRecentSignalRData && prevDetails?.errors) || []
+            };
           });
           
           // Check if queue is completed

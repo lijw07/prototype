@@ -14,8 +14,7 @@ namespace Prototype.Services.BulkUpload
 
     public class FileQueueService : IFileQueueService
     {
-        private readonly IBulkUploadService _bulkUploadService;
-        private readonly ITableDetectionService _tableDetectionService;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly IProgressService _progressService;
         private readonly IJobCancellationService _jobCancellationService;
         private readonly ILogger<FileQueueService> _logger;
@@ -23,14 +22,12 @@ namespace Prototype.Services.BulkUpload
         private readonly ConcurrentDictionary<string, FileQueue> _activeQueues = new();
 
         public FileQueueService(
-            IBulkUploadService bulkUploadService,
-            ITableDetectionService tableDetectionService,
+            IServiceScopeFactory serviceScopeFactory,
             IProgressService progressService,
             IJobCancellationService jobCancellationService,
             ILogger<FileQueueService> logger)
         {
-            _bulkUploadService = bulkUploadService;
-            _tableDetectionService = tableDetectionService;
+            _serviceScopeFactory = serviceScopeFactory;
             _progressService = progressService;
             _jobCancellationService = jobCancellationService;
             _logger = logger;
@@ -43,6 +40,10 @@ namespace Prototype.Services.BulkUpload
 
             var queuedFiles = new List<QueuedFileInfo>();
             
+            // Create a scope for table detection
+            using var scope = _serviceScopeFactory.CreateScope();
+            var tableDetectionService = scope.ServiceProvider.GetRequiredService<ITableDetectionService>();
+            
             for (int i = 0; i < request.Files.Count; i++)
             {
                 var file = request.Files[i];
@@ -50,7 +51,7 @@ namespace Prototype.Services.BulkUpload
                 var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
                 
                 // Detect table type for each file
-                var detectedTable = await _tableDetectionService.DetectTableTypeAsync(fileData, fileExtension);
+                var detectedTable = await tableDetectionService.DetectTableTypeAsync(fileData, fileExtension);
                 
                 queuedFiles.Add(new QueuedFileInfo
                 {
@@ -79,7 +80,7 @@ namespace Prototype.Services.BulkUpload
             
             _logger.LogInformation("File queue created for job {JobId}. Starting background processing.", jobId);
             
-            // Start processing in background
+            // Start processing in background with proper scope management
             _ = Task.Run(async () =>
             {
                 try
@@ -156,8 +157,12 @@ namespace Prototype.Services.BulkUpload
                             throw new InvalidOperationException($"Could not determine table type for file {queuedFile.FileName}");
                         }
 
+                        // Create a new scope for each file to avoid context disposal issues
+                        using var fileScope = _serviceScopeFactory.CreateScope();
+                        var bulkUploadService = fileScope.ServiceProvider.GetRequiredService<IBulkUploadService>();
+
                         // Process the file with progress tracking
-                        var result = await _bulkUploadService.ProcessBulkDataWithProgressAsync(
+                        var result = await bulkUploadService.ProcessBulkDataWithProgressAsync(
                             queuedFile.FileData,
                             queuedFile.TableType,
                             queuedFile.FileExtension,

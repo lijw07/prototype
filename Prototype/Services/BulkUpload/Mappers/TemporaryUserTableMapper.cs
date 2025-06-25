@@ -10,13 +10,15 @@ namespace Prototype.Services.BulkUpload.Mappers
 {
     public class TemporaryUserTableMapper : ITableMapper
     {
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly SentinelContext _context;
         private readonly ILogger<TemporaryUserTableMapper> _logger;
 
         public string TableType => "TemporaryUsers";
 
-        public TemporaryUserTableMapper(SentinelContext context, ILogger<TemporaryUserTableMapper> logger)
+        public TemporaryUserTableMapper(IServiceScopeFactory scopeFactory, SentinelContext context, ILogger<TemporaryUserTableMapper> logger)
         {
+            _scopeFactory = scopeFactory;
             _context = context;
             _logger = logger;
         }
@@ -52,6 +54,10 @@ namespace Prototype.Services.BulkUpload.Mappers
                 if (!string.IsNullOrWhiteSpace(lastName) && lastName.Length > 50)
                     result.Errors.Add($"Row {rowNumber}: LastName cannot exceed 50 characters");
 
+                // Use fresh DbContext scope for validation queries
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<SentinelContext>();
+
                 // Validate requested applications exist
                 if (!string.IsNullOrWhiteSpace(requestedApplications))
                 {
@@ -61,8 +67,8 @@ namespace Prototype.Services.BulkUpload.Mappers
 
                     foreach (var appName in appNames)
                     {
-                        var appExists = await _context.Applications
-                            .AnyAsync(a => a.ApplicationName == appName);
+                        var appExists = await context.Applications
+                            .AnyAsync(a => a.ApplicationName == appName, cancellationToken);
                         if (!appExists)
                             result.Errors.Add($"Row {rowNumber}: Application '{appName}' does not exist");
                     }
@@ -71,13 +77,13 @@ namespace Prototype.Services.BulkUpload.Mappers
                 // Check for duplicates
                 if (!string.IsNullOrWhiteSpace(email))
                 {
-                    var existingTempUser = await _context.TemporaryUsers
-                        .FirstOrDefaultAsync(tu => tu.Email == email);
+                    var existingTempUser = await context.TemporaryUsers
+                        .FirstOrDefaultAsync(tu => tu.Email == email, cancellationToken);
                     if (existingTempUser != null)
                         result.Errors.Add($"Row {rowNumber}: Email '{email}' already has a temporary user request");
 
-                    var existingUser = await _context.Users
-                        .FirstOrDefaultAsync(u => u.Email == email);
+                    var existingUser = await context.Users
+                        .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
                     if (existingUser != null)
                         result.Errors.Add($"Row {rowNumber}: Email '{email}' already exists as an active user");
                 }

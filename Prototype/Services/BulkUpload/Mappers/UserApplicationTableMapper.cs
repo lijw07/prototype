@@ -9,13 +9,15 @@ namespace Prototype.Services.BulkUpload.Mappers
 {
     public class UserApplicationTableMapper : ITableMapper
     {
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly SentinelContext _context;
         private readonly ILogger<UserApplicationTableMapper> _logger;
 
         public string TableType => "UserApplications";
 
-        public UserApplicationTableMapper(SentinelContext context, ILogger<UserApplicationTableMapper> logger)
+        public UserApplicationTableMapper(IServiceScopeFactory scopeFactory, SentinelContext context, ILogger<UserApplicationTableMapper> logger)
         {
+            _scopeFactory = scopeFactory;
             _context = context;
             _logger = logger;
         }
@@ -38,11 +40,15 @@ namespace Prototype.Services.BulkUpload.Mappers
                 if (string.IsNullOrWhiteSpace(applicationName))
                     result.Errors.Add($"Row {rowNumber}: ApplicationName is required");
 
+                // Use fresh DbContext scope for validation queries
+                using var scope = _scopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<SentinelContext>();
+
                 // Validate user exists
                 if (!string.IsNullOrWhiteSpace(username))
                 {
-                    var userExists = await _context.Users
-                        .AnyAsync(u => u.Username == username && u.IsActive);
+                    var userExists = await context.Users
+                        .AnyAsync(u => u.Username == username && u.IsActive, cancellationToken);
                     if (!userExists)
                         result.Errors.Add($"Row {rowNumber}: User '{username}' does not exist or is inactive");
                 }
@@ -50,8 +56,8 @@ namespace Prototype.Services.BulkUpload.Mappers
                 // Validate application exists
                 if (!string.IsNullOrWhiteSpace(applicationName))
                 {
-                    var appExists = await _context.Applications
-                        .AnyAsync(a => a.ApplicationName == applicationName);
+                    var appExists = await context.Applications
+                        .AnyAsync(a => a.ApplicationName == applicationName, cancellationToken);
                     if (!appExists)
                         result.Errors.Add($"Row {rowNumber}: Application '{applicationName}' does not exist");
                 }
@@ -68,7 +74,7 @@ namespace Prototype.Services.BulkUpload.Mappers
                 if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(applicationName))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var existingAssignment = await _context.UserApplications
+                    var existingAssignment = await context.UserApplications
                         .Include(ua => ua.User)
                         .Include(ua => ua.Application)
                         .FirstOrDefaultAsync(ua => 

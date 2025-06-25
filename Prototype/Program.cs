@@ -62,10 +62,13 @@ var dbName = Environment.GetEnvironmentVariable("DB_NAME") ?? "PrototypeDb";
 var dbUser = Environment.GetEnvironmentVariable("DB_USER") ?? "sa";
 var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "YourStrong!Passw0rd";
 
-var connectionString = $"Server={dbHost},{dbPort};Database={dbName};User={dbUser};Password={dbPassword};TrustServerCertificate=True;MultipleActiveResultSets=False;Connection Timeout=60";
+var connectionString = $"Server={dbHost},{dbPort};Database={dbName};User={dbUser};Password={dbPassword};TrustServerCertificate=True;MultipleActiveResultSets=False;Connection Timeout=300";
 
 builder.Services.AddDbContext<SentinelContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(connectionString, sqlOptions =>
+    {
+        sqlOptions.CommandTimeout(300); // 5 minutes timeout for bulk operations
+    }));
 
 // Bind SMTP Settings
 builder.Services.Configure<SmtpSettingsPoco>(
