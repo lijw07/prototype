@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using Prototype.DTOs.BulkUpload;
+using Prototype.Data;
+using Prototype.Models;
 
 namespace Prototype.Services.BulkUpload
 {
@@ -229,6 +231,9 @@ namespace Prototype.Services.BulkUpload
                 queue.Status = failedFiles == 0 ? QueueStatus.Completed : QueueStatus.CompletedWithErrors;
                 queue.CompletedAt = DateTime.UtcNow;
 
+                // Log the overall queue completion to BulkUploadHistory
+                await LogQueueCompletionHistory(queue, completedFiles, failedFiles);
+
                 await _progressService.NotifyJobCompleted(jobId, new JobCompleteDto
                 {
                     JobId = jobId,
@@ -329,6 +334,55 @@ namespace Prototype.Services.BulkUpload
             }
             
             return wasCancelled; // Return true if cancellation token was found and cancelled
+        }
+
+        private async Task LogQueueCompletionHistory(FileQueue queue, int completedFiles, int failedFiles)
+        {
+            try
+            {
+                using var scope = _serviceScopeFactory.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<SentinelContext>();
+                
+                // Calculate totals from all files
+                var totalRecords = queue.Files.Sum(f => f.TotalRecords);
+                var processedRecords = queue.Files.Sum(f => f.ProcessedRecords);
+                var failedRecords = queue.Files.Sum(f => f.FailedRecords);
+                var processingTime = queue.CompletedAt.HasValue ? queue.CompletedAt.Value - queue.StartedAt.GetValueOrDefault() : TimeSpan.Zero;
+                
+                // Create a summary entry for the entire queue operation
+                var history = new BulkUploadHistoryModel
+                {
+                    UploadId = Guid.NewGuid(),
+                    UserId = queue.UserId,
+                    TableType = "Multiple Files", // Or could be the most common table type
+                    FileName = $"Queue Job ({completedFiles + failedFiles} files)",
+                    TotalRecords = totalRecords,
+                    ProcessedRecords = processedRecords,
+                    FailedRecords = failedRecords,
+                    UploadedAt = queue.StartedAt ?? queue.CreatedAt,
+                    Status = failedFiles == 0 ? "Success" : completedFiles == 0 ? "Failed" : "Partial",
+                    ProcessingTime = processingTime,
+                    ErrorDetails = queue.Files.Where(f => f.Errors != null && f.Errors.Any())
+                        .SelectMany(f => f.Errors.Select(e => $"{f.FileName}: {e}"))
+                        .Take(10) // Limit to first 10 errors
+                        .Any() ? System.Text.Json.JsonSerializer.Serialize(
+                            queue.Files.Where(f => f.Errors != null && f.Errors.Any())
+                                .SelectMany(f => f.Errors.Select(e => $"{f.FileName}: {e}"))
+                                .Take(10)
+                                .ToList()
+                        ) : null
+                };
+
+                context.BulkUploadHistories.Add(history);
+                await context.SaveChangesAsync();
+                
+                _logger.LogInformation("Created queue completion BulkUploadHistory record for job {JobId} with {TotalFiles} files", 
+                    queue.JobId, completedFiles + failedFiles);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error logging queue completion history for job {JobId}", queue.JobId);
+            }
         }
 
         private async Task<byte[]> ReadFileDataAsync(IFormFile file)

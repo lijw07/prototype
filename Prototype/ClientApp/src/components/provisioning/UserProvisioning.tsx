@@ -458,8 +458,21 @@ export default function UserProvisioning() {
       jobId: jobStart.jobId
     });
     
+    // Update progress details with job information
+    setProgressDetails({
+      jobId: jobStart.jobId,
+      progressPercentage: 10,
+      status: 'processing',
+      processedRecords: 0,
+      totalRecords: jobStart.estimatedTotalRecords || allMigrationData.length,
+      processedFiles: 0,
+      totalFiles: jobStart.totalFiles || uploadedFiles.length,
+      currentOperation: 'Job started...',
+      timestamp: new Date().toISOString()
+    });
+    
     // Show notification
-  }, [updateMigrationState]);
+  }, [updateMigrationState, allMigrationData.length, uploadedFiles.length]);
 
   const handleProgressUpdate = useCallback((progress: ProgressUpdate) => {
     setProgressDetails({
@@ -754,8 +767,7 @@ export default function UserProvisioning() {
           break;
         case 'xlsx':
         case 'xls':
-          // For Excel files, we'll return empty array and process on backend
-          parsedData = [];
+          parsedData = await parseXLSX(file);
           break;
         default:
           throw new Error(`Unsupported format: ${fileExtension}`);
@@ -788,31 +800,93 @@ export default function UserProvisioning() {
   };
 
   const parseXML = (text: string): any[] => {
-    // Simple XML parser for user data
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(text, 'text/xml');
     const users: any[] = [];
-    const userMatches = text.match(/<user[^>]*>[\s\S]*?<\/user>/g);
     
-    if (userMatches) {
-      userMatches.forEach(userXml => {
-        const user: any = {};
-        const fieldMatches = userXml.match(/<(\w+)>([^<]*)<\/\1>/g);
-        
-        if (fieldMatches) {
-          fieldMatches.forEach(field => {
-            const match = field.match(/<(\w+)>([^<]*)<\/\1>/);
-            if (match) {
-              user[match[1]] = match[2];
-            }
-          });
-        }
-        
+    // Check for parsing errors
+    const parseError = xmlDoc.getElementsByTagName('parsererror');
+    if (parseError.length > 0) {
+      throw new Error('Invalid XML format');
+    }
+    
+    // Try to find user records - support multiple formats
+    // Format 1: <users><user>...</user></users>
+    let userNodes = xmlDoc.getElementsByTagName('user');
+    
+    // Format 2: <records><record>...</record></records>
+    if (userNodes.length === 0) {
+      userNodes = xmlDoc.getElementsByTagName('record');
+    }
+    
+    // Format 3: <data><item>...</item></data>
+    if (userNodes.length === 0) {
+      userNodes = xmlDoc.getElementsByTagName('item');
+    }
+    
+    // Format 4: Try root element's children if no standard format found
+    if (userNodes.length === 0 && xmlDoc.documentElement) {
+      const rootChildren = xmlDoc.documentElement.children;
+      if (rootChildren.length > 0) {
+        userNodes = rootChildren;
+      }
+    }
+    
+    // Convert each user node to object
+    for (let i = 0; i < userNodes.length; i++) {
+      const userNode = userNodes[i];
+      const user: any = {};
+      
+      // Get all child elements
+      for (let j = 0; j < userNode.children.length; j++) {
+        const child = userNode.children[j];
+        const tagName = child.tagName;
+        const textContent = child.textContent || '';
+        user[tagName] = textContent.trim();
+      }
+      
+      // Only add if user object has properties
+      if (Object.keys(user).length > 0) {
         users.push(user);
-      });
+      }
     }
     
     return users;
   };
 
+  const parseXLSX = async (file: File): Promise<any[]> => {
+    try {
+      // Check if XLSX is available from CDN
+      const XLSX = (window as any).XLSX;
+      if (!XLSX) {
+        throw new Error('XLSX library not loaded');
+      }
+      
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      
+      // Get the first worksheet
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      
+      // Convert to JSON
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+        raw: false,
+        defval: '' // Default value for empty cells
+      });
+      
+      return jsonData;
+    } catch (error) {
+      console.error('Error parsing XLSX:', error);
+      // Fallback to indicate the file was recognized but couldn't be parsed
+      return [{
+        _error: 'Preview unavailable',
+        _message: 'Excel file will be processed on server',
+        _fileName: file.name,
+        _fileSize: `${(file.size / 1024).toFixed(1)} KB`
+      }];
+    }
+  };
 
   const processBulkMigration = async () => {
     if (uploadedFiles.length === 0 && allMigrationData.length === 0) return;
@@ -823,7 +897,18 @@ export default function UserProvisioning() {
       results: null,
       startTime: new Date().toISOString()
     });
-    setProgressDetails(null);
+    // Initialize progress details with file data
+    setProgressDetails({
+      jobId: '',
+      progressPercentage: 0,
+      status: 'starting',
+      processedRecords: 0,
+      totalRecords: allMigrationData.length,
+      processedFiles: 0,
+      totalFiles: uploadedFiles.length,
+      currentOperation: 'Starting migration...',
+      timestamp: new Date().toISOString()
+    });
     
     // Show initial notification
 
@@ -1928,7 +2013,7 @@ export default function UserProvisioning() {
                                               <small className="text-muted">
                                                 {(file.size / 1024).toFixed(1)} KB • 
                                                 {fileExtension?.toUpperCase()} • 
-                                                {fileData.length > 0 ? `${fileData.length} records` : (fileExtension === 'xlsx' || fileExtension === 'xls' ? 'Excel files processed on server' : 'Processing...')}
+                                                {fileData.length > 0 ? `${fileData.length} records` : 'Processing...'}
                                               </small>
                                             </div>
                                           </div>
@@ -2200,12 +2285,12 @@ export default function UserProvisioning() {
                                 )}
 
                                 {/* Progress Details */}
-                                {progressDetails && migrationStatus === 'processing' && (
+                                {migrationStatus === 'processing' && (
                                   <div className="row g-3 mb-4">
                                     <div className="col-md-3">
                                       <div className="text-center p-3 bg-white rounded-3 border">
                                         <div className="h6 fw-bold text-primary mb-1">
-                                          {progressDetails.processedRecords}
+                                          {progressDetails?.processedRecords || Math.floor((migrationProgress / 100) * allMigrationData.length)}
                                         </div>
                                         <div className="small text-muted">Processed</div>
                                       </div>
@@ -2213,7 +2298,7 @@ export default function UserProvisioning() {
                                     <div className="col-md-3">
                                       <div className="text-center p-3 bg-white rounded-3 border">
                                         <div className="h6 fw-bold text-secondary mb-1">
-                                          {progressDetails.totalRecords}
+                                          {progressDetails?.totalRecords || allMigrationData.length}
                                         </div>
                                         <div className="small text-muted">Total Records</div>
                                       </div>
@@ -2221,7 +2306,7 @@ export default function UserProvisioning() {
                                     <div className="col-md-3">
                                       <div className="text-center p-3 bg-white rounded-3 border">
                                         <div className="h6 fw-bold text-info mb-1">
-                                          {progressDetails.processedFiles} / {progressDetails.totalFiles}
+                                          {progressDetails?.processedFiles || Math.floor((migrationProgress / 100) * uploadedFiles.length)} / {progressDetails?.totalFiles || uploadedFiles.length}
                                         </div>
                                         <div className="small text-muted">Files</div>
                                       </div>
@@ -2229,7 +2314,7 @@ export default function UserProvisioning() {
                                     <div className="col-md-3">
                                       <div className="text-center p-3 bg-white rounded-3 border">
                                         <div className="h6 fw-bold text-warning mb-1">
-                                          {progressDetails.currentOperation || 'Processing...'}
+                                          {progressDetails?.currentOperation || 'Processing...'}
                                         </div>
                                         <div className="small text-muted">Current Step</div>
                                       </div>

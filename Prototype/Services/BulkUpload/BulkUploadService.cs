@@ -57,7 +57,7 @@ namespace Prototype.Services.BulkUpload
                 }
 
                 var validationErrors = new List<string>();
-                var rowNumber = 2; // Start from 2 assuming row 1 is header
+                var rowNumber = 2;
 
                 foreach (DataRow row in dataTable.Rows)
                 {
@@ -150,55 +150,53 @@ namespace Prototype.Services.BulkUpload
                                 return Result<BulkUploadResponse>.Failure("Validation errors encountered");
                             }
                         }
+                        else
+                        {
+                            var saveResult = await mapper.SaveRowAsync(row, userId);
+                            if (saveResult.IsSuccess)
+                            {
+                                response.ProcessedRecords++;
+                            }
                             else
                             {
-                                var saveResult = await mapper.SaveRowAsync(row, userId);
-                                if (saveResult.IsSuccess)
+                                response.FailedRecords++;
+                                response.Errors.Add(new BulkUploadError
                                 {
-                                    response.ProcessedRecords++;
-                                }
-                                else
-                                {
-                                    response.FailedRecords++;
-                                    response.Errors.Add(new BulkUploadError
-                                    {
-                                        RowNumber = rowNumber,
-                                        ErrorMessage = saveResult.ErrorMessage,
-                                        RowData = GetRowData(row)
-                                    });
+                                    RowNumber = rowNumber,
+                                    ErrorMessage = saveResult.ErrorMessage,
+                                    RowData = GetRowData(row)
+                                });
 
-                                    if (!ignoreErrors)
-                                    {
-                                        return Result<BulkUploadResponse>.Failure($"Error saving row {rowNumber}: {saveResult.ErrorMessage}");
-                                    }
+                                if (!ignoreErrors)
+                                {
+                                    return Result<BulkUploadResponse>.Failure($"Error saving row {rowNumber}: {saveResult.ErrorMessage}");
                                 }
                             }
                         }
-                        catch (Exception ex)
-                        {
-                            response.FailedRecords++;
-                            response.Errors.Add(new BulkUploadError
-                            {
-                                RowNumber = rowNumber,
-                                ErrorMessage = ex.Message,
-                                RowData = GetRowData(row)
-                            });
-
-                            if (!ignoreErrors)
-                            {
-                                throw;
-                            }
-                        }
-                        rowNumber++;
                     }
+                    catch (Exception ex)
+                    {
+                        response.FailedRecords++;
+                        response.Errors.Add(new BulkUploadError
+                        {
+                            RowNumber = rowNumber,
+                            ErrorMessage = ex.Message,
+                            RowData = GetRowData(row)
+                        });
+
+                        if (!ignoreErrors)
+                        {
+                            throw;
+                        }
+                    }
+                    rowNumber++;
+                }
 
                 stopwatch.Stop();
                 response.ProcessingTime = stopwatch.Elapsed;
-
-                // Add history to context before saving
+                
                 await LogBulkUploadHistory(userId, tableType, response);
-
-                // Save all changes at once (bulk data + history)
+                
                 _logger.LogInformation("Saving {ProcessedRecords} processed records to database", response.ProcessedRecords);
                 await _context.SaveChangesAsync();
                 _logger.LogInformation("Successfully saved all records to database");
@@ -512,7 +510,7 @@ namespace Prototype.Services.BulkUpload
                 UploadId = Guid.NewGuid(),
                 UserId = userId,
                 TableType = tableType,
-                FileName = "BulkUpload", // This should be passed from controller
+                FileName = response.FileName ?? "BulkUpload", // Use actual filename from response
                 TotalRecords = response.TotalRecords,
                 ProcessedRecords = response.ProcessedRecords,
                 FailedRecords = response.FailedRecords,
@@ -523,6 +521,8 @@ namespace Prototype.Services.BulkUpload
             };
 
             _context.BulkUploadHistories.Add(history);
+            _logger.LogInformation("Created BulkUploadHistory record for user {UserId}, table {TableType}, file {FileName}", 
+                userId, tableType, history.FileName);
             // Note: SaveChanges will be called by the controller's transaction
         }
 
