@@ -253,7 +253,6 @@ export default function UserProvisioning() {
 
   // Periodic status checking for when SignalR reconnection fails
   const startPeriodicStatusCheck = (jobId: string) => {
-    console.log('🔄 Starting periodic status check for job:', jobId);
     
     // Clear any existing interval
     if (statusCheckInterval) {
@@ -265,13 +264,11 @@ export default function UserProvisioning() {
     
     const interval = setInterval(async () => {
       attemptCount++;
-      console.log(`🔄 Reconnection attempt ${attemptCount}/${maxAttempts} for job: ${jobId}`);
       
       try {
         // Try to reconnect to SignalR periodically
         await progressService.ensureConnection();
         await progressService.joinProgressGroup(jobId);
-        console.log('✅ Periodic reconnection successful for job:', jobId);
         
         // Reset the session restoration flag since we're now connected
         setIsRestoringSession(false);
@@ -282,11 +279,9 @@ export default function UserProvisioning() {
         clearInterval(interval);
         setStatusCheckInterval(null);
       } catch (error) {
-        console.log(`🔄 Reconnection attempt ${attemptCount} failed:`, error);
         
         // If we've exhausted all attempts, gracefully handle the situation
         if (attemptCount >= maxAttempts) {
-          console.log('⏰ Maximum reconnection attempts reached, assuming job completed');
           clearInterval(interval);
           setStatusCheckInterval(null);
           
@@ -340,27 +335,22 @@ export default function UserProvisioning() {
   useEffect(() => {
     const isOnBulk = activeTab === 'bulk';
     setIsOnBulkTab(isOnBulk);
-    console.log('🔄 Initial bulk tab state:', isOnBulk, 'activeTab:', activeTab);
   }, []); // Run once on mount
 
   // Restore migration state and reconnect to SignalR if migration is in progress
   useEffect(() => {
     if (migrationState?.status === 'processing' && migrationState.jobId) {
-      console.log('🔄 Restoring migration session for job:', migrationState.jobId);
-      console.log('🔍 Migration state on restoration:', migrationState);
       setCurrentJobId(migrationState.jobId);
       setIsRestoringSession(true);
       setIsSessionRestoration(true);
       
       // Clear session restoration flag after a reasonable time
       setTimeout(() => {
-        console.log('⏰ Clearing session restoration flag after timeout');
         setIsSessionRestoration(false);
       }, 60000); // 1 minute
       
       // Auto-switch to bulk tab when restoring migration session
       if (activeTab !== 'bulk') {
-        console.log('🔄 Switching to bulk tab for migration session restoration');
         setActiveTab('bulk');
         setIsOnBulkTab(true); // Immediately update the bulk tab state
       } else {
@@ -372,7 +362,6 @@ export default function UserProvisioning() {
       
       // Set a longer timeout for session restoration (backend might still be processing)
       const restorationTimeout = setTimeout(() => {
-        console.log('⏰ Session restoration timeout - backend job may still be running');
         setIsRestoringSession(false);
         
         // Update UI to show we're monitoring an active job
@@ -391,14 +380,12 @@ export default function UserProvisioning() {
       progressService.ensureConnection()
         .then(() => progressService.joinProgressGroup(migrationState.jobId!))
         .then(() => {
-          console.log('✅ Reconnected to SignalR progress group for job:', migrationState.jobId);
           clearTimeout(restorationTimeout);
           setIsRestoringSession(false);
           setIsSessionRestoration(false);
         })
         .catch(error => {
           console.error('❌ Failed to reconnect to SignalR:', error);
-          console.log('🔄 Job may still be running on backend. Starting monitoring mode...');
           clearTimeout(restorationTimeout);
           
           // Don't immediately assume failure - start monitoring mode
@@ -426,7 +413,6 @@ export default function UserProvisioning() {
   // Handle navigation to bulk tab from global indicator
   useEffect(() => {
     if (shouldNavigateToBulkTab) {
-      console.log('🔄 Navigating to bulk tab from global indicator');
       setActiveTab('bulk');
       setShouldNavigateToBulkTab(false); // Reset the flag
     }
@@ -436,15 +422,7 @@ export default function UserProvisioning() {
   useEffect(() => {
     const isOnBulk = activeTab === 'bulk';
     setIsOnBulkTab(isOnBulk);
-    console.log('📊 User is on bulk tab:', isOnBulk);
   }, [activeTab, setIsOnBulkTab]);
-
-  // Debug: Log migration state changes
-  useEffect(() => {
-    if (migrationState) {
-      console.log('📊 Migration state:', migrationStatus, `${migrationProgress}%`);
-    }
-  }, [migrationStatus, migrationProgress]);
 
   // Cleanup on component unmount
   useEffect(() => {
@@ -482,7 +460,6 @@ export default function UserProvisioning() {
   // SignalR event handlers
   useEffect(() => {
     const handleJobStarted = (jobStart: JobStart) => {
-      console.log('🎬 SignalR: Job started:', jobStart);
       setCurrentJobId(jobStart.jobId);
       updateMigrationState({
         status: 'processing',
@@ -494,7 +471,6 @@ export default function UserProvisioning() {
     };
 
     const handleProgressUpdate = (progress: ProgressUpdate) => {
-      console.log('📈 SignalR: Progress update:', progress);
       setProgressDetails({
         ...progress,
         timestamp: new Date().toISOString() // Add timestamp to track when we received this update
@@ -507,7 +483,6 @@ export default function UserProvisioning() {
     };
 
     const handleJobCompleted = (result: JobComplete) => {
-      console.log('🎉 SignalR: Job completed:', result);
       
       // Add a delay to ensure users see the progress bar working
       setTimeout(() => {
@@ -534,16 +509,12 @@ export default function UserProvisioning() {
     };
 
     const handleJobError = (error: JobError) => {
-      console.log('❌ SignalR: Job error:', error);
-      console.log('🔍 Debug - isRestoringSession:', isRestoringSession, 'isSessionRestoration:', isSessionRestoration, 'error.error:', error.error);
       
       // Check if this is a "Load failed" error which commonly happens during page refresh/reconnection
       if (error.error === "Load failed") {
-        console.log('🔄 "Load failed" error detected - treating as connection issue, not genuine failure');
         
         // If we're restoring session or just refreshed the page, this is expected
         if (isRestoringSession || isSessionRestoration) {
-          console.log('🔄 During session restoration - ignoring Load failed error');
           setIsRestoringSession(false);
           setIsSessionRestoration(false);
           
@@ -561,9 +532,6 @@ export default function UserProvisioning() {
           
           return;
         } else {
-          // Even if not in restoration mode, "Load failed" during active migration should not immediately fail
-          console.log('🔄 "Load failed" outside restoration - still treating as connection issue');
-          
           // Keep processing state and start monitoring
           updateMigrationState({
             status: 'processing',
@@ -580,7 +548,6 @@ export default function UserProvisioning() {
         }
       } else {
         // Handle genuine errors (not "Load failed")
-        console.log('💥 Genuine error occurred:', error.error);
         const errorResults = {
           successful: 0,
           failed: 1,
@@ -608,7 +575,6 @@ export default function UserProvisioning() {
     progressService.onJobError(handleJobError);
 
     // Initialize SignalR connection on component mount
-    console.log('🔗 Initializing SignalR connection...');
     progressService.ensureConnection().catch(error => {
       console.error('❌ Failed to initialize SignalR connection:', error);
     });
@@ -684,23 +650,15 @@ export default function UserProvisioning() {
 
   // Bulk migration helper functions
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log('handleFileUpload called');
-    console.log('Event target:', event.target);
-    console.log('Files:', event.target.files);
-    const files = Array.from(event.target.files || []);
-    console.log('Files array:', files);
+    const files = Array.from(event.target.files || [])
     if (files.length > 0) {
-      console.log('Processing files...');
       processFiles(files);
-    } else {
-      console.log('No files selected');
     }
     // Clear the input value so the same file can be selected again
     event.target.value = '';
   };
 
   const processFiles = async (files: File[]) => {
-    console.log('Processing files:', files.map(f => f.name));
     setDragError(null);
     const supportedFormats = ['csv', 'json', 'xml', 'xlsx', 'xls'];
     const validFiles: File[] = [];
@@ -712,7 +670,6 @@ export default function UserProvisioning() {
     // Validate all files first
     for (const file of files) {
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
-      console.log(`File: ${file.name}, Extension: ${fileExtension}`);
       
       // Check for duplicates
       if (existingFileNames.has(file.name)) {
@@ -725,24 +682,19 @@ export default function UserProvisioning() {
       } else {
         validFiles.push(file);
       }
-    }
-    
-    console.log('Valid files:', validFiles.map(f => f.name));
-    console.log('Errors during validation:', errors);
+    };
     
     if (errors.length > 0) {
       setDragError(`Some files have issues:\n${errors.join('\n')}`);
     }
     
     if (validFiles.length === 0) {
-      console.log('No valid files to process');
       return;
     }
     
     // Add to existing files instead of replacing
     const updatedFiles = [...uploadedFiles, ...validFiles];
     setUploadedFiles(updatedFiles);
-    console.log('Added files to existing uploaded files. Total files:', updatedFiles.length);
     
     // Process files for preview - preserve existing data and add new
     const newFileDataMap = new Map(fileDataMap); // Start with existing data
@@ -753,16 +705,13 @@ export default function UserProvisioning() {
       
       // For Excel files, we'll process them on the backend
       if (fileExtension === 'xlsx' || fileExtension === 'xls') {
-        console.log(`Skipping client-side parsing for Excel file: ${file.name}`);
         newFileDataMap.set(file.name, []); // Empty data for Excel files
         continue;
       }
       
       // For text-based formats, parse for preview
       try {
-        console.log(`Parsing file: ${file.name}`);
         const fileData = await parseFile(file);
-        console.log(`Parsed ${fileData.length} records from ${file.name}:`, fileData.slice(0, 2));
         newFileDataMap.set(file.name, fileData);
         allData = [...allData, ...fileData];
       } catch (error) {
@@ -771,16 +720,10 @@ export default function UserProvisioning() {
       }
     }
     
-    console.log('All parsed data:', allData.length, 'records');
-    console.log('File data map:', Array.from(newFileDataMap.entries()));
-    
     setFileDataMap(newFileDataMap);
     setAllMigrationData(allData);
     setPreviewCurrentPage(1);
     setShowPreview(allData.length > 0);
-    
-    console.log('Updated state - showPreview:', allData.length > 0, 'allData length:', allData.length);
-    console.log('Sample data:', allData.slice(0, 3));
     
     if (errors.length > 0) {
       setDragError(`Some files could not be processed:\n${errors.join('\n')}`);
@@ -918,7 +861,6 @@ export default function UserProvisioning() {
   const processBulkMigration = async () => {
     if (uploadedFiles.length === 0 && allMigrationData.length === 0) return;
 
-    console.log('🚀 Starting bulk migration with SignalR tracking...');
     updateMigrationState({
       status: 'processing',
       progress: 0,
@@ -932,10 +874,8 @@ export default function UserProvisioning() {
     try {
       // Use queue-based processing for multiple files, single file processing for one file
       if (uploadedFiles.length > 1) {
-        console.log(`📁 Processing ${uploadedFiles.length} files using queue system...`);
         await processBulkMigrationWithQueue();
       } else if (uploadedFiles.length === 1) {
-        console.log('📁 Processing single file with progress tracking...');
         await processSingleFileWithProgress();
       } else {
         throw new Error('No files to process');
@@ -947,7 +887,6 @@ export default function UserProvisioning() {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
       if (errorMessage === 'Load failed') {
-        console.log('🔄 "Load failed" in bulk migration - treating as connection issue, keeping processing state');
         
         // Don't change status to error - keep it as processing since the job might be running on backend
         updateMigrationState({
@@ -959,12 +898,10 @@ export default function UserProvisioning() {
         
         // Start periodic checking to monitor the job
         if (currentJobId) {
-          console.log('🔄 Starting monitoring for job:', currentJobId);
           startPeriodicStatusCheck(currentJobId);
         }
       } else {
         // Handle genuine errors
-        console.log('💥 Genuine error in bulk migration:', errorMessage);
         updateMigrationState({
           status: 'error',
           results: {
@@ -1014,7 +951,6 @@ export default function UserProvisioning() {
           formData.append('totalFiles', totalFiles.toString());
 
           const bulkResponse = await userProvisioningApi.bulkProvisionUsers(formData);
-          console.log('Bulk API Response:', bulkResponse);
 
           if (bulkResponse.success && bulkResponse.data) {
             // Handle bulk response - map to expected format
@@ -1030,7 +966,6 @@ export default function UserProvisioning() {
             throw new Error(`Bulk API failed for ${file.name}, falling back to individual processing`);
           }
         } catch (bulkError) {
-          console.warn(`Bulk API not available or failed for ${file.name}, processing individually:`, bulkError);
           
           // Fallback: Process users from this file individually
           const fileData = fileDataMap.get(file.name) || [];
@@ -1044,7 +979,6 @@ export default function UserProvisioning() {
               const lastName = user.lastName || user.LastName;
               
               if (!email || !firstName || !lastName) {
-                console.log('User data:', user);
                 throw new Error(`Missing required fields: email, firstName, or lastName`);
               }
 
@@ -1146,7 +1080,6 @@ export default function UserProvisioning() {
   const cancelMigration = async () => {
     try {
       if (currentJobId) {
-        console.log('🚫 Cancelling job:', currentJobId);
         
         // Determine if this is a queue job or single file job
         let response;
@@ -1163,7 +1096,6 @@ export default function UserProvisioning() {
         }
 
         if (response.success || response.ok) {
-          console.log('✅ Job cancelled successfully');
           
           // Update the migration state to cancelled
           updateMigrationState({
@@ -1261,13 +1193,10 @@ export default function UserProvisioning() {
 
   // Queue-based processing for multiple files
   const processBulkMigrationWithQueue = async () => {
-    console.log(`📁 Starting queue-based processing for ${uploadedFiles.length} files...`);
     
     // First connect to SignalR before starting the upload
-    console.log('🔗 Connecting to SignalR...');
     try {
       await progressService.ensureConnection();
-      console.log('✅ SignalR connected successfully');
       updateMigrationState({ progress: 5 });
     } catch (signalRError) {
       console.error('❌ Failed to connect to SignalR:', signalRError);
@@ -1282,19 +1211,15 @@ export default function UserProvisioning() {
     formData.append('ignoreErrors', 'false');
     formData.append('continueOnError', 'true');
     formData.append('processFilesSequentially', 'true');
-    
-    console.log(`📁 Uploading ${uploadedFiles.length} files to queue...`);
     updateMigrationState({ progress: 10 });
     
     // Call the queue-based API endpoint
     const response = await userProvisioningApi.bulkProvisionWithQueue(formData);
-    console.log('📊 Queue API Response:', response);
     
     if (response.success && response.data) {
       const jobId = response.data.jobId;
       setCurrentJobId(jobId);
       
-      console.log('✅ Files queued successfully, job ID:', jobId);
       updateMigrationState({ 
         progress: 15,
         jobId: jobId
@@ -1303,7 +1228,6 @@ export default function UserProvisioning() {
       // Join SignalR group for this job
       try {
         await progressService.joinProgressGroup(jobId);
-        console.log('✅ Successfully joined SignalR progress group for job:', jobId);
       } catch (signalRError) {
         console.error('❌ Failed to join SignalR progress group:', signalRError);
         // Fall back to polling
@@ -1322,10 +1246,8 @@ export default function UserProvisioning() {
     updateMigrationState({ progress: 1 });
     
     // First connect to SignalR before starting the upload
-    console.log('🔗 Connecting to SignalR...');
     try {
       await progressService.ensureConnection();
-      console.log('✅ SignalR connected successfully');
       updateMigrationState({ progress: 5 });
     } catch (signalRError) {
       console.error('❌ Failed to connect to SignalR:', signalRError);
@@ -1335,11 +1257,9 @@ export default function UserProvisioning() {
     // Pre-generate job ID and join SignalR group before API call
     const jobId = progressService.generateJobId();
     setCurrentJobId(jobId);
-    console.log('🔗 Pre-joining SignalR group for job:', jobId);
     
     try {
       await progressService.joinProgressGroup(jobId);
-      console.log('✅ Successfully pre-joined SignalR progress group for job:', jobId);
       updateMigrationState({ progress: 10, jobId });
     } catch (signalRError) {
       console.error('❌ Failed to pre-join SignalR progress group:', signalRError);
@@ -1350,18 +1270,13 @@ export default function UserProvisioning() {
     formData.append('file', file);
     formData.append('ignoreErrors', 'false');
     formData.append('jobId', jobId); // Send the pre-generated job ID
-
-    console.log('📁 Uploading file:', file.name, 'Size:', file.size, 'bytes');
+    
     updateMigrationState({ progress: 15 });
     
     // Call the SignalR-enabled API endpoint with pre-generated job ID
     const response = await userProvisioningApi.bulkProvisionWithProgress(formData);
-    console.log('📊 API Response:', response);
 
-    if (response.success && response.data) {
-      // Success case - progress updates will come via SignalR
-      console.log('✅ Upload started successfully, waiting for SignalR updates...');
-    } else {
+    if (!response.success || response.data) {
       // Error case - show error immediately
       console.error('❌ Upload failed:', response.message);
       updateMigrationState({
@@ -1379,7 +1294,6 @@ export default function UserProvisioning() {
 
   // Polling fallback for queue status when SignalR is not available
   const startQueueStatusPolling = (jobId: string) => {
-    console.log('🔄 Starting queue status polling for job:', jobId);
     
     const pollInterval = setInterval(async () => {
       try {
@@ -1958,7 +1872,6 @@ export default function UserProvisioning() {
                                   type="button"
                                   className="btn btn-primary btn-lg px-4"
                                   onClick={() => {
-                                    console.log('Button clicked - triggering file input');
                                     const fileInput = document.getElementById('fileUploadInitial') as HTMLInputElement;
                                     if (fileInput) {
                                       fileInput.click();

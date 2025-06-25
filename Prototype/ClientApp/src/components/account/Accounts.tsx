@@ -201,7 +201,6 @@ export default function Accounts() {
         }
       }
       
-      console.log('Fetched all users:', allUsers.length);
       setAllUsers(allUsers);
       return allUsers;
     } catch (error) {
@@ -539,10 +538,7 @@ export default function Accounts() {
     setFormErrors({}); // Clear any previous errors
     
     try {
-      console.log('Submitting user registration:', newUserForm);
       const response = await authApi.register(newUserForm);
-      console.log('Registration response:', response);
-      
       if (response && response.success) {
         setSubmitSuccess(true);
         // Reset form
@@ -795,9 +791,6 @@ export default function Accounts() {
               : u
           )
         );
-        
-        // Show success message (you could add a toast notification here)
-        console.log(`User ${user.isActive ? 'frozen' : 'unfrozen'} successfully`);
       }
     } catch (error) {
       console.error('Error updating user status:', error);
@@ -813,15 +806,10 @@ export default function Accounts() {
     if (!deletingUser) return;
 
     try {
-      console.log('Attempting to delete user:', deletingUser.userId);
-      console.log('User data:', deletingUser);
-      console.log('Is temporary:', deletingUser.isTemporary);
       
       // Test if we can access a working endpoint first
       try {
-        console.log('Testing API connectivity...');
         const testResponse = await userApi.getProfile();
-        console.log('API test successful:', testResponse.success);
       } catch (testError) {
         console.log('API test failed:', testError);
       }
@@ -829,17 +817,12 @@ export default function Accounts() {
       let response;
       
       if (deletingUser.isTemporary) {
-        console.log('Calling deleteTemporaryUser API');
         response = await userApi.deleteTemporaryUser(deletingUser.userId);
       } else {
-        console.log('Calling deleteUser API');
         response = await userApi.deleteUser(deletingUser.userId);
       }
       
-      console.log('Delete user response:', response);
-      
       if (response && response.success) {
-        console.log(`User ${deletingUser.firstName} ${deletingUser.lastName} deleted successfully`);
         setDeleteSuccess(true);
         
         // Smart refetch to handle pagination after deletion

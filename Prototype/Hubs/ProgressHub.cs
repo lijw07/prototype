@@ -3,6 +3,10 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace Prototype.Hubs
 {
+    /// <summary>
+    /// SignalR Hub for real-time progress updates during bulk operations.
+    /// Requires JWT authentication - client must provide access_token via accessTokenFactory.
+    /// </summary>
     [Authorize]
     public class ProgressHub : Hub
     {

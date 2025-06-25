@@ -29,7 +29,6 @@ public class AuditLogSettingsController : BaseSettingsController
             var skip = (page - 1) * pageSize;
 
             var totalCount = await _context.AuditLogs.CountAsync();
-            _logger.LogInformation("Total audit logs count: {TotalCount}", totalCount);
 
             var logs = await _context.AuditLogs
                 .Include(log => log.User)
@@ -46,9 +45,7 @@ public class AuditLogSettingsController : BaseSettingsController
                     CreatedAt = log.CreatedAt
                 })
                 .ToListAsync();
-
-            _logger.LogInformation("Retrieved {LogCount} audit logs", logs.Count);
-
+            
             var result = CreatePaginatedResponse(logs, page, pageSize, totalCount);
 
             return Ok(result);

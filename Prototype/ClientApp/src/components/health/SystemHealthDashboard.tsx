@@ -93,17 +93,12 @@ export default function SystemHealthDashboard() {
   const fetchHealthData = async () => {
     try {
       setLoading(true);
-      console.log('Fetching health data...');
       
       const [healthResponse, connectionsResponse, performanceResponse] = await Promise.all([
         systemHealthApi.getHealthOverview(),
         systemHealthApi.getDatabaseConnections(),
         systemHealthApi.getPerformanceMetrics()
       ]);
-
-      console.log('Health response:', healthResponse);
-      console.log('Connections response:', connectionsResponse);
-      console.log('Performance response:', performanceResponse);
 
       if (healthResponse.success) {
         setHealthData(healthResponse.data);

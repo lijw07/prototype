@@ -47,13 +47,15 @@ class ProgressService {
 
   private initializeConnection() {
     const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+    const token = localStorage.getItem('authToken');
     
     this.connection = new signalR.HubConnectionBuilder()
       .withUrl(`${baseUrl}/progressHub`, {
         skipNegotiation: true,
         transport: signalR.HttpTransportType.WebSockets,
+        accessTokenFactory: () => token || '',
       })
-      .withAutomaticReconnect()
+      .withAutomaticReconnect([0, 2000, 10000, 30000])
       .configureLogging(signalR.LogLevel.Information)
       .build();
 
@@ -65,8 +67,9 @@ class ProgressService {
       console.log('SignalR: Reconnected');
     });
 
-    this.connection.onclose(() => {
-      console.log('SignalR: Connection closed');
+    this.connection.onclose((error) => {
+      console.log('SignalR: Connection closed', error);
+      this.connectionPromise = null;
     });
   }
 
@@ -74,7 +77,26 @@ class ProgressService {
     return `job_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
   }
 
+  async refreshConnection(): Promise<void> {
+    console.log('SignalR: Refreshing connection...');
+    if (this.connection) {
+      await this.connection.stop();
+      this.connection = null;
+      this.connectionPromise = null;
+    }
+    this.initializeConnection();
+    await this.ensureConnection();
+  }
+
   async ensureConnection(): Promise<void> {
+    const currentToken = localStorage.getItem('authToken');
+    
+    // If there's no token, we can't connect to an authorized hub
+    if (!currentToken) {
+      throw new Error('No authentication token available for SignalR connection');
+    }
+    
+    // Reinitialize connection if it doesn't exist or if we need to refresh the token
     if (!this.connection) {
       this.initializeConnection();
     }
@@ -98,14 +120,28 @@ class ProgressService {
 
   async joinProgressGroup(jobId: string): Promise<void> {
     console.log(`🔗 SignalR: Attempting to join progress group for job ${jobId}`);
-    await this.ensureConnection();
-    console.log(`🔗 SignalR: Connection ensured, state: ${this.connection?.state}`);
     try {
+      await this.ensureConnection();
+      console.log(`🔗 SignalR: Connection ensured, state: ${this.connection?.state}`);
+      
       await this.connection!.invoke('JoinProgressGroup', jobId);
       console.log(`✅ SignalR: Successfully joined progress group for job ${jobId}`);
     } catch (error) {
       console.error('❌ SignalR: Failed to join progress group:', error);
-      throw error;
+      // If it's an authentication error, try refreshing the connection once
+      if (error instanceof Error && error.message.includes('Unauthorized')) {
+        console.log('🔄 SignalR: Attempting to refresh connection due to auth error');
+        try {
+          await this.refreshConnection();
+          await this.connection!.invoke('JoinProgressGroup', jobId);
+          console.log(`✅ SignalR: Successfully joined progress group after refresh for job ${jobId}`);
+        } catch (refreshError) {
+          console.error('❌ SignalR: Failed to join progress group even after refresh:', refreshError);
+          throw refreshError;
+        }
+      } else {
+        throw error;
+      }
     }
   }
 
@@ -159,6 +195,7 @@ class ProgressService {
       this.connectionPromise = null;
     }
   }
+
 }
 
 export const progressService = new ProgressService();

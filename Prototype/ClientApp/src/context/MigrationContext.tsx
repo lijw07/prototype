@@ -35,7 +35,6 @@ export const MigrationProvider: React.FC<MigrationProviderProps> = ({ children }
   useEffect(() => {
     const savedState = MigrationStorage.loadMigrationState();
     if (savedState) {
-      console.log('🔄 Restoring migration session:', savedState.status, savedState.progress + '%');
       setMigrationState(savedState);
     }
   }, []);

@@ -80,14 +80,12 @@ export default function Dashboard() {
       // Try to get data from dashboard API first
       try {
         const response = await dashboardApi.getStatistics();
-        console.log('Dashboard API response:', response);
         if (response.success && response.data) {
           setStats(response.data);
           return;
         }
       } catch (dashboardError) {
         console.error('Dashboard API error:', dashboardError);
-        console.log('Dashboard API not available, using alternative approach');
       }
       
       // Fallback: Get data from existing APIs with accurate counts

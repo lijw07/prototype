@@ -29,10 +29,6 @@ class ApiService {
 
   private getAuthHeaders(): HeadersInit {
     const token = localStorage.getItem('authToken');
-    console.log('Auth token exists:', !!token);
-    if (token) {
-      console.log('Token length:', token.length);
-    }
     return {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` }),
@@ -88,15 +84,11 @@ class ApiService {
 
   async delete<T>(endpoint: string): Promise<T> {
     const fullUrl = `${this.baseUrl}${endpoint}`;
-    console.log('DELETE request to:', fullUrl);
     const headers = this.getAuthHeaders();
-    console.log('DELETE headers:', headers);
     const response = await fetch(fullUrl, {
       method: 'DELETE',
       headers: headers,
     });
-    console.log('DELETE response status:', response.status);
-    console.log('DELETE response headers:', Object.fromEntries(response.headers.entries()));
     return this.handleResponse<T>(response);
   }
 }
@@ -182,7 +174,6 @@ export const userApi = {
   
   deleteUser: (userId: string) => {
     const url = `/settings/user/delete/${userId}`;
-    console.log('DELETE User URL:', url);
     return api.delete<{ success: boolean; message?: string }>(url);
   },
   
@@ -198,7 +189,6 @@ export const userApi = {
   
   deleteTemporaryUser: (temporaryUserId: string) => {
     const url = `/settings/user/delete-temporary/${temporaryUserId}`;
-    console.log('DELETE Temporary User URL:', url);
     return api.delete<{ success: boolean; message?: string }>(url);
   },
 };

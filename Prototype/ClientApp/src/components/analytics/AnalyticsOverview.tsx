@@ -132,7 +132,6 @@ export default function AnalyticsOverview() {
 
   const fetchRealTimeData = async () => {
     try {
-      console.log(`Fetching real-time analytics data for ${timeRange}...`);
       
       // Fetch data from multiple real sources
       const [
@@ -150,15 +149,6 @@ export default function AnalyticsOverview() {
         auditLogApi.getAuditLogs(1, 50).catch(e => ({ success: false, error: e })),
         activityLogApi.getActivityLogs(1, 50).catch(e => ({ success: false, error: e }))
       ]);
-
-      console.log('Real data sources:', {
-        dashboard: dashboardResponse.success,
-        userCounts: userCountsResponse.success,
-        users: allUsersResponse.success,
-        apps: applicationsResponse.success,
-        audit: 'data' in auditLogsResponse,
-        activity: 'data' in activityLogsResponse
-      });
 
       // Aggregate real data
       const realData = await aggregateRealData({
@@ -185,8 +175,6 @@ export default function AnalyticsOverview() {
       setLastUpdated(new Date());
     } catch (error) {
       console.error('Failed to fetch real-time analytics:', error);
-      // Fallback to static data if real data fails
-      await fetchFallbackData();
     }
   };
 
@@ -375,12 +363,6 @@ export default function AnalyticsOverview() {
     }
     
     return recommendations;
-  };
-
-  const fetchFallbackData = async () => {
-    // Previous fallback implementation as backup
-    console.log('Using fallback analytics data');
-    // ... existing fallback code ...
   };
 
   useEffect(() => {
