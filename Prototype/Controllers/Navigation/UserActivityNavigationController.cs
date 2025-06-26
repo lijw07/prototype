@@ -1,13 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
-using Prototype.Controllers;
 using Prototype.Data;
 using Prototype.Services;
 using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
 
-[Route("[controller]")]
-public class UserActivityNavigationController : BaseApiController
+[Route("navigation/user-activity")]
+public class UserActivityNavigationController : BaseNavigationController
 {
     private readonly INavigationService _navigationService;
 

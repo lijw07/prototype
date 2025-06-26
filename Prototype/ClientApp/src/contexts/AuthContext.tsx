@@ -51,7 +51,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const fetchUserProfile = useCallback(async (authToken: string) => {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/settings/user/profile`, {
+      const response = await fetch(`${getApiBaseUrl()}/settings/user-profile`, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json',

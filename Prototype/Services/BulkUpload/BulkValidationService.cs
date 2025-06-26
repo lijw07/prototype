@@ -5,19 +5,11 @@ using Prototype.Helpers;
 
 namespace Prototype.Services.BulkUpload;
 
-public class BulkValidationService : IBulkValidationService
+public class BulkValidationService(
+    ITableMappingService tableMappingService,
+    ILogger<BulkValidationService> logger)
+    : IBulkValidationService
 {
-    private readonly ITableMappingService _tableMappingService;
-    private readonly ILogger<BulkValidationService> _logger;
-
-    public BulkValidationService(
-        ITableMappingService tableMappingService,
-        ILogger<BulkValidationService> logger)
-    {
-        _tableMappingService = tableMappingService;
-        _logger = logger;
-    }
-
     public async Task<Result<bool>> ValidateDataAsync(DataTable dataTable, string tableType, CancellationToken cancellationToken = default)
     {
         try
@@ -27,7 +19,7 @@ public class BulkValidationService : IBulkValidationService
                 return Result<bool>.Failure("No data found to validate");
             }
 
-            var mapper = _tableMappingService.GetMapper(tableType);
+            var mapper = tableMappingService.GetMapper(tableType);
             if (mapper == null)
             {
                 return Result<bool>.Failure($"No mapper found for table type: {tableType}");
@@ -35,12 +27,12 @@ public class BulkValidationService : IBulkValidationService
 
             var validationErrors = new List<string>();
             
-            _logger.LogInformation("Starting validation for {TotalRecords} records", dataTable.Rows.Count);
+            logger.LogInformation("Starting validation for {TotalRecords} records", dataTable.Rows.Count);
 
             // Use batch validation if supported for better performance
             if (mapper is IBatchTableMapper batchMapper)
             {
-                _logger.LogInformation("Using optimized batch validation for {TotalRecords} records", dataTable.Rows.Count);
+                logger.LogInformation("Using optimized batch validation for {TotalRecords} records", dataTable.Rows.Count);
                 
                 try
                 {
@@ -55,12 +47,12 @@ public class BulkValidationService : IBulkValidationService
                         }
                     }
                     
-                    _logger.LogInformation("Batch validation completed. Valid: {ValidRecords}, Invalid: {InvalidRecords}", 
+                    logger.LogInformation("Batch validation completed. Valid: {ValidRecords}, Invalid: {InvalidRecords}", 
                         validationResults.Count(vr => vr.Value.IsValid), validationResults.Count(vr => !vr.Value.IsValid));
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Batch validation failed, falling back to row-by-row validation");
+                    logger.LogError(ex, "Batch validation failed, falling back to row-by-row validation");
                     // Fall back to individual validation if batch fails
                     validationErrors.Clear();
                 }
@@ -69,7 +61,7 @@ public class BulkValidationService : IBulkValidationService
             // Fall back to row-by-row validation if batch not supported or failed
             if (!validationErrors.Any() && !(mapper is IBatchTableMapper))
             {
-                _logger.LogInformation("Using row-by-row validation for {TotalRecords} records", dataTable.Rows.Count);
+                logger.LogInformation("Using row-by-row validation for {TotalRecords} records", dataTable.Rows.Count);
                 
                 var rowNumber = 1;
                 foreach (DataRow row in dataTable.Rows)
@@ -94,47 +86,47 @@ public class BulkValidationService : IBulkValidationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating bulk upload data");
+            logger.LogError(ex, "Error validating bulk upload data");
             return Result<bool>.Failure($"Validation error: {ex.Message}");
         }
     }
 
     public async Task<Dictionary<int, ValidationResultDto>> ValidateWithResultsAsync(DataTable dataTable, string tableType, CancellationToken cancellationToken = default)
     {
-        var mapper = _tableMappingService.GetMapper(tableType);
+        var mapper = tableMappingService.GetMapper(tableType);
         if (mapper == null)
         {
-            _logger.LogError("No mapper found for table type: {TableType}", tableType);
+            logger.LogError("No mapper found for table type: {TableType}", tableType);
             return new Dictionary<int, ValidationResultDto>();
         }
 
         var validationResults = new Dictionary<int, ValidationResultDto>();
         
-        _logger.LogInformation("Starting detailed validation for {TotalRecords} records", dataTable.Rows.Count);
+        logger.LogInformation("Starting detailed validation for {TotalRecords} records", dataTable.Rows.Count);
 
         // Use batch validation if supported for better performance
         if (mapper is IBatchTableMapper batchMapper)
         {
-            _logger.LogInformation("Using optimized batch validation for {TotalRecords} records", dataTable.Rows.Count);
+            logger.LogInformation("Using optimized batch validation for {TotalRecords} records", dataTable.Rows.Count);
             
             try
             {
                 validationResults = await batchMapper.ValidateBatchAsync(dataTable, cancellationToken);
                 
-                _logger.LogInformation("Batch validation completed. Valid: {ValidRecords}, Invalid: {InvalidRecords}", 
+                logger.LogInformation("Batch validation completed. Valid: {ValidRecords}, Invalid: {InvalidRecords}", 
                     validationResults.Count(vr => vr.Value.IsValid), validationResults.Count(vr => !vr.Value.IsValid));
                 
                 return validationResults;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Batch validation failed, falling back to row-by-row validation");
+                logger.LogError(ex, "Batch validation failed, falling back to row-by-row validation");
                 validationResults.Clear();
             }
         }
         
         // Fall back to row-by-row validation if batch not supported or failed
-        _logger.LogInformation("Using row-by-row validation for {TotalRecords} records", dataTable.Rows.Count);
+        logger.LogInformation("Using row-by-row validation for {TotalRecords} records", dataTable.Rows.Count);
         
         var rowNumber = 1;
         foreach (DataRow row in dataTable.Rows)

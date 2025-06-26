@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Controllers;
 using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Enum;
@@ -11,22 +10,17 @@ using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
 
-[Route("settings/user/admin")]
-public class UserAdministrationController : BaseApiController
+[Route("navigation/user-administration")]
+public class UserAdministrationController(
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    TransactionService transactionService,
+    IAuditLogService auditLogService,
+    IUserAccountService userAccountService,
+    ILogger<UserAdministrationController> logger)
+    : BaseNavigationController(logger, context, userAccessor, transactionService, auditLogService)
 {
-    private readonly IUserAccountService _userAccountService;
-
-    public UserAdministrationController(
-        SentinelContext context,
-        IAuthenticatedUserAccessor userAccessor,
-        TransactionService transactionService,
-        IAuditLogService auditLogService,
-        IUserAccountService userAccountService,
-        ILogger<UserAdministrationController> logger)
-        : base(logger, context, userAccessor, transactionService, auditLogService)
-    {
-        _userAccountService = userAccountService ?? throw new ArgumentNullException(nameof(userAccountService));
-    }
+    private readonly IUserAccountService _userAccountService = userAccountService ?? throw new ArgumentNullException(nameof(userAccountService));
 
     [HttpGet("counts")]
     public async Task<IActionResult> GetUserCounts()
@@ -117,22 +111,17 @@ public class UserAdministrationController : BaseApiController
     {
         return await EnsureUserAuthenticatedAsync(async currentUser =>
         {
-            return await ExecuteWithErrorHandlingAsync(async () =>
+            // Get target user info for audit logging
+            var targetUser = await _userAccountService.GetUserByIdAsync(dto.UserId);
+            var targetUserName = targetUser != null ? $"{targetUser.FirstName} {targetUser.LastName}" : "Unknown User";
+            
+            return await ExecuteInTransactionWithAuditAsync(async user =>
             {
                 var result = await _userAccountService.UpdateUserAsync(dto);
                 
                 if (!result.Success)
                 {
                     return BadRequestWithMessage(result.Message);
-                }
-                
-                // Log the user modification activity for the current user (administrator)
-                var targetUser = await _userAccountService.GetUserByIdAsync(dto.UserId);
-                if (targetUser != null)
-                {
-                    await LogAuditActivityAsync(currentUser.UserId, ActionTypeEnum.Update,
-                        $"Administrator updated user account: {targetUser.FirstName} {targetUser.LastName} (ID: {targetUser.UserId}, Username: {dto.Username}, Email: {dto.Email}, Role: {dto.Role}, Active: {dto.IsActive})",
-                        $"Administrator modified user account: {targetUser.FirstName} {targetUser.LastName} (Username: {dto.Username})");
                 }
 
                 // Return updated user data
@@ -158,7 +147,9 @@ public class UserAdministrationController : BaseApiController
 
                 return SuccessResponse(new { Message = result.Message }, result.Message);
 
-            }, "updating user");
+            }, ActionTypeEnum.Update, 
+               $"Administrator updated user account: {targetUserName} (ID: {dto.UserId}, Username: {dto.Username}, Email: {dto.Email}, Role: {dto.Role}, Active: {dto.IsActive})", 
+               "User updated successfully");
         });
     }
 
@@ -167,17 +158,17 @@ public class UserAdministrationController : BaseApiController
     {
         return await EnsureUserAuthenticatedAsync(async currentUser =>
         {
-            return await ExecuteWithErrorHandlingAsync(async () =>
+            // Get the target user before deletion for logging
+            var targetUser = await _userAccountService.GetUserByIdAsync(userId);
+            if (targetUser == null)
+                return BadRequestWithMessage("User not found");
+
+            // Prevent deleting own account
+            if (currentUser.UserId == userId)
+                return BadRequestWithMessage("Cannot delete your own account");
+
+            return await ExecuteInTransactionWithAuditAsync(async user =>
             {
-                // Get the target user before deletion for logging
-                var targetUser = await _userAccountService.GetUserByIdAsync(userId);
-                if (targetUser == null)
-                    return BadRequestWithMessage("User not found");
-
-                // Prevent deleting own account
-                if (currentUser.UserId == userId)
-                    return BadRequestWithMessage("Cannot delete your own account");
-
                 var result = await _userAccountService.DeleteUserAsync(userId);
                 
                 if (!result.Success)
@@ -185,49 +176,12 @@ public class UserAdministrationController : BaseApiController
                     return BadRequestWithMessage(result.Message);
                 }
 
-                // Log the user deletion activity for the current user (administrator)
-                await LogAuditActivityAsync(currentUser.UserId, ActionTypeEnum.Delete,
-                    $"Administrator deleted user account: {targetUser.FirstName} {targetUser.LastName} (ID: {targetUser.UserId}, Username: {targetUser.Username}, Email: {targetUser.Email})",
-                    $"Administrator deleted user account: {targetUser.FirstName} {targetUser.LastName} (Username: {targetUser.Username})");
-
                 return SuccessResponse(new { Message = "User deleted successfully" }, "User deleted successfully");
 
-            }, "deleting user");
+            }, ActionTypeEnum.Delete,
+               $"Administrator deleted user account: {targetUser.FirstName} {targetUser.LastName} (ID: {targetUser.UserId}, Username: {targetUser.Username}, Email: {targetUser.Email})",
+               "User deleted successfully");
         });
     }
 
-    private async Task LogAuditActivityAsync(Guid userId, ActionTypeEnum actionType, string auditMetadata, string activityDescription)
-    {
-        if (Context == null)
-            return;
-
-        // Create audit log for the administrator who made the change
-        var auditLog = new AuditLogModel
-        {
-            AuditLogId = Guid.NewGuid(),
-            UserId = userId,
-            User = null,
-            ActionType = actionType,
-            Metadata = auditMetadata,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        // Create user activity log for the administrator
-        var activityLog = new UserActivityLogModel
-        {
-            UserActivityLogId = Guid.NewGuid(),
-            UserId = userId,
-            User = null,
-            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
-            DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString() ?? "Unknown",
-            ActionType = actionType,
-            Description = activityDescription,
-            Timestamp = DateTime.UtcNow
-        };
-
-        // Add logs to database context and save
-        Context.AuditLogs.Add(auditLog);
-        Context.UserActivityLogs.Add(activityLog);
-        await Context.SaveChangesAsync();
-    }
 }

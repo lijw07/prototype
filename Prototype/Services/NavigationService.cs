@@ -5,24 +5,23 @@ using Prototype.DTOs;
 using Prototype.Models;
 using Prototype.Constants;
 using Prototype.Utility;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Services
 {
-    public class NavigationService : INavigationService
+    public class NavigationService(
+        SentinelContext context,
+        IAuthenticatedUserAccessor userAccessor,
+        ILogger<NavigationService> logger,
+        IPaginationService paginationService,
+        IHttpContextParsingService httpContextParsingService)
+        : INavigationService
     {
-        private readonly SentinelContext _context;
-        private readonly IAuthenticatedUserAccessor _userAccessor;
-        private readonly ILogger<NavigationService> _logger;
-
-        public NavigationService(
-            SentinelContext context,
-            IAuthenticatedUserAccessor userAccessor,
-            ILogger<NavigationService> logger)
-        {
-            _context = context ?? throw new ArgumentNullException(nameof(context));
-            _userAccessor = userAccessor ?? throw new ArgumentNullException(nameof(userAccessor));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
+        private readonly SentinelContext _context = context ?? throw new ArgumentNullException(nameof(context));
+        private readonly IAuthenticatedUserAccessor _userAccessor = userAccessor ?? throw new ArgumentNullException(nameof(userAccessor));
+        private readonly ILogger<NavigationService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        private readonly IPaginationService _paginationService = paginationService ?? throw new ArgumentNullException(nameof(paginationService));
+        private readonly IHttpContextParsingService _httpContextParsingService = httpContextParsingService ?? throw new ArgumentNullException(nameof(httpContextParsingService));
 
         public async Task<UserModel?> GetCurrentUserAsync(ClaimsPrincipal user)
         {
@@ -34,7 +33,7 @@ namespace Prototype.Services
             int page, 
             int pageSize)
         {
-            var validatedParams = ValidatePaginationParameters(page, pageSize);
+            var validatedParams = _paginationService.ValidatePaginationParameters(page, pageSize);
             page = validatedParams.page;
             pageSize = validatedParams.pageSize;
             var skip = validatedParams.skip;
@@ -51,16 +50,9 @@ namespace Prototype.Services
             int pageSize)
         {
             var (data, totalCount) = await GetPaginatedDataAsync(query, page, pageSize);
-            var validatedParams = ValidatePaginationParameters(page, pageSize);
+            var validatedParams = _paginationService.ValidatePaginationParameters(page, pageSize);
             
-            return new
-            {
-                Data = data,
-                Page = validatedParams.page,
-                PageSize = validatedParams.pageSize,
-                TotalCount = totalCount,
-                TotalPages = (int)Math.Ceiling((double)totalCount / validatedParams.pageSize)
-            };
+            return _paginationService.CreatePaginatedResponse(data, validatedParams.page, validatedParams.pageSize, totalCount);
         }
 
         public UserDto MapUserToDto(UserModel user)
@@ -174,8 +166,8 @@ namespace Prototype.Services
 
         public (string ipAddress, string deviceInfo) GetClientInformation(HttpContext httpContext)
         {
-            var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? ApplicationConstants.DefaultIpAddress;
-            var deviceInfo = httpContext.Request.Headers.UserAgent.ToString() ?? ApplicationConstants.DefaultDeviceInfo;
+            var ipAddress = _httpContextParsingService.GetClientIpAddress(httpContext);
+            var deviceInfo = _httpContextParsingService.GetDeviceInformation(httpContext);
             return (ipAddress, deviceInfo);
         }
 
@@ -196,17 +188,5 @@ namespace Prototype.Services
             }
         }
 
-        private static (int page, int pageSize, int skip) ValidatePaginationParameters(int page, int pageSize)
-        {
-            if (page < ApplicationConstants.Pagination.DefaultPage) 
-                page = ApplicationConstants.Pagination.DefaultPage;
-            
-            if (pageSize < ApplicationConstants.Pagination.MinPageSize || 
-                pageSize > ApplicationConstants.Pagination.MaxPageSize) 
-                pageSize = ApplicationConstants.Pagination.DefaultPageSize;
-            
-            var skip = (page - 1) * pageSize;
-            return (page, pageSize, skip);
-        }
     }
 }

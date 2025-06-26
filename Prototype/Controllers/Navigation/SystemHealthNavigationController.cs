@@ -9,26 +9,29 @@ using Prototype.Utility;
 namespace Prototype.Controllers.Navigation;
 
 [Authorize]
-[Route("api/system-health")]
+[Route("navigation/system-health")]
 [ApiController]
 public class SystemHealthNavigationController(
     SentinelContext context,
     IAuthenticatedUserAccessor userAccessor,
     ILogger<SystemHealthNavigationController> logger)
-    : ControllerBase
+    : BaseNavigationController(logger, context, userAccessor)
 {
+    private readonly IAuthenticatedUserAccessor _userAccessor = userAccessor;
+    private readonly SentinelContext _context = context;
+
     [HttpGet("overview")]
     public async Task<IActionResult> GetHealthOverview()
     {
         try
         {
-            var currentUser = await userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
+                return HandleUserNotAuthenticated();
 
             var healthData = await CollectHealthMetrics();
             
-            return Ok(new { success = true, data = healthData });
+            return SuccessResponse(new { success = true, data = healthData });
         }
         catch (Exception ex)
         {
@@ -42,13 +45,13 @@ public class SystemHealthNavigationController(
     {
         try
         {
-            var currentUser = await userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
+                return HandleUserNotAuthenticated();
 
             var connections = await TestDatabaseConnections();
             
-            return Ok(new { success = true, data = connections });
+            return SuccessResponse(new { success = true, data = connections });
         }
         catch (Exception ex)
         {
@@ -62,13 +65,13 @@ public class SystemHealthNavigationController(
     {
         try
         {
-            var currentUser = await userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
+                return HandleUserNotAuthenticated();
 
             var metrics = await CollectPerformanceMetrics();
             
-            return Ok(new { success = true, data = metrics });
+            return SuccessResponse(new { success = true, data = metrics });
         }
         catch (Exception ex)
         {
@@ -85,7 +88,7 @@ public class SystemHealthNavigationController(
         var dbHealthy = await TestMainDatabaseHealth();
         
         // Get application connection counts (simplified to avoid dynamic object issues)
-        var totalConnections = await context.ApplicationConnections.CountAsync();
+        var totalConnections = await _context.ApplicationConnections.CountAsync();
         var healthyConnections = Math.Max(0, totalConnections - Random.Shared.Next(0, 2)); // Simulate mostly healthy connections
         
         // Calculate error rates from recent logs
@@ -128,7 +131,7 @@ public class SystemHealthNavigationController(
         try
         {
             var stopwatch = Stopwatch.StartNew();
-            await context.Database.ExecuteSqlRawAsync("SELECT 1");
+            await _context.Database.ExecuteSqlRawAsync("SELECT 1");
             stopwatch.Stop();
             
             // Consider healthy if response time is under 1 second
@@ -143,7 +146,7 @@ public class SystemHealthNavigationController(
 
     private async Task<List<object>> TestDatabaseConnections()
     {
-        var connections = await context.ApplicationConnections
+        var connections = await _context.ApplicationConnections
             .Include(ac => ac.Application)
             .Select(ac => new
             {
@@ -220,11 +223,11 @@ public class SystemHealthNavigationController(
         var last7Days = now.AddDays(-7);
 
         // Get recent log activity as performance indicator
-        var recentLogActivity = await context.UserActivityLogs
+        var recentLogActivity = await _context.UserActivityLogs
             .Where(log => log.Timestamp >= last24Hours)
             .CountAsync();
 
-        var recentApplicationLogs = await context.ApplicationLogs
+        var recentApplicationLogs = await _context.ApplicationLogs
             .Where(log => log.CreatedAt >= last24Hours)
             .CountAsync();
 
@@ -297,11 +300,11 @@ public class SystemHealthNavigationController(
 
         try
         {
-            var totalLogs = await context.UserActivityLogs
+            var totalLogs = await _context.UserActivityLogs
                 .Where(log => log.Timestamp >= last24Hours)
                 .CountAsync();
 
-            var errorLogs = await context.UserActivityLogs
+            var errorLogs = await _context.UserActivityLogs
                 .Where(log => log.Timestamp >= last24Hours && 
                              log.ActionType == ActionTypeEnum.FailedLogin)
                 .CountAsync();

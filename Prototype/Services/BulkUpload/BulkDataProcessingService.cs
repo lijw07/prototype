@@ -11,30 +11,16 @@ using Prototype.Services.Interfaces;
 
 namespace Prototype.Services.BulkUpload;
 
-public class BulkDataProcessingService : IBulkDataProcessingService
+public class BulkDataProcessingService(
+    SentinelContext context,
+    ITransactionService transactionService,
+    ILogger<BulkDataProcessingService> logger,
+    ITableMappingService tableMappingService,
+    IProgressService progressService,
+    IBulkValidationService validationService)
+    : IBulkDataProcessingService
 {
-    private readonly SentinelContext _context;
-    private readonly ITransactionService _transactionService;
-    private readonly ILogger<BulkDataProcessingService> _logger;
-    private readonly ITableMappingService _tableMappingService;
-    private readonly IProgressService _progressService;
-    private readonly IBulkValidationService _validationService;
-
-    public BulkDataProcessingService(
-        SentinelContext context,
-        ITransactionService transactionService,
-        ILogger<BulkDataProcessingService> logger,
-        ITableMappingService tableMappingService,
-        IProgressService progressService,
-        IBulkValidationService validationService)
-    {
-        _context = context;
-        _transactionService = transactionService;
-        _logger = logger;
-        _tableMappingService = tableMappingService;
-        _progressService = progressService;
-        _validationService = validationService;
-    }
+    private readonly ITransactionService _transactionService = transactionService;
 
     public async Task<Result<BulkUploadResponseDto>> ProcessDataAsync(
         DataTable dataTable, 
@@ -43,7 +29,7 @@ public class BulkDataProcessingService : IBulkDataProcessingService
         bool ignoreErrors = false,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Starting ProcessDataAsync for table: {TableType}, userId: {UserId}", tableType, userId);
+        logger.LogInformation("Starting ProcessDataAsync for table: {TableType}, userId: {UserId}", tableType, userId);
         
         var stopwatch = Stopwatch.StartNew();
         var response = new BulkUploadResponseDto
@@ -57,24 +43,24 @@ public class BulkDataProcessingService : IBulkDataProcessingService
         {
             if (dataTable == null || dataTable.Rows.Count == 0)
             {
-                _logger.LogWarning("No data found in data table");
+                logger.LogWarning("No data found in data table");
                 return Result<BulkUploadResponseDto>.Failure("No data found to process");
             }
 
             response.TotalRecords = dataTable.Rows.Count;
-            _logger.LogInformation("Total records to process: {TotalRecords}", response.TotalRecords);
+            logger.LogInformation("Total records to process: {TotalRecords}", response.TotalRecords);
 
-            var mapper = _tableMappingService.GetMapper(tableType);
+            var mapper = tableMappingService.GetMapper(tableType);
             if (mapper == null)
             {
-                _logger.LogError("No mapper found for table type: {TableType}", tableType);
+                logger.LogError("No mapper found for table type: {TableType}", tableType);
                 return Result<BulkUploadResponseDto>.Failure($"No mapper found for table type: {tableType}");
             }
             
-            _logger.LogInformation("Found mapper for table type: {TableType}", tableType);
+            logger.LogInformation("Found mapper for table type: {TableType}", tableType);
 
             // Phase 1: Validation
-            var validationResults = await _validationService.ValidateWithResultsAsync(dataTable, tableType, cancellationToken);
+            var validationResults = await validationService.ValidateWithResultsAsync(dataTable, tableType, cancellationToken);
             var validationErrors = new List<BulkUploadErrorDto>();
             
             // Process validation results
@@ -102,7 +88,7 @@ public class BulkDataProcessingService : IBulkDataProcessingService
 
             if (validationErrors.Any() && !ignoreErrors)
             {
-                _logger.LogWarning("Validation failed with {ErrorCount} errors, aborting processing", validationErrors.Count);
+                logger.LogWarning("Validation failed with {ErrorCount} errors, aborting processing", validationErrors.Count);
                 return Result<BulkUploadResponseDto>.Failure($"Validation failed with {validationErrors.Count} errors");
             }
 
@@ -112,7 +98,7 @@ public class BulkDataProcessingService : IBulkDataProcessingService
             response.ProcessedRecords = successfullyProcessed;
             response.ProcessingTime = stopwatch.Elapsed;
             
-            _logger.LogInformation("Processing completed. Success: {SuccessCount}, Failed: {FailCount}, Duration: {Duration}", 
+            logger.LogInformation("Processing completed. Success: {SuccessCount}, Failed: {FailCount}, Duration: {Duration}", 
                 response.ProcessedRecords, response.FailedRecords, response.ProcessingTime);
 
             // Log bulk upload history
@@ -122,7 +108,7 @@ public class BulkDataProcessingService : IBulkDataProcessingService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing bulk data");
+            logger.LogError(ex, "Error processing bulk data");
             return Result<BulkUploadResponseDto>.Failure($"Error processing bulk data: {ex.Message}");
         }
     }
@@ -135,14 +121,14 @@ public class BulkDataProcessingService : IBulkDataProcessingService
         CancellationToken cancellationToken = default)
     {
         var jobId = Guid.NewGuid();
-        _logger.LogInformation("Starting ProcessDataWithProgressAsync for table: {TableType}, userId: {UserId}, jobId: {JobId}", tableType, userId, jobId);
+        logger.LogInformation("Starting ProcessDataWithProgressAsync for table: {TableType}, userId: {UserId}, jobId: {JobId}", tableType, userId, jobId);
         
         var stopwatch = Stopwatch.StartNew();
 
         try
         {
             // Notify job started
-            await _progressService.NotifyJobStarted(jobId.ToString(), new JobStartDto
+            await progressService.NotifyJobStarted(jobId.ToString(), new JobStartDto
             {
                 JobId = jobId.ToString(),
                 JobType = tableType,
@@ -159,7 +145,7 @@ public class BulkDataProcessingService : IBulkDataProcessingService
             if (result.IsSuccess)
             {
                 // Notify job completed successfully
-                await _progressService.NotifyJobCompleted(jobId.ToString(), new JobCompleteDto
+                await progressService.NotifyJobCompleted(jobId.ToString(), new JobCompleteDto
                 {
                     JobId = jobId.ToString(),
                     Success = true,
@@ -172,7 +158,7 @@ public class BulkDataProcessingService : IBulkDataProcessingService
             else
             {
                 // Notify job completed with error
-                await _progressService.NotifyJobCompleted(jobId.ToString(), new JobCompleteDto
+                await progressService.NotifyJobCompleted(jobId.ToString(), new JobCompleteDto
                 {
                     JobId = jobId.ToString(),
                     Success = false,
@@ -188,11 +174,11 @@ public class BulkDataProcessingService : IBulkDataProcessingService
         catch (OperationCanceledException)
         {
             stopwatch.Stop();
-            _logger.LogWarning("ProcessDataWithProgressAsync was cancelled for job {JobId}", jobId);
+            logger.LogWarning("ProcessDataWithProgressAsync was cancelled for job {JobId}", jobId);
             
-            await _progressService.NotifyError(jobId.ToString(), "Processing cancelled by user");
+            await progressService.NotifyError(jobId.ToString(), "Processing cancelled by user");
             
-            await _progressService.NotifyJobCompleted(jobId.ToString(), new JobCompleteDto
+            await progressService.NotifyJobCompleted(jobId.ToString(), new JobCompleteDto
             {
                 JobId = jobId.ToString(),
                 Success = false,
@@ -207,11 +193,11 @@ public class BulkDataProcessingService : IBulkDataProcessingService
         catch (Exception ex)
         {
             stopwatch.Stop();
-            _logger.LogError(ex, "Error in ProcessDataWithProgressAsync for job {JobId}", jobId);
+            logger.LogError(ex, "Error in ProcessDataWithProgressAsync for job {JobId}", jobId);
             
-            await _progressService.NotifyError(jobId.ToString(), $"Processing error: {ex.Message}");
+            await progressService.NotifyError(jobId.ToString(), $"Processing error: {ex.Message}");
             
-            await _progressService.NotifyJobCompleted(jobId.ToString(), new JobCompleteDto
+            await progressService.NotifyJobCompleted(jobId.ToString(), new JobCompleteDto
             {
                 JobId = jobId.ToString(),
                 Success = false,
@@ -249,15 +235,15 @@ public class BulkDataProcessingService : IBulkDataProcessingService
         
         var totalBatches = (int)Math.Ceiling((double)dataTable.Rows.Count / dynamicBatchSize);
         
-        _logger.LogInformation("Processing {TotalRecords} records in {TotalBatches} batches of {BatchSize}", 
+        logger.LogInformation("Processing {TotalRecords} records in {TotalBatches} batches of {BatchSize}", 
             dataTable.Rows.Count, totalBatches, dynamicBatchSize);
 
-        using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         
         try
         {
-            var originalChangeTrackingState = _context.ChangeTracker.AutoDetectChangesEnabled;
-            _context.ChangeTracker.AutoDetectChangesEnabled = false;
+            var originalChangeTrackingState = context.ChangeTracker.AutoDetectChangesEnabled;
+            context.ChangeTracker.AutoDetectChangesEnabled = false;
             
             for (int batchIndex = 0; batchIndex < totalBatches; batchIndex++)
             {
@@ -265,7 +251,7 @@ public class BulkDataProcessingService : IBulkDataProcessingService
                 var batchEnd = Math.Min(batchStart + dynamicBatchSize, dataTable.Rows.Count);
                 var batchRows = dataTable.Rows.Cast<DataRow>().Skip(batchStart).Take(batchEnd - batchStart).ToList();
                 
-                _logger.LogDebug("Processing batch {BatchIndex}/{TotalBatches} (rows {BatchStart}-{BatchEnd})", 
+                logger.LogDebug("Processing batch {BatchIndex}/{TotalBatches} (rows {BatchStart}-{BatchEnd})", 
                     batchIndex + 1, totalBatches, batchStart + 1, batchEnd);
 
                 var batchProcessed = 0;
@@ -293,7 +279,7 @@ public class BulkDataProcessingService : IBulkDataProcessingService
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error processing row {RowNumber}", currentRowNumber);
+                        logger.LogError(ex, "Error processing row {RowNumber}", currentRowNumber);
                         responseDto.Errors.Add(new BulkUploadErrorDto
                         {
                             RowNumber = currentRowNumber,
@@ -315,22 +301,22 @@ public class BulkDataProcessingService : IBulkDataProcessingService
                 {
                     successfullyProcessed += batchProcessed;
                     
-                    _logger.LogDebug("Batch {BatchIndex} completed. Processed: {BatchProcessed}", 
+                    logger.LogDebug("Batch {BatchIndex} completed. Processed: {BatchProcessed}", 
                         batchIndex + 1, batchProcessed);
                 }
                 
                 rowNumber = currentRowNumber;
             }
             
-            _context.ChangeTracker.AutoDetectChangesEnabled = originalChangeTrackingState;
+            context.ChangeTracker.AutoDetectChangesEnabled = originalChangeTrackingState;
             await transaction.CommitAsync(cancellationToken);
             
-            _logger.LogInformation("Successfully processed {SuccessfullyProcessed} records", successfullyProcessed);
+            logger.LogInformation("Successfully processed {SuccessfullyProcessed} records", successfullyProcessed);
             return successfullyProcessed;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during batch processing, rolling back transaction");
+            logger.LogError(ex, "Error during batch processing, rolling back transaction");
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
@@ -354,12 +340,12 @@ public class BulkDataProcessingService : IBulkDataProcessingService
                 Status = responseDto.FailedRecords > 0 ? "Completed with errors" : "Completed"
             };
 
-            await _context.BulkUploadHistories.AddAsync(history);
-            await _context.SaveChangesAsync();
+            await context.BulkUploadHistories.AddAsync(history);
+            await context.SaveChangesAsync();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to log bulk upload history");
+            logger.LogError(ex, "Failed to log bulk upload history");
         }
     }
 }

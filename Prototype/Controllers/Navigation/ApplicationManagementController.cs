@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Controllers;
+using Prototype.Controllers.Navigation;
 using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Enum;
@@ -11,30 +11,24 @@ using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
 
-[Route("settings/applications")]
-public class ApplicationManagementController : BaseApiController
+[Route("navigation/application-management")]
+public class ApplicationManagementController(
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    TransactionService transactionService,
+    IAuditLogService auditLogService,
+    IApplicationFactoryService applicationFactory,
+    IApplicationConnectionFactoryService connectionFactory,
+    ILogger<ApplicationManagementController> logger)
+    : BaseNavigationController(logger, context, userAccessor, transactionService, auditLogService)
 {
-    private readonly IApplicationFactoryService _applicationFactory;
-    private readonly IApplicationConnectionFactoryService _connectionFactory;
-
-    public ApplicationManagementController(
-        SentinelContext context,
-        IAuthenticatedUserAccessor userAccessor,
-        TransactionService transactionService,
-        IAuditLogService auditLogService,
-        IApplicationFactoryService applicationFactory,
-        IApplicationConnectionFactoryService connectionFactory,
-        ILogger<ApplicationManagementController> logger)
-        : base(logger, context, userAccessor, transactionService, auditLogService)
-    {
-        _applicationFactory = applicationFactory ?? throw new ArgumentNullException(nameof(applicationFactory));
-        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
-    }
+    private readonly IApplicationFactoryService _applicationFactory = applicationFactory ?? throw new ArgumentNullException(nameof(applicationFactory));
+    private readonly IApplicationConnectionFactoryService _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
 
     [HttpPost("new-application-connection")]
     public async Task<IActionResult> CreateApplication([FromBody] ApplicationRequestDto dto)
     {
-        return await EnsureUserAuthenticatedAsync(async currentUser =>
+        return await EnsureUserAuthenticatedAsync(async _ =>
         {
             return await ExecuteInTransactionWithAuditAsync(async user =>
             {
@@ -64,7 +58,7 @@ public class ApplicationManagementController : BaseApiController
 
                 Context.ApplicationConnections.Add(connection);
 
-                // Create user-application relationship
+                // Create a user-application relationship
                 var userApplication = new UserApplicationModel
                 {
                     UserApplicationId = Guid.NewGuid(),
@@ -81,8 +75,8 @@ public class ApplicationManagementController : BaseApiController
 
                 return SuccessResponse(new
                 {
-                    ApplicationId = application.ApplicationId,
-                    ApplicationName = application.ApplicationName,
+                    application.ApplicationId,
+                    application.ApplicationName,
                     Message = "Application created successfully"
                 }, "Application created successfully");
 
@@ -109,15 +103,15 @@ public class ApplicationManagementController : BaseApiController
             var userApplications = await Context.UserApplications
                 .Where(ua => ua.UserId == currentUser.UserId)
                 .Include(ua => ua.Application)
-                .ThenInclude(a => a!.Connections)
+                .ThenInclude(a => a.Connections)
                 .OrderByDescending(ua => ua.CreatedAt)
                 .Skip(skip)
                 .Take(validPageSize)
                 .ToListAsync();
 
-            var applicationDtos = userApplications.Select(ua => new ApplicationDto
+            var applicationDto = userApplications.Select(ua => new ApplicationDto
             {
-                ApplicationId = ua.Application!.ApplicationId,
+                ApplicationId = ua.Application.ApplicationId,
                 ApplicationName = ua.Application.ApplicationName,
                 Description = ua.Application.ApplicationDescription ?? string.Empty,
                 CreatedAt = ua.Application.CreatedAt,
@@ -130,10 +124,10 @@ public class ApplicationManagementController : BaseApiController
                     Schema = ac.DatabaseName,
                     Port = ac.Port,
                     Host = ac.Host
-                }).ToList() ?? new List<ApplicationConnectionDto>()
+                }).ToList() ?? []
             }).ToList();
 
-            var result = CreatePaginatedResponse(applicationDtos, validPage, validPageSize, totalCount);
+            var result = CreatePaginatedResponse(applicationDto, validPage, validPageSize, totalCount);
             return SuccessResponse(result, "Applications retrieved successfully");
         });
     }
@@ -141,7 +135,7 @@ public class ApplicationManagementController : BaseApiController
     [HttpPut("update-application/{applicationId}")]
     public async Task<IActionResult> UpdateApplication(string applicationId, [FromBody] ApplicationRequestDto dto)
     {
-        return await EnsureUserAuthenticatedAsync(async currentUser =>
+        return await EnsureUserAuthenticatedAsync(async _ =>
         {
             if (!Guid.TryParse(applicationId, out var appGuid))
             {

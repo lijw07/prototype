@@ -5,7 +5,6 @@ namespace Prototype.Utility;
 
 public interface IAuthenticatedUserAccessor
 {
-    Task<UserModel?> GetCurrentUserAsync();
     Task<UserModel?> GetUserByIdAsync(Guid userId);
     Task<UserModel?> GetUserByEmailAsync(string email);
     Task<UserModel?> GetUserByUsernameAsync(string username);

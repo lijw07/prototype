@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Controllers;
 using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Enum;
@@ -11,22 +10,18 @@ using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
 
-[Route("settings/roles")]
-public class RoleNavigationController : BaseApiController
+[Route("navigation/roles")]
+public class RoleNavigationController(
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    TransactionService transactionService,
+    IAuditLogService auditLogService,
+    IUserRoleService userRoleService,
+    ILogger<RoleNavigationController> logger)
+    : BaseNavigationController(logger, context, userAccessor, transactionService, auditLogService)
 {
-    private readonly IUserRoleService _userRoleService;
+    private readonly IUserRoleService _userRoleService = userRoleService ?? throw new ArgumentNullException(nameof(userRoleService));
 
-    public RoleNavigationController(
-        SentinelContext context,
-        IAuthenticatedUserAccessor userAccessor,
-        TransactionService transactionService,
-        IAuditLogService auditLogService,
-        IUserRoleService userRoleService,
-        ILogger<RoleNavigationController> logger)
-        : base(logger, context, userAccessor, transactionService, auditLogService)
-    {
-        _userRoleService = userRoleService ?? throw new ArgumentNullException(nameof(userRoleService));
-    }
     [HttpGet]
     public async Task<IActionResult> GetAllRoles([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {

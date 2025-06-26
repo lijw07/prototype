@@ -10,36 +10,23 @@ using Prototype.Models;
 using Prototype.Services.Interfaces;
 using Prototype.Database.Interface;
 using Prototype.Utility;
+using Prototype.Controllers.Navigation;
 
 namespace Prototype.Controllers;
 
-[Authorize]
 [Route("api/application-connection-test")]
-[ApiController]
-public class ApplicationConnectionTestController : ControllerBase
+public class ApplicationConnectionTestController(
+    ILogger<ApplicationConnectionTestController> logger,
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    IDatabaseConnectionFactory dbConnectionFactory,
+    IEnumerable<IApiConnectionStrategy> apiStrategies,
+    IEnumerable<IFileConnectionStrategy> fileStrategies)
+    : BaseNavigationController(logger, context, userAccessor, null!, null!)
 {
-    private readonly SentinelContext _context;
-    private readonly ILogger<ApplicationConnectionTestController> _logger;
-    private readonly IAuthenticatedUserAccessor _userAccessor;
-    private readonly IDatabaseConnectionFactory _dbConnectionFactory;
-    private readonly IEnumerable<IApiConnectionStrategy> _apiStrategies;
-    private readonly IEnumerable<IFileConnectionStrategy> _fileStrategies;
-
-    public ApplicationConnectionTestController(
-        SentinelContext context,
-        ILogger<ApplicationConnectionTestController> logger,
-        IAuthenticatedUserAccessor userAccessor,
-        IDatabaseConnectionFactory dbConnectionFactory,
-        IEnumerable<IApiConnectionStrategy> apiStrategies,
-        IEnumerable<IFileConnectionStrategy> fileStrategies)
-    {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _userAccessor = userAccessor ?? throw new ArgumentNullException(nameof(userAccessor));
-        _dbConnectionFactory = dbConnectionFactory ?? throw new ArgumentNullException(nameof(dbConnectionFactory));
-        _apiStrategies = apiStrategies ?? throw new ArgumentNullException(nameof(apiStrategies));
-        _fileStrategies = fileStrategies ?? throw new ArgumentNullException(nameof(fileStrategies));
-    }
+    private readonly IDatabaseConnectionFactory _dbConnectionFactory = dbConnectionFactory ?? throw new ArgumentNullException(nameof(dbConnectionFactory));
+    private readonly IEnumerable<IApiConnectionStrategy> _apiStrategies = apiStrategies ?? throw new ArgumentNullException(nameof(apiStrategies));
+    private readonly IEnumerable<IFileConnectionStrategy> _fileStrategies = fileStrategies ?? throw new ArgumentNullException(nameof(fileStrategies));
 
     [HttpPost("debug-connection-test")]
     public async Task<IActionResult> DebugConnectionTest([FromBody] object requestData)
@@ -52,14 +39,14 @@ public class ApplicationConnectionTestController : ControllerBase
     {
         try
         {
-            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
+                return HandleUserNotAuthenticated();
 
             try
             {
                 string host, port, description;
-                bool connectionTestResult = false;
+                var connectionTestResult = false;
                 DataSourceTypeEnum dataSourceType;
                 Guid? testingApplicationId = null;
                 ApplicationConnectionModel? existingConnection = null;
@@ -67,7 +54,7 @@ public class ApplicationConnectionTestController : ControllerBase
                 
                 // Check if this is a request by applicationId or full data
                 var jsonElement = (JsonElement)requestData;
-                _logger.LogInformation("Received connection test request: {JsonData}", jsonElement.GetRawText());
+                Logger.LogInformation("Received connection test request: {JsonData}", jsonElement.GetRawText());
                 
                 if (jsonElement.TryGetProperty("applicationId", out var appIdProperty) && appIdProperty.ValueKind == JsonValueKind.String)
                 {
@@ -76,12 +63,12 @@ public class ApplicationConnectionTestController : ControllerBase
                     testingApplicationId = applicationId;
                     
                     // Get the application and its connection
-                    var userApp = await _context.UserApplications
+                    var userApp = await Context!.UserApplications
                         .Include(ua => ua.Application)
                         .Include(ua => ua.ApplicationConnection)
                         .FirstOrDefaultAsync(ua => ua.ApplicationId == applicationId && ua.UserId == currentUser.UserId);
                     
-                    if (userApp?.ApplicationConnection == null || userApp.Application == null)
+                    if (userApp?.ApplicationConnection == null)
                         return BadRequest(new { success = false, message = "Application or connection not found" });
                     
                     existingConnection = userApp.ApplicationConnection;
@@ -94,7 +81,7 @@ public class ApplicationConnectionTestController : ControllerBase
                 }
                 else
                 {
-                    _logger.LogInformation("Testing new application with full connection data");
+                    Logger.LogInformation("Testing new application with full connection data");
                     
                     // Testing new application with full connection data
                     var options = new JsonSerializerOptions
@@ -107,12 +94,12 @@ public class ApplicationConnectionTestController : ControllerBase
                     try
                     {
                         var dto = JsonSerializer.Deserialize<ApplicationRequestDto>(jsonElement.GetRawText(), options);
-                        _logger.LogInformation("Deserialized DTO: ApplicationName={ApplicationName}, DataSourceType={DataSourceType}, ConnectionSource null={ConnectionSourceNull}", 
+                        Logger.LogInformation("Deserialized DTO: ApplicationName={ApplicationName}, DataSourceType={DataSourceType}, ConnectionSource null={ConnectionSourceNull}", 
                             dto?.ApplicationName, dto?.DataSourceType, dto?.ConnectionSource == null);
                         
                         if (dto?.ConnectionSource == null)
                         {
-                            _logger.LogWarning("ConnectionSource is null in deserialized DTO");
+                            Logger.LogWarning("ConnectionSource is null in deserialized DTO");
                             return BadRequest(new { success = false, message = "Invalid connection data" });
                         }
                         
@@ -122,12 +109,12 @@ public class ApplicationConnectionTestController : ControllerBase
                         description = $"tested connection to new application {dto.ApplicationName}";
                         dataSourceType = dto.DataSourceType;
                         
-                        _logger.LogInformation("Parsed connection data: Host={Host}, Port={Port}, DataSourceType={DataSourceType}", 
+                        Logger.LogInformation("Parsed connection data: Host={Host}, Port={Port}, DataSourceType={DataSourceType}", 
                             host, port, dataSourceType);
                     }
                     catch (Exception deserializeEx)
                     {
-                        _logger.LogError(deserializeEx, "Failed to deserialize connection test request");
+                        Logger.LogError(deserializeEx, "Failed to deserialize connection test request");
                         return BadRequest(new { success = false, message = "Failed to parse connection data" });
                     }
                     
@@ -140,35 +127,35 @@ public class ApplicationConnectionTestController : ControllerBase
                 }
 
                 // Perform the actual connection test based on the data source type
-                _logger.LogInformation("Testing connection for data source type: {DataSourceType}", dataSourceType);
+                Logger.LogInformation("Testing connection for data source type: {DataSourceType}", dataSourceType);
                 
                 try
                 {
                     if (IsDatabaseType(dataSourceType))
                     {
-                        _logger.LogInformation("Testing database connection for {DataSourceType}", dataSourceType);
+                        Logger.LogInformation("Testing database connection for {DataSourceType}", dataSourceType);
                         
                         // Test database connection
                         string connectionString;
                         if (existingConnection != null)
                         {
-                            _logger.LogInformation("Building connection string from existing connection");
+                            Logger.LogInformation("Building connection string from existing connection");
                             connectionString = _dbConnectionFactory.BuildConnectionString(dataSourceType, existingConnection);
                         }
                         else if (newConnectionSource != null)
                         {
-                            _logger.LogInformation("Building connection string from new connection source");
+                            Logger.LogInformation("Building connection string from new connection source");
                             connectionString = _dbConnectionFactory.BuildConnectionString(dataSourceType, newConnectionSource);
                         }
                         else
                         {
-                            _logger.LogWarning("No connection data available for testing");
+                            Logger.LogWarning("No connection data available for testing");
                             return BadRequest(new { success = false, message = "No connection data available" });
                         }
                         
-                        _logger.LogInformation("Built connection string, testing connection...");
+                        Logger.LogInformation("Built connection string, testing connection...");
                         connectionTestResult = await _dbConnectionFactory.TestConnectionAsync(dataSourceType, connectionString);
-                        _logger.LogInformation("Database connection test result: {Result}", connectionTestResult);
+                        Logger.LogInformation("Database connection test result: {Result}", connectionTestResult);
                     }
                     else if (IsApiType(dataSourceType))
                     {
@@ -221,11 +208,11 @@ public class ApplicationConnectionTestController : ControllerBase
                 }
                 catch (Exception testEx)
                 {
-                    _logger.LogError(testEx, "Connection test failed for {DataSourceType}: {Error}", dataSourceType, testEx.Message);
+                    Logger.LogError(testEx, "Connection test failed for {DataSourceType}: {Error}", dataSourceType, testEx.Message);
                     connectionTestResult = false;
                 }
                 
-                _logger.LogInformation("Final connection test result for {DataSourceType}: {Result}", dataSourceType, connectionTestResult);
+                Logger.LogInformation("Final connection test result for {DataSourceType}: {Result}", dataSourceType, connectionTestResult);
 
                 // Log connection test attempt
                 var activityLog = new UserActivityLogModel
@@ -239,7 +226,7 @@ public class ApplicationConnectionTestController : ControllerBase
                     Description = $"User {description} - Result: {(connectionTestResult ? "Success" : "Failed")}",
                     Timestamp = DateTime.UtcNow
                 };
-                _context.UserActivityLogs.Add(activityLog);
+                Context!.UserActivityLogs.Add(activityLog);
 
                 // Add application log if testing existing application
                 if (testingApplicationId.HasValue)
@@ -254,25 +241,25 @@ public class ApplicationConnectionTestController : ControllerBase
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     };
-                    _context.ApplicationLogs.Add(applicationLog);
+                    Context!.ApplicationLogs.Add(applicationLog);
                     
-                    _logger.LogInformation("Added application log for connection test on application {ApplicationId} with result {Result}", testingApplicationId.Value, connectionTestResult);
+                    Logger.LogInformation("Added application log for connection test on application {ApplicationId} with result {Result}", testingApplicationId.Value, connectionTestResult);
                 }
 
-                await _context.SaveChangesAsync();
+                await Context!.SaveChangesAsync();
 
                 var message = connectionTestResult ? "Connection test successful" : "Connection test failed";
                 return Ok(new { success = connectionTestResult, message = message, connectionValid = connectionTestResult });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Connection test failed: {Error}", ex.Message);
+                Logger.LogError(ex, "Connection test failed: {Error}", ex.Message);
                 return StatusCode(500, new { success = false, message = "Connection test failed", error = ex.Message });
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error in connection test");
+            Logger.LogError(ex, "Unexpected error in connection test");
             return StatusCode(500, new { success = false, message = "An unexpected error occurred" });
         }
     }

@@ -48,5 +48,15 @@ namespace Prototype.Services
         /// Helper method to format connection-related metadata
         /// </summary>
         string FormatConnectionMetadata(string connectionName, string action, string? details = null);
+
+        /// <summary>
+        /// Creates an audit log entry
+        /// </summary>
+        Task CreateAuditLogAsync(Guid userId, ActionTypeEnum actionType, string metadata);
+
+        /// <summary>
+        /// Creates a user activity log entry with IP and device information
+        /// </summary>
+        Task CreateUserActivityLogAsync(Guid userId, ActionTypeEnum actionType, string description, string ipAddress, string deviceInfo);
     }
 }

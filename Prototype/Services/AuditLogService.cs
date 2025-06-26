@@ -5,21 +5,15 @@ using Prototype.Constants;
 
 namespace Prototype.Services
 {
-    public class AuditLogService : IAuditLogService
+    public class AuditLogService(
+        SentinelContext context,
+        IHttpContextAccessor httpContextAccessor,
+        ILogger<AuditLogService> logger)
+        : IAuditLogService
     {
-        private readonly SentinelContext _context;
-        private readonly IHttpContextAccessor _httpContextAccessor;
-        private readonly ILogger<AuditLogService> _logger;
-
-        public AuditLogService(
-            SentinelContext context,
-            IHttpContextAccessor httpContextAccessor,
-            ILogger<AuditLogService> logger)
-        {
-            _context = context ?? throw new ArgumentNullException(nameof(context));
-            _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
+        private readonly SentinelContext _context = context ?? throw new ArgumentNullException(nameof(context));
+        private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
+        private readonly ILogger<AuditLogService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         public async Task LogUserActionAsync(Guid userId, ActionTypeEnum actionType, string metadata, string? description = null)
         {
@@ -183,6 +177,51 @@ namespace Prototype.Services
         {
             var metadata = $"Connection '{connectionName}' {action}";
             return string.IsNullOrEmpty(details) ? metadata : $"{metadata}. {details}";
+        }
+
+        public async Task CreateAuditLogAsync(Guid userId, ActionTypeEnum actionType, string metadata)
+        {
+            try
+            {
+                var auditLog = CreateAuditLog(userId, actionType, metadata);
+                _context.AuditLogs.Add(auditLog);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create audit log. UserId: {UserId}, ActionType: {ActionType}", userId, actionType);
+                throw;
+            }
+        }
+
+        public async Task CreateUserActivityLogAsync(Guid userId, ActionTypeEnum actionType, string description, string ipAddress, string deviceInfo)
+        {
+            try
+            {
+                var user = await _context.Users.FindAsync(userId);
+                if (user != null)
+                {
+                    var activityLog = new UserActivityLogModel
+                    {
+                        UserActivityLogId = Guid.NewGuid(),
+                        UserId = userId,
+                        User = user,
+                        IpAddress = ipAddress,
+                        DeviceInformation = deviceInfo,
+                        ActionType = actionType,
+                        Description = description,
+                        Timestamp = DateTime.UtcNow
+                    };
+
+                    _context.UserActivityLogs.Add(activityLog);
+                    await _context.SaveChangesAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create user activity log. UserId: {UserId}, ActionType: {ActionType}", userId, actionType);
+                throw;
+            }
         }
     }
 }

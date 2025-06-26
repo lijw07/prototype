@@ -1,15 +1,16 @@
 using Microsoft.AspNetCore.Mvc;
+using Prototype.Controllers.Navigation;
 using Prototype.DTOs;
 using Prototype.Services.Interfaces;
 
 namespace Prototype.Controllers.Login;
 
 [ApiController]
-[Route("PasswordReset")]
+[Route("login/password-reset")]
 public class PasswordResetController(
     IUserAccountService userAccountService,
     ILogger<PasswordResetController> logger)
-    : ControllerBase
+    : BaseNavigationController(logger)
 {
     [HttpPost]
     public async Task<IActionResult> PasswordReset([FromBody] ResetPasswordRequestDto requestDto)
@@ -18,10 +19,7 @@ public class PasswordResetController(
         {
             var result = await userAccountService.ResetPasswordAsync(requestDto);
             
-            if (!result.Success)
-                return BadRequest(result);
-                
-            return Ok(result);
+            return !result.Success ? BadRequestWithMessage(result) : SuccessResponse(result);
         }
         catch (Exception ex)
         {

@@ -123,42 +123,42 @@ export const authApi = {
     password: string;
     reEnterPassword: string;
   }) =>
-    api.post<ApiResponse>('/Register', userData),
+    api.post<ApiResponse>('/login/register', userData),
   
   forgotPassword: (email: string, userRecoveryType: string) =>
-    api.post<ApiResponse>('/ForgotUser', { email, userRecoveryType }),
+    api.post<ApiResponse>('/login/forgot-user', { email, userRecoveryType }),
   
   resetPassword: (token: string, newPassword: string, reTypePassword: string) =>
-    api.post<ApiResponse>('/PasswordReset', { token, newPassword, reTypePassword }),
+    api.post<ApiResponse>('/login/password-reset', { token, newPassword, reTypePassword }),
   
   verifyUser: (token: string) =>
-    api.post<ApiResponse>(`/VerifyUser?token=${token}`),
+    api.post<ApiResponse>(`/login/verify-user?token=${token}`),
 };
 
 // User Settings API
 export const userApi = {
   getProfile: () =>
-    api.get<{ success: boolean; user: any; message?: string }>('/settings/user/profile'),
+    api.get<{ success: boolean; user: any; message?: string }>('/settings/user-profile'),
   
   updateProfile: (userData: {
     firstName: string;
     lastName: string;
     email: string;
   }) =>
-    api.put<{ success: boolean; message?: string; user?: any }>('/settings/user/update-profile', userData),
+    api.put<{ success: boolean; message?: string; user?: any }>('/settings/user-profile', userData),
   
   changePassword: (passwordData: {
     currentPassword: string;
     newPassword: string;
     reTypeNewPassword: string;
   }) =>
-    api.post<{ success: boolean; message?: string }>('/settings/user/change-password', passwordData),
+    api.post<{ success: boolean; message?: string }>('/settings/user-profile', passwordData),
   
   getAllUsers: (page: number = 1, pageSize: number = 10) =>
-    api.get<{ success: boolean; data?: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }; users?: any[]; message?: string }>(`/settings/user/all?page=${page}&pageSize=${pageSize}`),
+    api.get<{ success: boolean; data?: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }; users?: any[]; message?: string }>(`/navigation/user-administration/all?page=${page}&pageSize=${pageSize}`),
 
   getUserCounts: () =>
-    api.get<{ success: boolean; data: { totalUsers: number; totalVerifiedUsers: number; totalTemporaryUsers: number }; message?: string }>('/settings/user/counts'),
+    api.get<{ success: boolean; data: { totalUsers: number; totalVerifiedUsers: number; totalTemporaryUsers: number }; message?: string }>('/navigation/user-administration/counts'),
   
   updateUser: (userData: {
     userId: string;
@@ -170,10 +170,10 @@ export const userApi = {
     role: string;
     isActive: boolean;
   }) =>
-    api.put<{ success: boolean; user?: any; message?: string }>('/settings/user/update', userData),
+    api.put<{ success: boolean; user?: any; message?: string }>('/navigation/user-administration/update', userData),
   
   deleteUser: (userId: string) => {
-    const url = `/settings/user/delete/${userId}`;
+    const url = `/navigation/user-administration/delete/${userId}`;
     return api.delete<{ success: boolean; message?: string }>(url);
   },
   
@@ -185,10 +185,10 @@ export const userApi = {
     email: string;
     phoneNumber?: string;
   }) =>
-    api.put<{ success: boolean; user?: any; message?: string }>('/settings/user/update-temporary', userData),
+    api.put<{ success: boolean; user?: any; message?: string }>('/navigation/temporary-user-management/update', userData),
   
   deleteTemporaryUser: (temporaryUserId: string) => {
-    const url = `/settings/user/delete-temporary/${temporaryUserId}`;
+    const url = `/navigation/temporary-user-management/delete/${temporaryUserId}`;
     return api.delete<{ success: boolean; message?: string }>(url);
   },
 };
@@ -196,85 +196,85 @@ export const userApi = {
 // Application Settings API
 export const applicationApi = {
   getApplications: (page: number = 1, pageSize: number = 10) =>
-    api.get<ApiResponse<any>>(`/settings/applications/get-applications?page=${page}&pageSize=${pageSize}`),
+    api.get<ApiResponse<any>>(`/navigation/applications/get-applications?page=${page}&pageSize=${pageSize}`),
   
   createApplication: (applicationData: any) =>
-    api.post<ApiResponse>('/settings/applications/new-application-connection', applicationData),
+    api.post<ApiResponse>('/navigation/applications/new-application-connection', applicationData),
   
   updateApplication: (applicationId: string, applicationData: any) =>
-    api.put<ApiResponse>(`/settings/applications/update-application/${applicationId}`, applicationData),
+    api.put<ApiResponse>(`/navigation/applications/update-application/${applicationId}`, applicationData),
   
   deleteApplication: (applicationId: string) =>
-    api.delete<ApiResponse>(`/settings/applications/delete-application/${applicationId}`),
+    api.delete<ApiResponse>(`/navigation/applications/delete-application/${applicationId}`),
   
   testConnection: (connectionData: any) =>
-    api.post<ConnectionTestResponse>('/settings/applications/test-application-connection', connectionData),
+    api.post<ConnectionTestResponse>('/navigation/applications/test-application-connection', connectionData),
 };
 
 // Role Settings API
 export const roleApi = {
   getAllRoles: (page: number = 1, pageSize: number = 10) =>
-    api.get<{ success: boolean; data?: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }; roles?: any[]; message?: string }>(`/settings/roles?page=${page}&pageSize=${pageSize}`),
+    api.get<{ success: boolean; data?: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }; roles?: any[]; message?: string }>(`/navigation/roles?page=${page}&pageSize=${pageSize}`),
   
   getRoleById: (roleId: string) =>
-    api.get<{ success: boolean; role: any; message?: string }>(`/settings/roles/${roleId}`),
+    api.get<{ success: boolean; role: any; message?: string }>(`/navigation/roles/${roleId}`),
   
   createRole: (roleData: { roleName: string }) =>
-    api.post<{ success: boolean; role?: any; message?: string }>('/settings/roles', roleData),
+    api.post<{ success: boolean; role?: any; message?: string }>('/navigation/roles', roleData),
   
   updateRole: (roleId: string, roleData: { roleName: string }) =>
-    api.put<{ success: boolean; role?: any; message?: string }>(`/settings/roles/${roleId}`, roleData),
+    api.put<{ success: boolean; role?: any; message?: string }>(`/navigation/roles/${roleId}`, roleData),
   
   getRoleDeletionConstraints: (roleId: string) =>
-    api.get<{ success: boolean; canDelete: boolean; usersCount: number; temporaryUsersCount: number; constraintMessage: string; roleName: string }>(`/settings/roles/${roleId}/deletion-constraints`),
+    api.get<{ success: boolean; canDelete: boolean; usersCount: number; temporaryUsersCount: number; constraintMessage: string; roleName: string }>(`/navigation/roles/${roleId}/deletion-constraints`),
   
   deleteRole: (roleId: string) =>
-    api.delete<{ success: boolean; message?: string }>(`/settings/roles/${roleId}`),
+    api.delete<{ success: boolean; message?: string }>(`/navigation/roles/${roleId}`),
 };
 
 // Dashboard API
 export const dashboardApi = {
   getStatistics: () =>
-    api.get<{ success: boolean; data: any; message?: string }>('/Dashboard/statistics'),
+    api.get<{ success: boolean; data: any; message?: string }>('/navigation/dashboard/statistics'),
 };
 
 // Audit Logs API
 export const auditLogApi = {
   getAuditLogs: (page: number = 1, pageSize: number = 100) =>
-    api.get<{ data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }>(`/AuditLogSettings?page=${page}&pageSize=${pageSize}`),
+    api.get<{ data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }>(`/navigation/audit-log?page=${page}&pageSize=${pageSize}`),
 };
 
 // User Activity Logs API
 export const activityLogApi = {
   getActivityLogs: (page: number = 1, pageSize: number = 100) =>
-    api.get<{ data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }>(`/UserActivitySettings?page=${page}&pageSize=${pageSize}`),
+    api.get<{ data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }>(`/navigation/user-activity?page=${page}&pageSize=${pageSize}`),
 };
 
 // Application Logs API
 export const applicationLogApi = {
   getApplicationLogs: (page: number = 1, pageSize: number = 100) =>
-    api.get<{ success: boolean; data: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number } }>(`/ApplicationLogSettings?page=${page}&pageSize=${pageSize}`),
+    api.get<{ success: boolean; data: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number } }>(`/navigation/application-log?page=${page}&pageSize=${pageSize}`),
 };
 
 // Security Dashboard API
 export const securityDashboardApi = {
   getSecurityOverview: () =>
-    api.get<{ success: boolean; data: any }>('/api/security-dashboard/overview'),
+    api.get<{ success: boolean; data: any }>('/navigation/security-dashboard/overview'),
   
   getFailedLogins: (days: number = 7) =>
-    api.get<{ success: boolean; data: any[] }>(`/api/security-dashboard/failed-logins?days=${days}`),
+    api.get<{ success: boolean; data: any[] }>(`/navigation/security-dashboard/failed-logins?days=${days}`),
 };
 
 // System Health API
 export const systemHealthApi = {
   getHealthOverview: () =>
-    api.get<{ success: boolean; data: any }>('/api/system-health/overview'),
+    api.get<{ success: boolean; data: any }>('/navigation/system-health/overview'),
     
   getDatabaseConnections: () =>
-    api.get<{ success: boolean; data: any[] }>('/api/system-health/database-connections'),
+    api.get<{ success: boolean; data: any[] }>('/navigation/system-health/database-connections'),
     
   getPerformanceMetrics: () =>
-    api.get<{ success: boolean; data: any }>('/api/system-health/performance-metrics'),
+    api.get<{ success: boolean; data: any }>('/navigation/system-health/performance-metrics'),
 };
 
 // Executive Dashboard API
@@ -292,28 +292,28 @@ export const executiveDashboardApi = {
 // Analytics Overview API
 export const analyticsOverviewApi = {
   getOverview: () =>
-    api.get<{ success: boolean; data: any }>('/api/analytics-overview/overview'),
+    api.get<{ success: boolean; data: any }>('/navigation/analytics-overview/overview'),
     
   getBusinessMetrics: () =>
-    api.get<{ success: boolean; data: any }>('/api/analytics-overview/business-metrics'),
+    api.get<{ success: boolean; data: any }>('/navigation/analytics-overview/business-metrics'),
     
   getGrowthTrends: (months: number = 6) =>
-    api.get<{ success: boolean; data: any }>(`/api/analytics-overview/growth-trends?months=${months}`),
+    api.get<{ success: boolean; data: any }>(`/navigation/analytics-overview/growth-trends?months=${months}`),
 };
 
 // User Provisioning API
 export const userProvisioningApi = {
   getProvisioningOverview: () =>
-    api.get<{ success: boolean; data: any }>('/api/user-provisioning/overview'),
+    api.get<{ success: boolean; data: any }>('/navigation/user-provisioning/overview'),
     
   getPendingRequests: (page: number = 1, pageSize: number = 10) =>
-    api.get<{ success: boolean; data: any }>(`/api/user-provisioning/pending-requests?page=${page}&pageSize=${pageSize}`),
+    api.get<{ success: boolean; data: any }>(`/navigation/user-provisioning/pending-requests?page=${page}&pageSize=${pageSize}`),
     
   autoProvisionUsers: (request: any) =>
-    api.post<{ success: boolean; data: any }>('/api/user-provisioning/auto-provision', request),
+    api.post<{ success: boolean; data: any }>('/navigation/user-provisioning/auto-provision', request),
     
   bulkProvisionUsers: (formData: FormData) =>
-    fetch(`${getApiBaseUrl()}/api/bulkupload/core/upload`, {
+    fetch(`${getApiBaseUrl()}/bulk-upload/core/upload`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
@@ -322,7 +322,7 @@ export const userProvisioningApi = {
     }).then(response => response.json()),
     
   bulkProvisionMultipleFiles: (formData: FormData) =>
-    fetch(`${getApiBaseUrl()}/api/bulkupload/multiple/upload-multiple`, {
+    fetch(`${getApiBaseUrl()}/bulk-upload/multiple/upload-multiple`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
@@ -331,7 +331,7 @@ export const userProvisioningApi = {
     }).then(response => response.json()),
     
   bulkProvisionWithProgress: (formData: FormData) =>
-    fetch(`${getApiBaseUrl()}/api/bulkupload/progress/upload-with-progress`, {
+    fetch(`${getApiBaseUrl()}/bulk-upload/progress/upload-with-progress`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
@@ -340,7 +340,7 @@ export const userProvisioningApi = {
     }).then(response => response.json()),
     
   bulkProvisionWithQueue: (formData: FormData) =>
-    fetch(`${getApiBaseUrl()}/api/bulkupload/queue/upload`, {
+    fetch(`${getApiBaseUrl()}/bulk-upload/queue/upload`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
@@ -349,52 +349,52 @@ export const userProvisioningApi = {
     }).then(response => response.json()),
     
   getQueueStatus: (jobId: string) =>
-    api.get<ApiResponse<any>>(`/api/bulkupload/queue/status/${jobId}`),
+    api.get<ApiResponse<any>>(`/bulk-upload/queue/status/${jobId}`),
     
   cancelQueue: (jobId: string) =>
-    api.post<ApiResponse<any>>(`/api/bulkupload/queue/cancel/${jobId}`),
+    api.post<ApiResponse<any>>(`/bulk-upload/queue/cancel/${jobId}`),
     
   getProvisioningTemplates: () =>
-    api.get<{ success: boolean; data: any }>('/api/user-provisioning/provisioning-templates'),
+    api.get<{ success: boolean; data: any }>('/navigation/user-provisioning/provisioning-templates'),
 };
 
 // Compliance API
 export const complianceApi = {
   getComplianceOverview: () =>
-    api.get<{ success: boolean; data: any }>('/api/compliance/overview'),
+    api.get<{ success: boolean; data: any }>('/navigation/compliance/overview'),
     
   generateAuditReport: (period: string = '30', format: string = 'summary') =>
-    api.get<{ success: boolean; data: any }>(`/api/compliance/audit-report?period=${period}&format=${format}`),
+    api.get<{ success: boolean; data: any }>(`/navigation/compliance/audit-report?period=${period}&format=${format}`),
     
   getPolicyViolations: (page: number = 1, pageSize: number = 10) =>
-    api.get<{ success: boolean; data: any }>(`/api/compliance/policy-violations?page=${page}&pageSize=${pageSize}`),
+    api.get<{ success: boolean; data: any }>(`/navigation/compliance/policy-violations?page=${page}&pageSize=${pageSize}`),
     
   getComplianceFrameworks: () =>
-    api.get<{ success: boolean; data: any }>('/api/compliance/frameworks'),
+    api.get<{ success: boolean; data: any }>('/navigation/compliance/frameworks'),
     
   generateCustomReport: (request: any) =>
-    api.post<{ success: boolean; data: any }>('/api/compliance/generate-report', request),
+    api.post<{ success: boolean; data: any }>('/navigation/compliance/generate-report', request),
 };
 
 // User Requests API
 export const userRequestsApi = {
   getUserRequests: () =>
-    api.get<{ success: boolean; data: any[] }>('/api/user-requests'),
+    api.get<{ success: boolean; data: any[] }>('/navigation/user-requests'),
     
   createRequest: (request: any) =>
-    api.post<{ success: boolean; data: any }>('/api/user-requests', request),
+    api.post<{ success: boolean; data: any }>('/navigation/user-requests', request),
     
   getRequestById: (id: string) =>
-    api.get<{ success: boolean; data: any }>(`/api/user-requests/${id}`),
+    api.get<{ success: boolean; data: any }>(`/navigation/user-requests/${id}`),
     
   updateRequestStatus: (id: string, status: string, comments?: string) =>
-    api.put<{ success: boolean; data: any }>(`/api/user-requests/${id}/status`, { status, comments }),
+    api.put<{ success: boolean; data: any }>(`/navigation/user-requests/${id}/status`, { status, comments }),
     
   getAvailableTools: () =>
-    api.get<{ success: boolean; data: any[] }>('/api/user-requests/available-tools'),
+    api.get<{ success: boolean; data: any[] }>('/navigation/user-requests/available-tools'),
     
   cancelRequest: (id: string) =>
-    api.delete<{ success: boolean; data: any }>(`/api/user-requests/${id}`),
+    api.delete<{ success: boolean; data: any }>(`/navigation/user-requests/${id}`),
 };
 
 export default api;

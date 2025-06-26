@@ -13,7 +13,7 @@ using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
 
-[Route("settings/applications")]
+[Route("navigation/applications")]
 public class ApplicationNavigationController(
     SentinelContext context,
     IApplicationFactoryService applicationFactory,
@@ -23,9 +23,14 @@ public class ApplicationNavigationController(
     IEnumerable<IFileConnectionStrategy> fileStrategies,
     IAuthenticatedUserAccessor userAccessor,
     TransactionService transactionService,
-    ILogger<ApplicationNavigationController> logger)
-    : BaseNavigationController(logger, userAccessor, transactionService)
+    IHttpContextAccessor httpContextAccessor,
+    IHttpContextParsingService httpContextParsingService,
+    ILogger<ApplicationNavigationController> logger,
+    IAuditLogService auditLogService)
+    : BaseNavigationController(logger, userAccessor, auditLogService, transactionService)
 {
+    private readonly IAuditLogService _auditLogService = auditLogService;
+
     [HttpPost("new-application-connection")]
     public async Task<IActionResult> CreateApplication([FromBody] ApplicationRequestDto dto)
     {
@@ -33,13 +38,13 @@ public class ApplicationNavigationController(
         {
             var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return new { success = false, message = "User not authenticated" };
+                return HandleUserNotAuthenticated();
 
             // Check if the application name already exists for this user
             var existingApp = await context.Applications
                 .FirstOrDefaultAsync(a => a.ApplicationName == dto.ApplicationName);
             if (existingApp != null)
-                return new { success = false, message = "Application name already exists" };
+                return BadRequestWithMessage("Application name already exists");
 
             return await TransactionService!.ExecuteInTransactionAsync(async () =>
             {
@@ -67,38 +72,18 @@ public class ApplicationNavigationController(
                 context.ApplicationConnections.Add(connection);
                 context.UserApplications.Add(userApplication);
 
-                // Log activity
-                var activityLog = new UserActivityLogModel
-                {
-                    UserActivityLogId = Guid.NewGuid(),
-                    UserId = currentUser.UserId,
-                    User = null, // Don't set navigation property to avoid tracking issues
-                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
-                    DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
-                    ActionType = ActionTypeEnum.ApplicationAdded,
-                    Description = $"User created application: {dto.ApplicationName}",
-                    Timestamp = DateTime.UtcNow
-                };
-                context.UserActivityLogs.Add(activityLog);
-
-                // Also create application log
-                var applicationLog = new ApplicationLogModel
-                {
-                    ApplicationLogId = Guid.NewGuid(),
-                    ApplicationId = applicationId,
-                    Application = null, // Don't set navigation property to avoid tracking issues
-                    ActionType = ActionTypeEnum.ApplicationAdded,
-                    Metadata = $"Application '{dto.ApplicationName}' was created by user {currentUser.Username}",
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                context.ApplicationLogs.Add(applicationLog);
+                // Create activity log using centralized service
+                var httpContext = httpContextAccessor.HttpContext;
+                var ipAddress = httpContextParsingService.GetClientIpAddress(httpContext);
+                var deviceInfo = httpContextParsingService.GetDeviceInformation(httpContext);
+            
+                await _auditLogService.CreateUserActivityLogAsync(currentUser.UserId, ActionTypeEnum.ApplicationAdded, "Created new application", ipAddress, deviceInfo);
                 
                 Logger.LogInformation("Added application log for application {ApplicationId} with action {ActionType}", applicationId, ActionTypeEnum.ApplicationAdded);
 
                 await context.SaveChangesAsync();
 
-                return new { success = true, message = "Application created successfully", applicationId = applicationId };
+                return SuccessResponse("Application created successfully");
             });
         }, "creating application");
     }
@@ -110,7 +95,7 @@ public class ApplicationNavigationController(
         {
             var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return new { success = false, message = "User not authenticated" };
+                return HandleUserNotAuthenticated();
 
             var (validPage, validPageSize, skip) = ValidatePaginationParameters(page, pageSize);
 
@@ -153,7 +138,7 @@ public class ApplicationNavigationController(
 
 
             var result = CreatePaginatedResponse(applications, validPage, validPageSize, totalCount);
-            return new { success = true, data = result };
+            return SuccessResponse(result);
         }, "retrieving applications");
     }
 
@@ -164,10 +149,10 @@ public class ApplicationNavigationController(
         {
             var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return new { success = false, message = "User not authenticated" };
+                return HandleUserNotAuthenticated();
 
             if (!Guid.TryParse(applicationId, out var appGuid))
-                return new { success = false, message = "Invalid application ID" };
+                return BadRequestWithMessage("Invalid application ID");
 
             return await TransactionService!.ExecuteInTransactionAsync(async () =>
             {
@@ -188,19 +173,12 @@ public class ApplicationNavigationController(
                 // Update application and connection
                 applicationFactory.UpdateApplication(application, connection, dto);
 
-                // Log activity
-                var activityLog = new UserActivityLogModel
-                {
-                    UserActivityLogId = Guid.NewGuid(),
-                    UserId = currentUser.UserId,
-                    User = null, // Don't set navigation property to avoid tracking issues
-                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
-                    DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
-                    ActionType = ActionTypeEnum.ApplicationUpdated,
-                    Description = $"User updated application: {dto.ApplicationName}",
-                    Timestamp = DateTime.UtcNow
-                };
-                context.UserActivityLogs.Add(activityLog);
+                // Create activity log using centralized service
+                var httpContext = httpContextAccessor.HttpContext;
+                var ipAddress = httpContextParsingService.GetClientIpAddress(httpContext);
+                var deviceInfo = httpContextParsingService.GetDeviceInformation(httpContext);
+            
+                await _auditLogService.CreateUserActivityLogAsync(currentUser.UserId, ActionTypeEnum.ApplicationUpdated, "Update new application", ipAddress, deviceInfo);
 
                 // Also create application log
                 var applicationLog = new ApplicationLogModel
@@ -262,32 +240,14 @@ public class ApplicationNavigationController(
                 var applicationName = application?.ApplicationName ?? "Unknown";
 
                 // Create logs first before making any deletions
-                var activityLog = new UserActivityLogModel
-                {
-                    UserActivityLogId = Guid.NewGuid(),
-                    UserId = currentUser.UserId,
-                    User = null, // Don't set navigation property to avoid tracking issues
-                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
-                    DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
-                    ActionType = ActionTypeEnum.ApplicationRemoved,
-                    Description = $"User deleted application: {applicationName}",
-                    Timestamp = DateTime.UtcNow
-                };
-                context.UserActivityLogs.Add(activityLog);
+                var httpContext = httpContextAccessor.HttpContext;
+                var ipAddress = httpContextParsingService.GetClientIpAddress(httpContext);
+                var deviceInfo = httpContextParsingService.GetDeviceInformation(httpContext);
+            
+                await _auditLogService.CreateUserActivityLogAsync(currentUser.UserId, ActionTypeEnum.Delete, "User Delete application", ipAddress, deviceInfo);
 
                 // Create audit log for application deletion
-                var auditLog = new AuditLogModel
-                {
-                    AuditLogId = Guid.NewGuid(),
-                    UserId = currentUser.UserId,
-                    User = null, // Don't set navigation property to avoid tracking issues
-                    ActionType = ActionTypeEnum.ApplicationRemoved,
-                    Metadata = otherUsersUsingApp > 0 
-                        ? $"User {currentUser.Username} removed access to application: {applicationName}" 
-                        : $"User {currentUser.Username} permanently deleted application: {applicationName}",
-                    CreatedAt = DateTime.UtcNow
-                };
-                context.AuditLogs.Add(auditLog);
+                await _auditLogService.CreateAuditLogAsync(currentUser.UserId, ActionTypeEnum.Delete, "User Delete application");
                 
                 Logger.LogInformation("Added audit log for application {ApplicationId} deletion by user {UserId}", appGuid, currentUser.UserId);
 
@@ -362,7 +322,7 @@ public class ApplicationNavigationController(
     [HttpPost("debug-connection-test")]
     public async Task<IActionResult> DebugConnectionTest([FromBody] object requestData)
     {
-        return Ok(new { success = false, message = "DEBUG METHOD CALLED - This proves routing works", connectionValid = false });
+        return SuccessResponse(new { success = false, message = "DEBUG METHOD CALLED - This proves routing works", connectionValid = false });
     }
     
     [HttpPost("test-application-connection")]
@@ -399,7 +359,7 @@ public class ApplicationNavigationController(
                         .Include(ua => ua.ApplicationConnection)
                         .FirstOrDefaultAsync(ua => ua.ApplicationId == applicationId && ua.UserId == currentUser.UserId);
                     
-                    if (userApp?.ApplicationConnection == null || userApp.Application == null)
+                    if (userApp?.ApplicationConnection == null)
                         return new { success = false, message = "Application or connection not found" };
                     
                     existingConnection = userApp.ApplicationConnection;
@@ -545,19 +505,12 @@ public class ApplicationNavigationController(
                 
                 Logger.LogInformation("Final connection test result for {DataSourceType}: {Result}", dataSourceType, connectionTestResult);
 
-                // Log connection test attempt
-                var activityLog = new UserActivityLogModel
-                {
-                    UserActivityLogId = Guid.NewGuid(),
-                    UserId = currentUser.UserId,
-                    User = null,
-                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
-                    DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
-                    ActionType = ActionTypeEnum.ConnectionAttempt,
-                    Description = $"User {description} - Result: {(connectionTestResult ? "Success" : "Failed")}",
-                    Timestamp = DateTime.UtcNow
-                };
-                context.UserActivityLogs.Add(activityLog);
+                // Create activity log using centralized service
+                var httpContext = httpContextAccessor.HttpContext;
+                var ipAddress = httpContextParsingService.GetClientIpAddress(httpContext);
+                var deviceInfo = httpContextParsingService.GetDeviceInformation(httpContext);
+            
+                await _auditLogService.CreateUserActivityLogAsync(currentUser.UserId, ActionTypeEnum.ApplicationAdded, "Created new application", ipAddress, deviceInfo);
 
                 // Add application log if testing existing application
                 if (testingApplicationId.HasValue)
@@ -694,19 +647,12 @@ public class ApplicationNavigationController(
                 
                 Logger.LogInformation("Final connection test result for {DataSourceType}: {Result}", dataSourceType, connectionTestResult);
 
-                // Log connection test attempt
-                var activityLog = new UserActivityLogModel
-                {
-                    UserActivityLogId = Guid.NewGuid(),
-                    UserId = currentUser.UserId,
-                    User = null,
-                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
-                    DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
-                    ActionType = ActionTypeEnum.ConnectionAttempt,
-                    Description = $"User {description} - Result: {(connectionTestResult ? "Success" : "Failed")}",
-                    Timestamp = DateTime.UtcNow
-                };
-                context.UserActivityLogs.Add(activityLog);
+                // Create activity log using centralized service
+                var httpContext = httpContextAccessor.HttpContext;
+                var ipAddress = httpContextParsingService.GetClientIpAddress(httpContext);
+                var deviceInfo = httpContextParsingService.GetDeviceInformation(httpContext);
+            
+                await _auditLogService.CreateUserActivityLogAsync(currentUser.UserId, ActionTypeEnum.ApplicationFailure, $"User {description} - Result: {(connectionTestResult ? "Success" : "Failed")}", ipAddress, deviceInfo);
 
                 // Add application log if testing existing application
                 if (testingApplicationId.HasValue)

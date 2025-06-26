@@ -89,16 +89,18 @@ builder.Services.AddScoped<IApplicationFactoryService, ApplicationFactoryService
 builder.Services.AddScoped<IApplicationConnectionFactoryService, ApplicationConnectionFactoryService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<TransactionService>();
-builder.Services.AddScoped<PasswordEncryptionService>();
+builder.Services.AddScoped<IPasswordEncryptionService, PasswordEncryptionService>();
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<IUserAccountService, UserAccountService>();
 // UserContext handled by AuthenticatedUserAccessor
 builder.Services.AddScoped<IUserRoleService, UserRoleService>();
-builder.Services.AddScoped<DatabaseSeeder>();
+builder.Services.AddScoped<IDatabaseSeeder, DatabaseSeeder>();
 
 // Register Common Services
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<INavigationService, NavigationService>();
+builder.Services.AddScoped<IHttpContextParsingService, HttpContextParsingService>();
+builder.Services.AddScoped<IPaginationService, PaginationService>();
 
 // Register Repository Pattern
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -113,7 +115,7 @@ builder.Services.AddScoped<LoginRequestValidator>();
 builder.Services.AddScoped<IFileParsingService, FileParsingService>();
 builder.Services.AddScoped<IBulkValidationService, BulkValidationService>();
 builder.Services.AddScoped<IBulkDataProcessingService, BulkDataProcessingService>();
-builder.Services.AddScoped<IBulkUploadService, BulkUploadServiceRefactored>();
+builder.Services.AddScoped<IBulkUploadService, BulkUploadService>();
 builder.Services.AddScoped<ITableDetectionService, TableDetectionService>();
 builder.Services.AddScoped<ITableMappingService, TableMappingService>();
 builder.Services.AddScoped<IProgressService, ProgressService>();
@@ -299,7 +301,7 @@ using (var scope = app.Services.CreateScope())
                 logger.LogDebug("Database connection verified successfully.");
                 
                 // Seed database with initial data
-                var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
+                var seeder = scope.ServiceProvider.GetRequiredService<IDatabaseSeeder>();
                 await seeder.SeedAsync();
                 
                 // Success - exit the retry loop

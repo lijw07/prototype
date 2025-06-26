@@ -1,17 +1,16 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Controllers;
+using Prototype.Controllers.Navigation;
 using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Enum;
-using Prototype.Models;
 using Prototype.Services;
 using Prototype.Utility;
 
-namespace Prototype.Controllers.Navigation;
+namespace Prototype.Controllers.Setting;
 
-[Route("settings/user/profile")]
-public class UserProfileController : BaseApiController
+[Route("settings/user-profile")]
+public class UserProfileController : BaseNavigationController
 {
     public UserProfileController(
         SentinelContext context,

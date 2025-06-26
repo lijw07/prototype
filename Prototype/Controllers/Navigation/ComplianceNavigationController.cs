@@ -4,30 +4,35 @@ using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.Enum;
 using Prototype.Models;
+using Prototype.Services;
 using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
 
 [Authorize]
-[Route("api/compliance")]
+[Route("navigation/compliance")]
 [ApiController]
 public class ComplianceNavigationController(
     SentinelContext context,
     IAuthenticatedUserAccessor userAccessor,
-    ILogger<ComplianceNavigationController> logger)
-    : ControllerBase
+    ILogger<ComplianceNavigationController> logger,
+    IAuditLogService auditLogService)
+    : BaseNavigationController(logger, context, userAccessor, auditLogService)
 {
+    private readonly IAuthenticatedUserAccessor _userAccessor = userAccessor;
+    private readonly SentinelContext _context = context;
+
     [HttpGet("overview")]
     public async Task<IActionResult> GetComplianceOverview()
     {
         try
         {
-            var currentUser = await userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
+                return HandleUserNotAuthenticated();
 
             var overview = await CollectComplianceMetrics();
-            return Ok(new { success = true, data = overview });
+            return SuccessResponse(new { success = true, data = overview });
         }
         catch (Exception ex)
         {
@@ -41,12 +46,12 @@ public class ComplianceNavigationController(
     {
         try
         {
-            var currentUser = await userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
+                return HandleUserNotAuthenticated();
 
             var report = await GenerateComplianceAuditReport(int.Parse(period), format);
-            return Ok(new { success = true, data = report });
+            return SuccessResponse(new { success = true, data = report });
         }
         catch (Exception ex)
         {
@@ -60,12 +65,12 @@ public class ComplianceNavigationController(
     {
         try
         {
-            var currentUser = await userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
+                return HandleUserNotAuthenticated();
 
             var violations = await GetComplianceViolations(page, pageSize);
-            return Ok(new { success = true, data = violations });
+            return SuccessResponse(new { success = true, data = violations });
         }
         catch (Exception ex)
         {
@@ -79,12 +84,12 @@ public class ComplianceNavigationController(
     {
         try
         {
-            var currentUser = await userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
+                return HandleUserNotAuthenticated();
 
             var frameworks = await GetSupportedFrameworks();
-            return Ok(new { success = true, data = frameworks });
+            return SuccessResponse(new { success = true, data = frameworks });
         }
         catch (Exception ex)
         {
@@ -98,12 +103,12 @@ public class ComplianceNavigationController(
     {
         try
         {
-            var currentUser = await userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
+                return HandleUserNotAuthenticated();
 
             var report = await GenerateCustomComplianceReport(request, currentUser);
-            return Ok(new { success = true, data = report });
+            return SuccessResponse(new { success = true, data = report });
         }
         catch (Exception ex)
         {
@@ -120,37 +125,37 @@ public class ComplianceNavigationController(
         var lastYear = now.AddYears(-1);
 
         // Audit trail completeness
-        var totalAuditLogs = await context.AuditLogs
+        var totalAuditLogs = await _context.AuditLogs
             .Where(log => log.CreatedAt >= last30Days)
             .CountAsync();
 
-        var totalUserActivity = await context.UserActivityLogs
+        var totalUserActivity = await _context.UserActivityLogs
             .Where(log => log.Timestamp >= last30Days)
             .CountAsync();
 
         // User verification compliance
-        var totalUsers = await context.Users.CountAsync();
-        var verifiedUsers = await context.Users.CountAsync(); // All users in Users table are verified
+        var totalUsers = await _context.Users.CountAsync();
+        var verifiedUsers = await _context.Users.CountAsync(); // All users in Users table are verified
 
         // Access review compliance
-        var usersWithRecentActivity = await context.UserActivityLogs
+        var usersWithRecentActivity = await _context.UserActivityLogs
             .Where(log => log.Timestamp >= last90Days)
             .Select(log => log.UserId)
             .Distinct()
             .CountAsync();
 
         // Data retention metrics
-        var oldAuditLogs = await context.AuditLogs
+        var oldAuditLogs = await _context.AuditLogs
             .Where(log => log.CreatedAt < lastYear)
             .CountAsync();
 
         // Security compliance
-        var failedLogins = await context.UserActivityLogs
+        var failedLogins = await _context.UserActivityLogs
             .Where(log => log.Timestamp >= last30Days && 
                          log.ActionType == ActionTypeEnum.FailedLogin)
             .CountAsync();
 
-        var totalLogins = await context.UserActivityLogs
+        var totalLogins = await _context.UserActivityLogs
             .Where(log => log.Timestamp >= last30Days && 
                          (log.ActionType == ActionTypeEnum.Login || 
                           log.ActionType == ActionTypeEnum.FailedLogin))
@@ -197,7 +202,7 @@ public class ComplianceNavigationController(
         var startDate = DateTime.UtcNow.AddDays(-periodDays);
         var endDate = DateTime.UtcNow;
 
-        var auditActivities = await context.AuditLogs
+        var auditActivities = await _context.AuditLogs
             .Where(log => log.CreatedAt >= startDate && log.CreatedAt <= endDate)
             .Include(log => log.User)
             .GroupBy(log => log.ActionType)
@@ -214,7 +219,7 @@ public class ComplianceNavigationController(
             })
             .ToListAsync();
 
-        var userActivities = await context.UserActivityLogs
+        var userActivities = await _context.UserActivityLogs
             .Where(log => log.Timestamp >= startDate && log.Timestamp <= endDate)
             .Include(log => log.User)
             .GroupBy(log => log.ActionType)
@@ -226,7 +231,7 @@ public class ComplianceNavigationController(
             })
             .ToListAsync();
 
-        var securityEvents = await context.UserActivityLogs
+        var securityEvents = await _context.UserActivityLogs
             .Where(log => log.Timestamp >= startDate && 
                          log.Timestamp <= endDate &&
                          log.ActionType == ActionTypeEnum.FailedLogin)
@@ -272,7 +277,7 @@ public class ComplianceNavigationController(
 
         // Unverified users (policy violation)
         var sevenDaysAgo = now.AddDays(-7);
-        var unverifiedUsersData = await context.TemporaryUsers
+        var unverifiedUsersData = await _context.TemporaryUsers
             .Where(tu => tu.CreatedAt < sevenDaysAgo) // Violation if unverified > 7 days
             .ToListAsync();
 
@@ -288,7 +293,7 @@ public class ComplianceNavigationController(
             .ToList();
 
         // Excessive failed logins
-        var suspiciousLogins = await context.UserActivityLogs
+        var suspiciousLogins = await _context.UserActivityLogs
             .Where(log => log.Timestamp >= now.AddDays(-1) && 
                          log.ActionType == ActionTypeEnum.FailedLogin)
             .GroupBy(log => log.UserId)
@@ -305,10 +310,10 @@ public class ComplianceNavigationController(
             .ToListAsync();
 
         // Inactive users with access
-        var inactiveUsers = await context.Users
-            .Where(u => !context.UserActivityLogs
+        var inactiveUsers = await _context.Users
+            .Where(u => !_context.UserActivityLogs
                 .Any(log => log.UserId == u.UserId && log.Timestamp >= now.AddDays(-90)))
-            .Where(u => context.UserApplications.Any(ua => ua.UserId == u.UserId))
+            .Where(u => _context.UserApplications.Any(ua => ua.UserId == u.UserId))
             .Take(10)
             .Select(u => new
             {
@@ -443,7 +448,7 @@ public class ComplianceNavigationController(
         }
 
         // Log report generation
-        await LogReportGeneration(request, currentUser);
+        await auditLogService.CreateAuditLogAsync(currentUser.UserId, ActionTypeEnum.ReportGenerated, "Generate Compliance Report");
 
         return new
         {
@@ -505,12 +510,12 @@ public class ComplianceNavigationController(
         var thirtyDaysAgo = now.AddDays(-30);
 
         // Count various critical compliance issues
-        issues += await context.TemporaryUsers
+        issues += await _context.TemporaryUsers
             .Where(tu => tu.CreatedAt < thirtyDaysAgo)
             .CountAsync();
 
         var yesterday = now.AddDays(-1);
-        var suspiciousLoginGroups = await context.UserActivityLogs
+        var suspiciousLoginGroups = await _context.UserActivityLogs
             .Where(log => log.Timestamp >= yesterday && 
                          log.ActionType == ActionTypeEnum.FailedLogin)
             .GroupBy(log => log.UserId)
@@ -555,7 +560,7 @@ public class ComplianceNavigationController(
     private async Task<double> CalculateReportComplianceScore(DateTime start, DateTime end)
     {
         // Simplified compliance score calculation for the period
-        var auditLogs = await context.AuditLogs
+        var auditLogs = await _context.AuditLogs
             .Where(log => log.CreatedAt >= start && log.CreatedAt <= end)
             .CountAsync();
 
@@ -593,7 +598,7 @@ public class ComplianceNavigationController(
 
     private async Task<object> GetAuditTrailData(DateTime start, DateTime end)
     {
-        return await context.AuditLogs
+        return await _context.AuditLogs
             .Where(log => log.CreatedAt >= start && log.CreatedAt <= end)
             .Select(log => new
             {
@@ -608,7 +613,7 @@ public class ComplianceNavigationController(
 
     private async Task<object> GetUserActivityData(DateTime start, DateTime end)
     {
-        return await context.UserActivityLogs
+        return await _context.UserActivityLogs
             .Where(log => log.Timestamp >= start && log.Timestamp <= end)
             .Select(log => new
             {
@@ -623,7 +628,7 @@ public class ComplianceNavigationController(
 
     private async Task<object> GetSecurityEventsData(DateTime start, DateTime end)
     {
-        return await context.UserActivityLogs
+        return await _context.UserActivityLogs
             .Where(log => log.Timestamp >= start && 
                          log.Timestamp <= end &&
                          log.ActionType == ActionTypeEnum.FailedLogin)
@@ -646,25 +651,11 @@ public class ComplianceNavigationController(
             new
             {
                 type = "Unverified User",
-                count = await context.TemporaryUsers
+                count = await _context.TemporaryUsers
                     .Where(tu => tu.CreatedAt >= start && tu.CreatedAt <= end)
                     .CountAsync()
             }
         };
-    }
-
-    private async Task LogReportGeneration(ReportRequest request, UserModel user)
-    {
-        var auditLog = new AuditLogModel
-        {
-            AuditLogId = Guid.NewGuid(),
-            UserId = user.UserId,
-            ActionType = ActionTypeEnum.ReportGenerated,
-            Metadata = $"Compliance report generated by {user.Username} for period {request.StartDate:yyyy-MM-dd} to {request.EndDate:yyyy-MM-dd}",
-            CreatedAt = DateTime.UtcNow
-        };
-        context.AuditLogs.Add(auditLog);
-        await context.SaveChangesAsync();
     }
 }
 

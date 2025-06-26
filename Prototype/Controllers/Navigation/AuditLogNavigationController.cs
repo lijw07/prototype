@@ -1,27 +1,22 @@
 using Microsoft.AspNetCore.Mvc;
-using Prototype.Controllers;
+using Prototype.Controllers.Navigation;
 using Prototype.Data;
 using Prototype.Services;
 using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
 
-[Route("[controller]")]
-public class AuditLogNavigationController : BaseApiController
+[Route("navigation/audit-log")]
+public class AuditLogNavigationController(
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    TransactionService transactionService,
+    IAuditLogService auditLogService,
+    INavigationService navigationService,
+    ILogger<AuditLogNavigationController> logger)
+    : BaseNavigationController(logger, context, userAccessor, transactionService, auditLogService)
 {
-    private readonly INavigationService _navigationService;
-
-    public AuditLogNavigationController(
-        SentinelContext context,
-        IAuthenticatedUserAccessor userAccessor,
-        TransactionService transactionService,
-        IAuditLogService auditLogService,
-        INavigationService navigationService,
-        ILogger<AuditLogNavigationController> logger)
-        : base(logger, context, userAccessor, transactionService, auditLogService)
-    {
-        _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
-    }
+    private readonly INavigationService _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
 
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 50)

@@ -40,8 +40,8 @@ public class RateLimitingMiddleware(RequestDelegate next, ILogger<RateLimitingMi
     {
         var sensitiveEndpoints = new[]
         {
-            //"/login", // Disabled for development - allow unlimited login attempts
-            //"/register",
+            "/login",
+            "/register",
             "/forgotuser",
             "/passwordreset"
         };
@@ -76,7 +76,7 @@ public class RateLimitingMiddleware(RequestDelegate next, ILogger<RateLimitingMi
         var cutoff = DateTime.UtcNow.AddMinutes(-_windowMinutes);
         var recentAttempts = attempts.Where(a => a > cutoff).ToList();
         
-        // Update the attempts list to remove old entries
+        // Update the attempt list to remove old entries
         _attempts[clientId] = recentAttempts;
         
         return recentAttempts.Count >= _maxAttempts;

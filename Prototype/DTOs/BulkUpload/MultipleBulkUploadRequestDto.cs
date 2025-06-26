@@ -12,7 +12,5 @@ public class MultipleBulkUploadRequestDto
 
     public Dictionary<string, string>? ColumnMappings { get; set; }
         
-    public bool ProcessFilesSequentially { get; set; } = true;
-        
     public bool ContinueOnError { get; set; } = true;
 }
