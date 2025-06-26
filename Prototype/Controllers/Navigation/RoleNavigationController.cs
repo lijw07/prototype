@@ -34,10 +34,10 @@ public class RoleNavigationController(
                 .Take(validPageSize)
                 .ToListAsync();
             
-            var roleDtos = roles.Select(role => new RoleDto
+            var roleDtos = roles.Select(role => new RoleRequestDto
             {
                 UserRoleId = role.UserRoleId,
-                Role = role.Role,
+                RoleName = role.RoleName,
                 CreatedAt = role.CreatedAt,
                 CreatedBy = role.CreatedBy
             }).ToList();
@@ -57,10 +57,10 @@ public class RoleNavigationController(
             if (role == null)
                 return new { success = false, message = "Role not found" };
 
-            var roleDto = new RoleDto
+            var roleDto = new RoleRequestDto
             {
                 UserRoleId = role.UserRoleId,
-                Role = role.Role,
+                RoleName = role.RoleName,
                 CreatedAt = role.CreatedAt,
                 CreatedBy = role.CreatedBy
             };
@@ -80,7 +80,7 @@ public class RoleNavigationController(
 
             // Check if role already exists using the same context
             var roleExists = await context.UserRoles
-                .AnyAsync(r => r.Role.ToLower() == requestDto.RoleName.ToLower());
+                .AnyAsync(r => r.RoleName.ToLower() == requestDto.RoleName.ToLower());
             if (roleExists)
                 return new { success = false, message = "A role with this name already exists" };
 
@@ -88,7 +88,7 @@ public class RoleNavigationController(
             var role = new UserRoleModel
             {
                 UserRoleId = Guid.NewGuid(),
-                Role = requestDto.RoleName,
+                RoleName = requestDto.RoleName,
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = currentUser.Username
             };
@@ -127,10 +127,10 @@ public class RoleNavigationController(
             // All changes will be committed together by the transaction service
             Logger.LogInformation("Transaction will commit role and logs together for: {RoleName}", requestDto.RoleName);
             
-            var roleDto = new RoleDto
+            var roleDto = new RoleRequestDto
             {
                 UserRoleId = role.UserRoleId,
-                Role = role.Role,
+                RoleName = role.RoleName,
                 CreatedAt = role.CreatedAt,
                 CreatedBy = role.CreatedBy
             };
@@ -157,14 +157,14 @@ public class RoleNavigationController(
 
             // Check if another role with the same name exists using the same context
             var roleWithSameName = await context.UserRoles
-                .AnyAsync(r => r.Role.ToLower() == requestDto.RoleName.ToLower());
-            if (roleWithSameName && !existingRole.Role.Equals(requestDto.RoleName, StringComparison.OrdinalIgnoreCase))
+                .AnyAsync(r => r.RoleName.ToLower() == requestDto.RoleName.ToLower());
+            if (roleWithSameName && !existingRole.RoleName.Equals(requestDto.RoleName, StringComparison.OrdinalIgnoreCase))
                 return new { success = false, message = "A role with this name already exists" };
 
-            var oldRoleName = existingRole.Role;
+            var oldRoleName = existingRole.RoleName;
             
             // Update role directly in the controller's context (within transaction)
-            existingRole.Role = requestDto.RoleName;
+            existingRole.RoleName = requestDto.RoleName;
             
             Logger.LogInformation("Role updated in transaction, now creating logs for role update: {OldName} -> {NewName}", oldRoleName, requestDto.RoleName);
             
@@ -199,10 +199,10 @@ public class RoleNavigationController(
             // All changes will be committed together by the transaction service
             Logger.LogInformation("Transaction will commit role update and logs together for: {OldName} -> {NewName}", oldRoleName, requestDto.RoleName);
 
-            var roleDto = new RoleDto
+            var roleDto = new RoleRequestDto
             {
                 UserRoleId = existingRole.UserRoleId,
-                Role = existingRole.Role,
+                RoleName = existingRole.RoleName,
                 CreatedAt = existingRole.CreatedAt,
                 CreatedBy = existingRole.CreatedBy
             };
@@ -227,7 +227,7 @@ public class RoleNavigationController(
             if (role == null)
                 return NotFound(new { success = false, message = "Role not found" });
 
-            var roleName = role.Role;
+            var roleName = role.RoleName;
             
             // Check if role is assigned to any users
             var usersWithRole = await context.Users
@@ -281,7 +281,7 @@ public class RoleNavigationController(
             if (roleToDelete == null)
                 return new { success = false, message = "Role not found" };
 
-            var roleName = roleToDelete.Role;
+            var roleName = roleToDelete.RoleName;
             
             // Check if role is assigned to any users before deletion
             var usersWithRole = await context.Users

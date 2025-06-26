@@ -23,14 +23,14 @@ public interface IFileParsingService
 
 public class FileParsingService : IFileParsingService
 {
-    private readonly BulkUploadSettings _settings;
+    private readonly BulkUploadConfiguration _configuration;
     private readonly ILogger<FileParsingService> _logger;
 
     public FileParsingService(
-        IOptions<BulkUploadSettings> settings,
+        IOptions<BulkUploadConfiguration> settings,
         ILogger<FileParsingService> logger)
     {
-        _settings = settings.Value;
+        _configuration = settings.Value;
         _logger = logger;
     }
 
@@ -44,9 +44,9 @@ public class FileParsingService : IFileParsingService
             throw new ValidationException($"Unsupported file extension: {request.FileExtension}");
         }
 
-        if (request.FileData.Length > _settings.MaxFileSize)
+        if (request.FileData.Length > _configuration.MaxFileSize)
         {
-            throw new ValidationException($"File size exceeds maximum allowed size of {_settings.MaxFileSize / 1_000_000}MB");
+            throw new ValidationException($"File size exceeds maximum allowed size of {_configuration.MaxFileSize / 1_000_000}MB");
         }
 
         try
@@ -69,7 +69,7 @@ public class FileParsingService : IFileParsingService
 
     public bool IsValidFileExtension(string extension)
     {
-        return _settings.AllowedFileExtensions.Contains(extension.ToLowerInvariant());
+        return _configuration.AllowedFileExtensions.Contains(extension.ToLowerInvariant());
     }
 
     public async Task<int> GetEstimatedRowCountAsync(byte[] fileData, string fileExtension)

@@ -33,7 +33,7 @@ public class RefactoredBulkUploadService : IRefactoredBulkUploadService
     private readonly IProgressTrackingService _progressTracker;
     private readonly ITableDetectionService _tableDetector;
     private readonly IRetryPolicyService _retryService;
-    private readonly BulkUploadSettings _settings;
+    private readonly BulkUploadConfiguration _configuration;
     private readonly ILogger<RefactoredBulkUploadService> _logger;
 
     public RefactoredBulkUploadService(
@@ -43,7 +43,7 @@ public class RefactoredBulkUploadService : IRefactoredBulkUploadService
         IProgressTrackingService progressTracker,
         ITableDetectionService tableDetector,
         IRetryPolicyService retryService,
-        IOptions<BulkUploadSettings> settings,
+        IOptions<BulkUploadConfiguration> settings,
         ILogger<RefactoredBulkUploadService> logger)
     {
         _fileParser = fileParser;
@@ -52,7 +52,7 @@ public class RefactoredBulkUploadService : IRefactoredBulkUploadService
         _progressTracker = progressTracker;
         _tableDetector = tableDetector;
         _retryService = retryService;
-        _settings = settings.Value;
+        _configuration = settings.Value;
         _logger = logger;
     }
 
@@ -197,9 +197,9 @@ public class RefactoredBulkUploadService : IRefactoredBulkUploadService
         }
 
         var estimatedRows = await _fileParser.GetEstimatedRowCountAsync(request.FileData, request.FileExtension);
-        if (estimatedRows > _settings.MaxRowThreshold)
+        if (estimatedRows > _configuration.MaxRowThreshold)
         {
-            throw new ValidationException($"File contains too many rows ({estimatedRows}). Maximum allowed: {_settings.MaxRowThreshold}");
+            throw new ValidationException($"File contains too many rows ({estimatedRows}). Maximum allowed: {_configuration.MaxRowThreshold}");
         }
 
         return await _fileParser.ParseFileToDataTableAsync(request);

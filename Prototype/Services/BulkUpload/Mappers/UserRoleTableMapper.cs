@@ -68,7 +68,7 @@ public class UserRoleTableMapper(
             var userRole = new UserRoleModel
             {
                 UserRoleId = Guid.NewGuid(),
-                Role = GetColumnValue(row, "Role").Trim(),
+                RoleName = GetColumnValue(row, "Role").Trim(),
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = GetColumnValue(row, "CreatedBy")
             };
@@ -136,8 +136,8 @@ public class UserRoleTableMapper(
 
             // Batch database queries
             var existingRolesData = await context.UserRoles
-                .Where(ur => allRoles.Contains(ur.Role))
-                .Select(ur => ur.Role.ToLower())
+                .Where(ur => allRoles.Contains(ur.RoleName))
+                .Select(ur => ur.RoleName.ToLower())
                 .ToListAsync(cancellationToken);
             var existingRoles = new HashSet<string>(existingRolesData);
 
@@ -222,7 +222,7 @@ public class UserRoleTableMapper(
                 var userRole = new UserRoleModel
                 {
                     UserRoleId = Guid.NewGuid(),
-                    Role = GetColumnValue(row, "Role"),
+                    RoleName = GetColumnValue(row, "Role"),
                     CreatedBy = GetColumnValue(row, "CreatedBy"),
                     CreatedAt = DateTime.UtcNow
                 };

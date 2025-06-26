@@ -644,7 +644,7 @@ namespace Prototype.Controllers.BulkUpload
                 }
 
                 var history = await bulkUploadService.GetUploadHistoryAsync(currentUser.UserId, page, pageSize);
-                return Ok(new ApiResponseDto<PaginatedResult<BulkUploadHistory>>
+                return Ok(new ApiResponseDto<PaginatedResult<BulkUploadHistoryDto>>
                 {
                     Success = true,
                     Message = "Upload history retrieved successfully",
@@ -802,7 +802,7 @@ namespace Prototype.Controllers.BulkUpload
                 UserActivityLogId = Guid.NewGuid(),
                 UserId = userId,
                 DeviceInformation = HttpContext.Request.Headers["User-Agent"].ToString(),
-                ActionType = Enum.ActionTypeEnum.Create,
+                ActionType = ActionTypeEnum.Create,
                 Description = $"Bulk upload to {tableType} table. Records: {recordCount}. Success: {success}",
                 Timestamp = DateTime.UtcNow,
                 IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()

@@ -152,7 +152,7 @@ builder.Services.AddScoped<ICacheInvalidationService, CacheInvalidationService>(
 builder.Services.AddScoped<ICacheWarmupService, CacheWarmupService>();
 
 // Configure settings
-builder.Services.Configure<BulkUploadSettings>(builder.Configuration.GetSection(BulkUploadSettings.SectionName));
+builder.Services.Configure<BulkUploadConfiguration>(builder.Configuration.GetSection(BulkUploadConfiguration.SectionName));
 
 // Add common services for DRY optimization
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));

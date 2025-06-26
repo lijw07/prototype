@@ -471,7 +471,7 @@ public class BulkUploadService : IBulkUploadService
         }
     }
 
-    public async Task<PaginatedResult<BulkUploadHistory>> GetUploadHistoryAsync(Guid userId, int page, int pageSize)
+    public async Task<PaginatedResult<BulkUploadHistoryDto>> GetUploadHistoryAsync(Guid userId, int page, int pageSize)
     {
         try
         {
@@ -483,7 +483,7 @@ public class BulkUploadService : IBulkUploadService
                 .OrderByDescending(h => h.UploadedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(h => new BulkUploadHistory
+                .Select(h => new BulkUploadHistoryDto
                 {
                     UploadId = h.UploadId,
                     FileName = h.FileName,
@@ -497,7 +497,7 @@ public class BulkUploadService : IBulkUploadService
                 })
                 .ToListAsync();
 
-            return new PaginatedResult<BulkUploadHistory>
+            return new PaginatedResult<BulkUploadHistoryDto>
             {
                 Items = items,
                 TotalCount = totalCount,

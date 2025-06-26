@@ -1,6 +1,7 @@
+using Microsoft.SqlServer.TransactSql.ScriptDom;
 using OfficeOpenXml;
 using Prototype.DTOs.BulkUpload;
-using Prototype.Services.BulkUpload.Mappers;
+using Prototype.Services.BulkUpload;
 using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
@@ -9,15 +10,6 @@ public class BulkTemplateService(
     ITableMappingService tableMappingService,
     ILogger<BulkTemplateService> logger) : IBulkTemplateService
 {
-    private readonly Dictionary<string, string> _supportedTableTypes = new()
-    {
-        { "Users", "User management data" },
-        { "Applications", "Application configuration data" },
-        { "UserApplications", "User-application relationship data" },
-        { "TemporaryUsers", "Temporary user registration data" },
-        { "UserRoles", "User role assignment data" }
-    };
-
     static BulkTemplateService()
     {
         ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
@@ -42,7 +34,7 @@ public class BulkTemplateService(
             return null;
         }
     }
-
+    
     public async Task<FileTemplateInfo?> GenerateExcelTemplateAsync(ITableMapper mapper)
     {
         try
@@ -80,20 +72,14 @@ public class BulkTemplateService(
                 var columns = mapper.GetTemplateColumns();
                 var exampleData = mapper.GetExampleData();
 
-                // Create header row with styling
+                // Create a header row with styling
                 CreateHeaderRow(worksheet, columns);
-
-                // Add example data rows
-                AddExampleDataRows(worksheet, columns, exampleData);
 
                 // Add data validation and formatting
                 ApplyDataValidationAndFormatting(worksheet, columns);
 
                 // Auto-fit columns for better readability
                 worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
-
-                // Add instructions sheet
-                CreateInstructionsSheet(package, tableType, columns);
 
                 logger.LogInformation("Successfully created Excel template for {TableType} with {ColumnCount} columns and {ExampleRowCount} example rows",
                     tableType, columns.Count, exampleData?.Count ?? 0);
@@ -106,11 +92,6 @@ public class BulkTemplateService(
                 throw;
             }
         });
-    }
-
-    public List<string> GetSupportedTableTypes()
-    {
-        return _supportedTableTypes.Keys.ToList();
     }
 
     private void CreateHeaderRow(ExcelWorksheet worksheet, List<ColumnDefinition> columns)
@@ -140,47 +121,6 @@ public class BulkTemplateService(
                 cell.Value = $"{columns[i].ColumnName} *";
                 cell.Style.Font.Color.SetColor(System.Drawing.Color.Red);
             }
-        }
-    }
-
-    private void AddExampleDataRows(ExcelWorksheet worksheet, List<ColumnDefinition> columns, List<Dictionary<string, object?>>? exampleData)
-    {
-        if (exampleData == null || !exampleData.Any())
-        {
-            // Add one empty row as template
-            for (int i = 0; i < columns.Count; i++)
-            {
-                var cell = worksheet.Cells[2, i + 1];
-                cell.Value = GetPlaceholderValue(columns[i]);
-                cell.Style.Font.Italic = true;
-                cell.Style.Font.Color.SetColor(System.Drawing.Color.Gray);
-            }
-            return;
-        }
-
-        var rowIndex = 2;
-        foreach (var example in exampleData.Take(5)) // Limit to 5 example rows
-        {
-            for (int i = 0; i < columns.Count; i++)
-            {
-                var columnName = columns[i].ColumnName;
-                var cell = worksheet.Cells[rowIndex, i + 1];
-                
-                if (example.ContainsKey(columnName))
-                {
-                    cell.Value = example[columnName]?.ToString() ?? string.Empty;
-                }
-                else
-                {
-                    cell.Value = GetPlaceholderValue(columns[i]);
-                    cell.Style.Font.Italic = true;
-                    cell.Style.Font.Color.SetColor(System.Drawing.Color.Gray);
-                }
-
-                // Add borders for data cells
-                cell.Style.Border.BorderAround(OfficeOpenXml.Style.ExcelBorderStyle.Thin);
-            }
-            rowIndex++;
         }
     }
 
@@ -225,73 +165,5 @@ public class BulkTemplateService(
                 columnRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightYellow);
             }
         }
-    }
-
-    private void CreateInstructionsSheet(ExcelPackage package, string tableType, List<ColumnDefinition> columns)
-    {
-        var instructionsSheet = package.Workbook.Worksheets.Add("Instructions");
-        
-        // Title
-        instructionsSheet.Cells[1, 1].Value = $"{tableType} Template Instructions";
-        instructionsSheet.Cells[1, 1].Style.Font.Bold = true;
-        instructionsSheet.Cells[1, 1].Style.Font.Size = 16;
-
-        // General instructions
-        var instructions = new[]
-        {
-            "",
-            "General Instructions:",
-            "1. Fill in your data starting from row 2 in the main sheet",
-            "2. Do not modify the column headers in row 1",
-            "3. Required fields are marked with * and highlighted in yellow",
-            "4. Follow the data format specifications below",
-            "5. Remove example data before uploading",
-            "",
-            "Column Specifications:"
-        };
-
-        var row = 2;
-        foreach (var instruction in instructions)
-        {
-            instructionsSheet.Cells[row, 1].Value = instruction;
-            if (instruction.EndsWith(":"))
-            {
-                instructionsSheet.Cells[row, 1].Style.Font.Bold = true;
-            }
-            row++;
-        }
-
-        // Column details
-        foreach (var column in columns)
-        {
-            instructionsSheet.Cells[row, 1].Value = $"• {column.ColumnName}";
-            instructionsSheet.Cells[row, 2].Value = column.Description ?? "No description";
-            instructionsSheet.Cells[row, 3].Value = column.DataType ?? "string";
-            instructionsSheet.Cells[row, 4].Value = column.IsRequired ? "Required" : "Optional";
-            
-            if (column.IsRequired)
-            {
-                instructionsSheet.Cells[row, 4].Style.Font.Color.SetColor(System.Drawing.Color.Red);
-                instructionsSheet.Cells[row, 4].Style.Font.Bold = true;
-            }
-            
-            row++;
-        }
-
-        // Auto-fit columns
-        instructionsSheet.Cells[instructionsSheet.Dimension.Address].AutoFitColumns();
-    }
-
-    private string GetPlaceholderValue(ColumnDefinition column)
-    {
-        return column.DataType?.ToLower() switch
-        {
-            "datetime" or "date" => DateTime.Now.ToString("yyyy-MM-dd"),
-            "bool" or "boolean" => "true",
-            "int" or "integer" => "1",
-            "decimal" or "double" or "float" => "0.00",
-            "guid" => Guid.NewGuid().ToString(),
-            _ => $"Sample {column.ColumnName}"
-        };
     }
 }

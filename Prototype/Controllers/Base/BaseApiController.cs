@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Prototype.Common.Responses;
 using Prototype.Enum;
-using Prototype.Exceptions;
 using Prototype.Models;
 using Prototype.Services.Common;
 using Prototype.Services.Interfaces;
@@ -16,8 +15,8 @@ public abstract class BaseApiController(
     ICacheService? cacheService = null)
     : ControllerBase
 {
-    private readonly ILogger Logger = logger;
-    private readonly IErrorHandlerService ErrorHandler = errorHandler;
+    protected readonly ILogger Logger = logger;
+    protected readonly IErrorHandlerService ErrorHandler = errorHandler;
     protected readonly IAuthenticatedUserAccessor? UserAccessor = userAccessor;
     protected readonly ICacheService? CacheService = cacheService;
 

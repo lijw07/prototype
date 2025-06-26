@@ -13,17 +13,17 @@ namespace Prototype.Services.BulkUpload;
 /// </summary>
 public class BulkValidationService : IBulkValidationService
 {
-    private readonly BulkUploadSettings _settings;
+    private readonly BulkUploadConfiguration _configuration;
     private readonly ILogger<BulkValidationService> _logger;
     private readonly Regex _emailRegex;
 
     public BulkValidationService(
-        IOptions<BulkUploadSettings> settings,
+        IOptions<BulkUploadConfiguration> settings,
         ILogger<BulkValidationService> logger)
     {
-        _settings = settings.Value;
+        _configuration = settings.Value;
         _logger = logger;
-        _emailRegex = new Regex(_settings.Validation.EmailRegexPattern, RegexOptions.Compiled);
+        _emailRegex = new Regex(_configuration.Validation.EmailRegexPattern, RegexOptions.Compiled);
     }
 
     public async Task<ValidationResult> ValidateDataTableAsync(DataTable dataTable, ValidationContext context)
@@ -89,7 +89,7 @@ public class BulkValidationService : IBulkValidationService
                 processedRows++;
 
                 // Report progress every 100 rows or at completion
-                if (processedRows % _settings.ProgressUpdateInterval == 0 || processedRows == totalRows)
+                if (processedRows % _configuration.ProgressUpdateInterval == 0 || processedRows == totalRows)
                 {
                     var progress = (double)processedRows / totalRows;
                     await progressCallback(progress);
@@ -169,22 +169,22 @@ public class BulkValidationService : IBulkValidationService
         // First Name validation
         var firstName = GetCellValue(row, "FirstName");
         var firstNameValidation = CommonValidationService.ValidateStringLength(
-            firstName, "First Name", 1, _settings.Validation.MaxFirstNameLength);
+            firstName, "First Name", 1, _configuration.Validation.MaxFirstNameLength);
         if (!firstNameValidation.IsSuccess)
             errors.Add($"Row {rowNumber}: {firstNameValidation.ErrorMessage}");
 
         // Last Name validation
         var lastName = GetCellValue(row, "LastName");
         var lastNameValidation = CommonValidationService.ValidateStringLength(
-            lastName, "Last Name", 1, _settings.Validation.MaxLastNameLength);
+            lastName, "Last Name", 1, _configuration.Validation.MaxLastNameLength);
         if (!lastNameValidation.IsSuccess)
             errors.Add($"Row {rowNumber}: {lastNameValidation.ErrorMessage}");
 
         // Role validation
         var role = GetCellValue(row, "Role");
-        if (!string.IsNullOrWhiteSpace(role) && !_settings.Validation.ValidRoles.Contains(role))
+        if (!string.IsNullOrWhiteSpace(role) && !_configuration.Validation.ValidRoles.Contains(role))
         {
-            errors.Add($"Row {rowNumber}: Invalid role '{role}'. Valid roles: {string.Join(", ", _settings.Validation.ValidRoles)}");
+            errors.Add($"Row {rowNumber}: Invalid role '{role}'. Valid roles: {string.Join(", ", _configuration.Validation.ValidRoles)}");
         }
 
         // Phone validation (optional)

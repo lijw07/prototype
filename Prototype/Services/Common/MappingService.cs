@@ -78,7 +78,7 @@ public class MappingService : IMappingService
         return new RoleDto
         {
             UserRoleId = role.UserRoleId,
-            Role = role.Role,
+            Role = role.RoleName,
             CreatedAt = role.CreatedAt,
             CreatedBy = role.CreatedBy
         };

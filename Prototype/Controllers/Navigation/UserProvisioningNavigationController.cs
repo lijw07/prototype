@@ -391,7 +391,7 @@ public class UserProvisioningNavigationController(
     {
         // Role-based templates
         var roles = await context.UserRoles
-            .Select(r => r.Role)
+            .Select(r => r.RoleName)
             .Distinct()
             .ToListAsync();
 

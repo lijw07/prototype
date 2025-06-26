@@ -31,7 +31,7 @@ public class UserRoleService(SentinelContext context) : IUserRoleService
         var role = new UserRoleModel
         {
             UserRoleId = Guid.NewGuid(),
-            Role = roleName,
+            RoleName = roleName,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = createdBy
         };
@@ -56,7 +56,7 @@ public class UserRoleService(SentinelContext context) : IUserRoleService
         if (role == null)
             return null;
 
-        role.Role = roleName;
+        role.RoleName = roleName;
         return role;
     }
 
@@ -83,6 +83,6 @@ public class UserRoleService(SentinelContext context) : IUserRoleService
     public async Task<bool> RoleExistsAsync(string roleName)
     {
         return await context.UserRoles
-            .AnyAsync(r => r.Role.ToLower() == roleName.ToLower());
+            .AnyAsync(r => r.RoleName.ToLower() == roleName.ToLower());
     }
 }

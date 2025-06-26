@@ -1,6 +1,6 @@
 namespace Prototype.DTOs.BulkUpload;
 
-public class BulkUploadHistory
+public class BulkUploadHistoryDto
 {
     public Guid UploadId { get; set; }
     public string FileName { get; set; } = string.Empty;
