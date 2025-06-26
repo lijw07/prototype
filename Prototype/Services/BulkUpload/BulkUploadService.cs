@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Prototype.Data;
 using Prototype.DTOs.BulkUpload;
+using Prototype.Enum;
 using Prototype.Helpers;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
@@ -19,7 +20,7 @@ namespace Prototype.Services.BulkUpload;
 public class BulkUploadService : IBulkUploadService
 {
     private readonly SentinelContext _context;
-    private readonly IValidationService _validationService;
+    // TODO: Replace with specific validators in Phase 2 refactoring
     private readonly ITransactionService _transactionService;
     private readonly ILogger<BulkUploadService> _logger;
     private readonly ITableMappingService _tableMappingService;
@@ -27,14 +28,12 @@ public class BulkUploadService : IBulkUploadService
 
     public BulkUploadService(
         SentinelContext context,
-        IValidationService validationService,
         ITransactionService transactionService,
         ILogger<BulkUploadService> logger,
         ITableMappingService tableMappingService,
         IProgressService progressService)
     {
         _context = context;
-        _validationService = validationService;
         _transactionService = transactionService;
         _logger = logger;
         _tableMappingService = tableMappingService;

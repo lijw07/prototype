@@ -7,4 +7,5 @@ public class LoginResponse
     public string Token { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
     public UserDto? User { get; set; }
+    public List<string> Errors { get; set; } = new List<string>();
 }

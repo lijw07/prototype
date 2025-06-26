@@ -12,14 +12,12 @@ public class UserAccountService(
     SentinelContext context,
     IJwtTokenService jwtTokenService,
     IEmailNotificationFactoryService emailService,
-    ValidationService validationService,
     TransactionService transactionService,
     PasswordEncryptionService passwordService,
     ILogger<UserAccountService> logger,
     IHttpContextAccessor httpContextAccessor)
     : IUserAccountService
 {
-    private readonly ValidationService _validationService = validationService;
 
     public async Task<UserModel?> GetUserByEmailAsync(string email)
     {

@@ -22,10 +22,9 @@ public class ApplicationNavigationController(
     IEnumerable<IApiConnectionStrategy> apiStrategies,
     IEnumerable<IFileConnectionStrategy> fileStrategies,
     IAuthenticatedUserAccessor userAccessor,
-    ValidationService validationService,
     TransactionService transactionService,
     ILogger<ApplicationNavigationController> logger)
-    : BaseNavigationController(logger, userAccessor, validationService, transactionService)
+    : BaseNavigationController(logger, userAccessor, transactionService)
 {
     [HttpPost("new-application-connection")]
     public async Task<IActionResult> CreateApplication([FromBody] ApplicationRequestDto dto)

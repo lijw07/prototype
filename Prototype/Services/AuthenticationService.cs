@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Prototype.Constants;
 using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.DTOs.Responses;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
+using Prototype.Services.Validators;
 
 namespace Prototype.Services;
 
@@ -12,7 +14,7 @@ public class AuthenticationService(
     SentinelContext context,
     IJwtTokenService jwtTokenService,
     PasswordEncryptionService passwordService,
-    ValidationService validationService,
+    LoginRequestValidator loginValidator,
     ILogger<AuthenticationService> logger)
     : IAuthenticationService
 {
@@ -21,12 +23,13 @@ public class AuthenticationService(
         try
         {
             // Validation
-            var validationResult = validationService.ValidateLoginRequest(request);
+            var validationResult = await loginValidator.ValidateAsync(request);
             if (!validationResult.IsSuccess)
                 return new LoginResponse
                 {
                     Success = false,
-                    Message = "Validation failed"
+                    Message = ApplicationConstants.ErrorMessages.InvalidRequest,
+                    Errors = validationResult.Errors
                 };
 
             // Find user
@@ -39,7 +42,7 @@ public class AuthenticationService(
                 return new LoginResponse
                 {
                     Success = false,
-                    Message = "Invalid username or password"
+                    Message = ApplicationConstants.ErrorMessages.InvalidCredentials
                 };
             }
 
@@ -53,8 +56,8 @@ public class AuthenticationService(
                 UserActivityLogId = Guid.NewGuid(),
                 UserId = user.UserId,
                 User = user,
-                IpAddress = "127.0.0.1", // Would need HttpContext to get real IP
-                DeviceInformation = "Unknown", // Would need HttpContext to get real device info
+                IpAddress = ApplicationConstants.DefaultIpAddress, // Would need HttpContext to get real IP
+                DeviceInformation = ApplicationConstants.DefaultDeviceInfo, // Would need HttpContext to get real device info
                 ActionType = ActionTypeEnum.Login,
                 Description = "User logged in",
                 Timestamp = DateTime.UtcNow
@@ -70,7 +73,7 @@ public class AuthenticationService(
             return new LoginResponse
             {
                 Success = true,
-                Message = "Login successful",
+                Message = ApplicationConstants.SuccessMessages.LoginSuccess,
                 Token = token
             };
         }
@@ -80,7 +83,7 @@ public class AuthenticationService(
             return new LoginResponse
             {
                 Success = false,
-                Message = "An error occurred during authentication"
+                Message = ApplicationConstants.ErrorMessages.ServerError
             };
         }
     }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Prototype.Controllers;
 using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.Enum;
@@ -11,24 +12,33 @@ using Prototype.Utility;
 namespace Prototype.Controllers.Navigation;
 
 [Route("settings/roles")]
-public class RoleNavigationController(
-    IAuthenticatedUserAccessor userAccessor,
-    ValidationService validationService,
-    TransactionService transactionService,
-    IUserRoleService userRoleService,
-    SentinelContext context,
-    ILogger<RoleNavigationController> logger)
-    : BaseNavigationController(logger, userAccessor, validationService, transactionService)
+public class RoleNavigationController : BaseApiController
 {
+    private readonly IUserRoleService _userRoleService;
+
+    public RoleNavigationController(
+        SentinelContext context,
+        IAuthenticatedUserAccessor userAccessor,
+        TransactionService transactionService,
+        IAuditLogService auditLogService,
+        IUserRoleService userRoleService,
+        ILogger<RoleNavigationController> logger)
+        : base(logger, context, userAccessor, transactionService, auditLogService)
+    {
+        _userRoleService = userRoleService ?? throw new ArgumentNullException(nameof(userRoleService));
+    }
     [HttpGet]
     public async Task<IActionResult> GetAllRoles([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
-        return await ExecuteWithErrorHandlingAsync<object>(async () =>
+        return await EnsureUserAuthenticatedAsync(async currentUser =>
         {
+            if (Context == null)
+                throw new InvalidOperationException("Database context is not available");
+
             var (validPage, validPageSize, skip) = ValidatePaginationParameters(page, pageSize);
 
-            var totalCount = await context.UserRoles.CountAsync();
-            var roles = await context.UserRoles
+            var totalCount = await Context.UserRoles.CountAsync();
+            var roles = await Context.UserRoles
                 .OrderByDescending(r => r.CreatedAt)
                 .Skip(skip)
                 .Take(validPageSize)
@@ -43,19 +53,19 @@ public class RoleNavigationController(
             }).ToList();
 
             var result = CreatePaginatedResponse(roleDtos, validPage, validPageSize, totalCount);
-            return new { success = true, data = result };
-        }, "retrieving all roles");
+            return SuccessResponse(result, "Roles retrieved successfully");
+        });
     }
 
     [HttpGet("{roleId}")]
     public async Task<IActionResult> GetRoleById(Guid roleId)
     {
-        return await ExecuteWithErrorHandlingAsync<object>(async () =>
+        return await EnsureUserAuthenticatedAsync(async currentUser =>
         {
-            var role = await userRoleService.GetRoleByIdAsync(roleId);
+            var role = await _userRoleService.GetRoleByIdAsync(roleId);
             
             if (role == null)
-                return new { success = false, message = "Role not found" };
+                return BadRequestWithMessage("Role not found");
 
             var roleDto = new RoleDto
             {
@@ -65,283 +75,201 @@ public class RoleNavigationController(
                 CreatedBy = role.CreatedBy
             };
 
-            return new { success = true, role = roleDto };
-        }, "retrieving role");
+            return SuccessResponse(new { Role = roleDto }, "Role retrieved successfully");
+        });
     }
 
     [HttpPost]
     public async Task<IActionResult> CreateRole([FromBody] CreateRoleDto dto)
     {
-        return await ExecuteInTransactionAsync<object>(async () =>
+        return await EnsureUserAuthenticatedAsync(async currentUser =>
         {
-            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
-            if (currentUser == null)
-                return new { success = false, message = "User not authenticated" };
+            return await ExecuteInTransactionWithAuditAsync(async user =>
+            {
+                if (Context == null)
+                    throw new InvalidOperationException("Database context is not available");
 
-            // Check if role already exists using the same context
-            var roleExists = await context.UserRoles
-                .AnyAsync(r => r.Role.ToLower() == dto.RoleName.ToLower());
-            if (roleExists)
-                return new { success = false, message = "A role with this name already exists" };
+                // Check if role already exists using the same context
+                var roleExists = await Context.UserRoles
+                    .AnyAsync(r => r.Role.ToLower() == dto.RoleName.ToLower());
+                if (roleExists)
+                    return BadRequestWithMessage("A role with this name already exists");
 
-            // Create role directly in the controller's context (within transaction)
-            var role = new UserRoleModel
-            {
-                UserRoleId = Guid.NewGuid(),
-                Role = dto.RoleName,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = currentUser.Username
-            };
-            context.UserRoles.Add(role);
-            
-            Logger.LogInformation("Role created in transaction, now creating logs for role: {RoleName}", dto.RoleName);
-            
-            // Create audit logs in the same transaction using the same context
-            var activityLog = new UserActivityLogModel
-            {
-                UserActivityLogId = Guid.NewGuid(),
-                UserId = currentUser.UserId,
-                User = null,
-                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
-                DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
-                ActionType = ActionTypeEnum.RoleCreated,
-                Description = $"User created role: {dto.RoleName}",
-                Timestamp = DateTime.UtcNow
-            };
-            context.UserActivityLogs.Add(activityLog);
-            Logger.LogInformation("Added UserActivityLog for role creation");
-            
-            // Create audit log entry
-            var auditLog = new AuditLogModel
-            {
-                AuditLogId = Guid.NewGuid(),
-                ActionType = ActionTypeEnum.RoleCreated,
-                Metadata = $"Role '{dto.RoleName}' created by user {currentUser.Username}. Role ID: {role.UserRoleId}",
-                UserId = currentUser.UserId,
-                User = null,
-                CreatedAt = DateTime.UtcNow
-            };
-            context.AuditLogs.Add(auditLog);
-            Logger.LogInformation("Added AuditLog for role creation");
-            
-            // All changes will be committed together by the transaction service
-            Logger.LogInformation("Transaction will commit role and logs together for: {RoleName}", dto.RoleName);
-            
-            var roleDto = new RoleDto
-            {
-                UserRoleId = role.UserRoleId,
-                Role = role.Role,
-                CreatedAt = role.CreatedAt,
-                CreatedBy = role.CreatedBy
-            };
+                // Create role directly in the controller's context (within transaction)
+                var role = new UserRoleModel
+                {
+                    UserRoleId = Guid.NewGuid(),
+                    Role = dto.RoleName,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = user.Username
+                };
+                Context.UserRoles.Add(role);
+                
+                Logger.LogInformation("Role created in transaction, now creating logs for role: {RoleName}", dto.RoleName);
+                
+                var roleDto = new RoleDto
+                {
+                    UserRoleId = role.UserRoleId,
+                    Role = role.Role,
+                    CreatedAt = role.CreatedAt,
+                    CreatedBy = role.CreatedBy
+                };
 
-            Logger.LogInformation("Role '{RoleName}' created by user {Username}", dto.RoleName, currentUser.Username);
-            return new { success = true, message = "Role created successfully", role = roleDto };
+                Logger.LogInformation("Role '{RoleName}' created by user {Username}", dto.RoleName, user.Username);
+                return SuccessResponse(new { Message = "Role created successfully", Role = roleDto }, "Role created successfully");
+
+            }, ActionTypeEnum.RoleCreated, $"User created role: {dto.RoleName}", "Role created successfully");
         });
     }
 
     [HttpPut("{roleId}")]
     public async Task<IActionResult> UpdateRole(Guid roleId, [FromBody] CreateRoleDto dto)
     {
-        return await ExecuteInTransactionAsync<object>(async () =>
+        return await EnsureUserAuthenticatedAsync(async currentUser =>
         {
-            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
-            if (currentUser == null)
-                return new { success = false, message = "User not authenticated" };
-
-            // Check if role exists using the same context
-            var existingRole = await context.UserRoles
+            // Get role name first to use in audit message
+            var existingRoleForAudit = await Context!.UserRoles
                 .FirstOrDefaultAsync(r => r.UserRoleId == roleId);
-            if (existingRole == null)
-                return new { success = false, message = "Role not found" };
+            var oldRoleName = existingRoleForAudit?.Role ?? "Unknown";
 
-            // Check if another role with the same name exists using the same context
-            var roleWithSameName = await context.UserRoles
-                .AnyAsync(r => r.Role.ToLower() == dto.RoleName.ToLower());
-            if (roleWithSameName && !existingRole.Role.Equals(dto.RoleName, StringComparison.OrdinalIgnoreCase))
-                return new { success = false, message = "A role with this name already exists" };
-
-            var oldRoleName = existingRole.Role;
-            
-            // Update role directly in the controller's context (within transaction)
-            existingRole.Role = dto.RoleName;
-            
-            Logger.LogInformation("Role updated in transaction, now creating logs for role update: {OldName} -> {NewName}", oldRoleName, dto.RoleName);
-            
-            // Create audit logs in the same transaction using the same context
-            var activityLog = new UserActivityLogModel
+            return await ExecuteInTransactionWithAuditAsync(async user =>
             {
-                UserActivityLogId = Guid.NewGuid(),
-                UserId = currentUser.UserId,
-                User = null,
-                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
-                DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
-                ActionType = ActionTypeEnum.RoleUpdated,
-                Description = $"User updated role from '{oldRoleName}' to '{dto.RoleName}'",
-                Timestamp = DateTime.UtcNow
-            };
-            context.UserActivityLogs.Add(activityLog);
-            Logger.LogInformation("Added UserActivityLog for role update");
-            
-            // Create audit log entry
-            var auditLog = new AuditLogModel
-            {
-                AuditLogId = Guid.NewGuid(),
-                ActionType = ActionTypeEnum.RoleUpdated,
-                Metadata = $"Role updated from '{oldRoleName}' to '{dto.RoleName}' by user {currentUser.Username}. Role ID: {roleId}",
-                UserId = currentUser.UserId,
-                User = null,
-                CreatedAt = DateTime.UtcNow
-            };
-            context.AuditLogs.Add(auditLog);
-            Logger.LogInformation("Added AuditLog for role update");
-            
-            // All changes will be committed together by the transaction service
-            Logger.LogInformation("Transaction will commit role update and logs together for: {OldName} -> {NewName}", oldRoleName, dto.RoleName);
+                if (Context == null)
+                    throw new InvalidOperationException("Database context is not available");
 
-            var roleDto = new RoleDto
-            {
-                UserRoleId = existingRole.UserRoleId,
-                Role = existingRole.Role,
-                CreatedAt = existingRole.CreatedAt,
-                CreatedBy = existingRole.CreatedBy
-            };
+                // Check if role exists using the same context
+                var existingRole = await Context.UserRoles
+                    .FirstOrDefaultAsync(r => r.UserRoleId == roleId);
+                if (existingRole == null)
+                    return BadRequestWithMessage("Role not found");
 
-            Logger.LogInformation("Role '{OldRoleName}' updated to '{NewRoleName}' by user {Username}", oldRoleName, dto.RoleName, currentUser.Username);
-            return new { success = true, message = "Role updated successfully", role = roleDto };
+                // Check if another role with the same name exists using the same context
+                var roleWithSameName = await Context.UserRoles
+                    .AnyAsync(r => r.Role.ToLower() == dto.RoleName.ToLower());
+                if (roleWithSameName && !existingRole.Role.Equals(dto.RoleName, StringComparison.OrdinalIgnoreCase))
+                    return BadRequestWithMessage("A role with this name already exists");
+
+                // Update role directly in the controller's context (within transaction)
+                existingRole.Role = dto.RoleName;
+                
+                Logger.LogInformation("Role updated in transaction, now creating logs for role update: {OldName} -> {NewName}", oldRoleName, dto.RoleName);
+
+                var roleDto = new RoleDto
+                {
+                    UserRoleId = existingRole.UserRoleId,
+                    Role = existingRole.Role,
+                    CreatedAt = existingRole.CreatedAt,
+                    CreatedBy = existingRole.CreatedBy
+                };
+
+                Logger.LogInformation("Role '{OldRoleName}' updated to '{NewRoleName}' by user {Username}", oldRoleName, dto.RoleName, user.Username);
+                return SuccessResponse(new { Message = "Role updated successfully", Role = roleDto }, "Role updated successfully");
+
+            }, ActionTypeEnum.RoleUpdated, $"User updated role from '{oldRoleName}' to '{dto.RoleName}'", "Role updated successfully");
         });
     }
 
     [HttpGet("{roleId}/deletion-constraints")]
     public async Task<IActionResult> GetRoleDeletionConstraints(Guid roleId)
     {
-        try
+        return await EnsureUserAuthenticatedAsync(async currentUser =>
         {
-            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
-            if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
-
-            // Get role details
-            var role = await context.UserRoles
-                .FirstOrDefaultAsync(r => r.UserRoleId == roleId);
-            if (role == null)
-                return NotFound(new { success = false, message = "Role not found" });
-
-            var roleName = role.Role;
-            
-            // Check if role is assigned to any users
-            var usersWithRole = await context.Users
-                .Where(u => u.Role.ToLower() == roleName.ToLower())
-                .CountAsync();
-            
-            // Check if role is assigned to any temporary users (specifically for "User" role)
-            var tempUsersCount = await context.TemporaryUsers.CountAsync();
-            var blockedByTempUsers = tempUsersCount > 0 && roleName.ToLower() == "user";
-            
-            var canDelete = usersWithRole == 0 && !blockedByTempUsers;
-            
-            string constraintMessage = "";
-            if (usersWithRole > 0)
+            return await ExecuteWithErrorHandlingAsync(async () =>
             {
-                constraintMessage = $"Cannot delete role '{roleName}' - it is assigned to {usersWithRole} user(s). Please reassign users to different roles before deletion.";
-            }
-            else if (blockedByTempUsers)
-            {
-                constraintMessage = $"Cannot delete 'User' role - there are {tempUsersCount} temporary user(s) that will be assigned this role upon activation.";
-            }
-            
-            return Ok(new { 
-                success = true, 
-                canDelete = canDelete,
-                usersCount = usersWithRole,
-                temporaryUsersCount = blockedByTempUsers ? tempUsersCount : 0,
-                constraintMessage = constraintMessage,
-                roleName = roleName
-            });
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Error checking role deletion constraints for role {RoleId}", roleId);
-            return StatusCode(500, new { success = false, message = "Internal server error" });
-        }
+                if (Context == null)
+                    throw new InvalidOperationException("Database context is not available");
+
+                // Get role details
+                var role = await Context.UserRoles
+                    .FirstOrDefaultAsync(r => r.UserRoleId == roleId);
+                if (role == null)
+                    return BadRequestWithMessage("Role not found");
+
+                var roleName = role.Role;
+                
+                // Check if role is assigned to any users
+                var usersWithRole = await Context.Users
+                    .Where(u => u.Role.ToLower() == roleName.ToLower())
+                    .CountAsync();
+                
+                // Check if role is assigned to any temporary users (specifically for "User" role)
+                var tempUsersCount = await Context.TemporaryUsers.CountAsync();
+                var blockedByTempUsers = tempUsersCount > 0 && roleName.ToLower() == "user";
+                
+                var canDelete = usersWithRole == 0 && !blockedByTempUsers;
+                
+                string constraintMessage = "";
+                if (usersWithRole > 0)
+                {
+                    constraintMessage = $"Cannot delete role '{roleName}' - it is assigned to {usersWithRole} user(s). Please reassign users to different roles before deletion.";
+                }
+                else if (blockedByTempUsers)
+                {
+                    constraintMessage = $"Cannot delete 'User' role - there are {tempUsersCount} temporary user(s) that will be assigned this role upon activation.";
+                }
+                
+                var result = new { 
+                    CanDelete = canDelete,
+                    UsersCount = usersWithRole,
+                    TemporaryUsersCount = blockedByTempUsers ? tempUsersCount : 0,
+                    ConstraintMessage = constraintMessage,
+                    RoleName = roleName
+                };
+
+                return SuccessResponse(result, "Role deletion constraints retrieved successfully");
+
+            }, "checking role deletion constraints");
+        });
     }
 
     [HttpDelete("{roleId}")]
     public async Task<IActionResult> DeleteRole(Guid roleId)
     {
-        return await ExecuteInTransactionAsync<object>(async () =>
+        return await EnsureUserAuthenticatedAsync(async currentUser =>
         {
-            var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
-            if (currentUser == null)
-                return new { success = false, message = "User not authenticated" };
+            return await ExecuteInTransactionWithAuditAsync(async user =>
+            {
+                if (Context == null)
+                    throw new InvalidOperationException("Database context is not available");
 
-            // Get role details before deletion for logging using the same context
-            var roleToDelete = await context.UserRoles
-                .FirstOrDefaultAsync(r => r.UserRoleId == roleId);
-            if (roleToDelete == null)
-                return new { success = false, message = "Role not found" };
+                // Get role details before deletion for logging using the same context
+                var roleToDelete = await Context.UserRoles
+                    .FirstOrDefaultAsync(r => r.UserRoleId == roleId);
+                if (roleToDelete == null)
+                    return BadRequestWithMessage("Role not found");
 
-            var roleName = roleToDelete.Role;
-            
-            // Check if role is assigned to any users before deletion
-            var usersWithRole = await context.Users
-                .Where(u => u.Role.ToLower() == roleName.ToLower())
-                .CountAsync();
-            
-            if (usersWithRole > 0)
-            {
-                Logger.LogWarning("Cannot delete role '{RoleName}' - it is assigned to {UserCount} user(s)", roleName, usersWithRole);
-                return new { success = false, message = $"Cannot delete role '{roleName}' - it is assigned to {usersWithRole} user(s). Please reassign users to different roles before deletion." };
-            }
-            
-            // Check if role is assigned to any temporary users
-            var tempUsersCount = await context.TemporaryUsers.CountAsync();
-            if (tempUsersCount > 0 && roleName.ToLower() == "user")
-            {
-                Logger.LogWarning("Cannot delete 'User' role - there are {TempUserCount} temporary user(s) that will be assigned this role upon activation", tempUsersCount);
-                return new { success = false, message = $"Cannot delete 'User' role - there are {tempUsersCount} temporary user(s) that will be assigned this role upon activation." };
-            }
-            
-            Logger.LogInformation("Role '{RoleName}' passed constraint checks - no users assigned", roleName);
-            
-            // Delete role directly in the controller's context (within transaction)
-            context.UserRoles.Remove(roleToDelete);
-            
-            Logger.LogInformation("Role deleted in transaction, now creating logs for role deletion: {RoleName}", roleName);
-            
-            // Create audit logs in the same transaction using the same context
-            var activityLog = new UserActivityLogModel
-            {
-                UserActivityLogId = Guid.NewGuid(),
-                UserId = currentUser.UserId,
-                User = null,
-                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
-                DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
-                ActionType = ActionTypeEnum.RoleDeleted,
-                Description = $"User deleted role: {roleName}",
-                Timestamp = DateTime.UtcNow
-            };
-            context.UserActivityLogs.Add(activityLog);
-            Logger.LogInformation("Added UserActivityLog for role deletion");
-            
-            // Create audit log entry
-            var auditLog = new AuditLogModel
-            {
-                AuditLogId = Guid.NewGuid(),
-                ActionType = ActionTypeEnum.RoleDeleted,
-                Metadata = $"Role '{roleName}' deleted by user {currentUser.Username}. Role ID: {roleId}",
-                UserId = currentUser.UserId,
-                User = null,
-                CreatedAt = DateTime.UtcNow
-            };
-            context.AuditLogs.Add(auditLog);
-            Logger.LogInformation("Added AuditLog for role deletion");
-            
-            // All changes will be committed together by the transaction service
-            Logger.LogInformation("Transaction will commit role deletion and logs together for: {RoleName}", roleName);
+                var roleName = roleToDelete.Role;
+                
+                // Check if role is assigned to any users before deletion
+                var usersWithRole = await Context.Users
+                    .Where(u => u.Role.ToLower() == roleName.ToLower())
+                    .CountAsync();
+                
+                if (usersWithRole > 0)
+                {
+                    Logger.LogWarning("Cannot delete role '{RoleName}' - it is assigned to {UserCount} user(s)", roleName, usersWithRole);
+                    return BadRequestWithMessage($"Cannot delete role '{roleName}' - it is assigned to {usersWithRole} user(s). Please reassign users to different roles before deletion.");
+                }
+                
+                // Check if role is assigned to any temporary users
+                var tempUsersCount = await Context.TemporaryUsers.CountAsync();
+                if (tempUsersCount > 0 && roleName.ToLower() == "user")
+                {
+                    Logger.LogWarning("Cannot delete 'User' role - there are {TempUserCount} temporary user(s) that will be assigned this role upon activation", tempUsersCount);
+                    return BadRequestWithMessage($"Cannot delete 'User' role - there are {tempUsersCount} temporary user(s) that will be assigned this role upon activation.");
+                }
+                
+                Logger.LogInformation("Role '{RoleName}' passed constraint checks - no users assigned", roleName);
+                
+                // Delete role directly in the controller's context (within transaction)
+                Context.UserRoles.Remove(roleToDelete);
+                
+                Logger.LogInformation("Role deleted in transaction, now creating logs for role deletion: {RoleName}", roleName);
 
-            Logger.LogInformation("Role '{RoleName}' deleted by user {Username}", roleName, currentUser.Username);
-            return new { success = true, message = "Role deleted successfully" };
+                Logger.LogInformation("Role '{RoleName}' deleted by user {Username}", roleName, user.Username);
+                return SuccessResponse(new { Message = "Role deleted successfully" }, "Role deleted successfully");
+
+            }, ActionTypeEnum.RoleDeleted, $"User deleted role: {roleId}", "Role deleted successfully");
         });
     }
 }

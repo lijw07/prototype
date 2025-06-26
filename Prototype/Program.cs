@@ -23,11 +23,13 @@ using Prototype.Database.File;
 using Prototype.Database.Cloud;
 using Prototype.Middleware;
 using Prototype.POCO;
+using Prototype.Repositories;
 using Prototype.Services;
 using Prototype.Services.Factory;
 using Prototype.Services.Interfaces;
 using Prototype.Services.BulkUpload;
 using Prototype.Services.BulkUpload.Mappers;
+using Prototype.Services.Validators;
 using Prototype.Utility;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -81,24 +83,37 @@ builder.Services.Configure<SmtpSettingsPoco>(
 
 // Register Application Services
 builder.Services.AddScoped<IEmailNotificationFactoryService, EmailNotificationFactoryService>();
-builder.Services.AddScoped<IUserRecoveryRequestFactoryService, UserRecoveryFactoryService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthenticatedUserAccessor, AuthenticatedUserAccessor>();
 builder.Services.AddScoped<IApplicationFactoryService, ApplicationFactoryService>();
-builder.Services.AddScoped<IUserApplicationFactoryService, UserApplicationFactoryService>();
 builder.Services.AddScoped<IApplicationConnectionFactoryService, ApplicationConnectionFactoryService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<PasswordEncryptionService>();
-builder.Services.AddScoped<IValidationService, ValidationService>();
-builder.Services.AddScoped<ValidationService>();
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<IUserAccountService, UserAccountService>();
+// UserContext handled by AuthenticatedUserAccessor
 builder.Services.AddScoped<IUserRoleService, UserRoleService>();
 builder.Services.AddScoped<DatabaseSeeder>();
 
+// Register Common Services
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<INavigationService, NavigationService>();
+
+// Register Repository Pattern
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+
+// Register Validators
+builder.Services.AddScoped<RegisterRequestValidator>();
+builder.Services.AddScoped<LoginRequestValidator>();
+// TODO: Add FileUploadValidator in Phase 2
+
 // Register Bulk Upload Services
-builder.Services.AddScoped<IBulkUploadService, BulkUploadService>();
+builder.Services.AddScoped<IFileParsingService, FileParsingService>();
+builder.Services.AddScoped<IBulkValidationService, BulkValidationService>();
+builder.Services.AddScoped<IBulkDataProcessingService, BulkDataProcessingService>();
+builder.Services.AddScoped<IBulkUploadService, BulkUploadServiceRefactored>();
 builder.Services.AddScoped<ITableDetectionService, TableDetectionService>();
 builder.Services.AddScoped<ITableMappingService, TableMappingService>();
 builder.Services.AddScoped<IProgressService, ProgressService>();
@@ -121,8 +136,6 @@ builder.Services.AddMemoryCache();
 
 // Add SignalR
 builder.Services.AddSignalR();
-
-// SQL Server connection strategies are now self-contained in SqlServerDatabaseStrategy
 
 // Add Database Connection Strategies
 builder.Services.AddScoped<IDatabaseConnectionStrategy, SqlServerDatabaseStrategy>();
@@ -163,8 +176,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         var jwtKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? 
-                     builder.Configuration["JwtSettings:Key"] ?? 
-                     "your-super-secret-jwt-key-that-is-at-least-32-characters-long!";
+                     builder.Configuration["JwtSettings:Key"];
+        
+        if (string.IsNullOrEmpty(jwtKey))
+        {
+            throw new InvalidOperationException("JWT secret key must be configured via JWT_SECRET_KEY environment variable or JwtSettings:Key configuration setting. This is required for security.");
+        }
         var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? 
                         builder.Configuration["JwtSettings:Issuer"] ?? 
                         "PrototypeApp";

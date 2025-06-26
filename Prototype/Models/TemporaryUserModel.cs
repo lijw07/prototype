@@ -14,6 +14,7 @@ public class TemporaryUserModel
     public required string LastName { get; set; }
     
     [Required]
+    [StringLength(256)]
     public required string Email { get; set; }
     
     [Required]

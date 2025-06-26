@@ -313,7 +313,7 @@ export const userProvisioningApi = {
     api.post<{ success: boolean; data: any }>('/api/user-provisioning/auto-provision', request),
     
   bulkProvisionUsers: (formData: FormData) =>
-    fetch(`${getApiBaseUrl()}/api/BulkUpload/upload`, {
+    fetch(`${getApiBaseUrl()}/api/bulkupload/core/upload`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
@@ -322,7 +322,7 @@ export const userProvisioningApi = {
     }).then(response => response.json()),
     
   bulkProvisionMultipleFiles: (formData: FormData) =>
-    fetch(`${getApiBaseUrl()}/api/BulkUpload/upload-multiple`, {
+    fetch(`${getApiBaseUrl()}/api/bulkupload/multiple/upload-multiple`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
@@ -331,7 +331,7 @@ export const userProvisioningApi = {
     }).then(response => response.json()),
     
   bulkProvisionWithProgress: (formData: FormData) =>
-    fetch(`${getApiBaseUrl()}/api/BulkUpload/upload-with-progress`, {
+    fetch(`${getApiBaseUrl()}/api/bulkupload/progress/upload-with-progress`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
@@ -340,7 +340,7 @@ export const userProvisioningApi = {
     }).then(response => response.json()),
     
   bulkProvisionWithQueue: (formData: FormData) =>
-    fetch(`${getApiBaseUrl()}/api/BulkUpload/upload-queue`, {
+    fetch(`${getApiBaseUrl()}/api/bulkupload/queue/upload`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
@@ -349,10 +349,10 @@ export const userProvisioningApi = {
     }).then(response => response.json()),
     
   getQueueStatus: (jobId: string) =>
-    api.get<ApiResponse<any>>(`/api/BulkUpload/queue-status/${jobId}`),
+    api.get<ApiResponse<any>>(`/api/bulkupload/queue/status/${jobId}`),
     
   cancelQueue: (jobId: string) =>
-    api.post<ApiResponse<any>>(`/api/BulkUpload/cancel-queue/${jobId}`),
+    api.post<ApiResponse<any>>(`/api/bulkupload/queue/cancel/${jobId}`),
     
   getProvisioningTemplates: () =>
     api.get<{ success: boolean; data: any }>('/api/user-provisioning/provisioning-templates'),

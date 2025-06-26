@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Prototype.Common.Responses;
+using Prototype.Constants;
 using Prototype.Models;
 using Prototype.Services;
 using Prototype.Utility;
@@ -13,7 +14,6 @@ public abstract class BaseNavigationController : ControllerBase
 {
     protected readonly ILogger Logger;
     protected readonly IAuthenticatedUserAccessor? UserAccessor;
-    protected readonly ValidationService? ValidationService;
     protected readonly TransactionService? TransactionService;
 
     protected BaseNavigationController(ILogger logger)
@@ -24,12 +24,10 @@ public abstract class BaseNavigationController : ControllerBase
     protected BaseNavigationController(
         ILogger logger,
         IAuthenticatedUserAccessor userAccessor,
-        ValidationService validationService,
         TransactionService transactionService)
     {
         Logger = logger;
         UserAccessor = userAccessor;
-        ValidationService = validationService;
         TransactionService = transactionService;
     }
 
@@ -50,7 +48,7 @@ public abstract class BaseNavigationController : ControllerBase
             #if DEBUG
             return StatusCode(500, ApiResponse.FailureResponse($"Error: {ex.Message}. Inner: {ex.InnerException?.Message}"));
             #else
-            return StatusCode(500, ApiResponse.FailureResponse("An internal error occurred"));
+            return StatusCode(500, ApiResponse.FailureResponse(ApplicationConstants.ErrorMessages.ServerError));
             #endif
         }
     }
@@ -63,13 +61,13 @@ public abstract class BaseNavigationController : ControllerBase
 
     protected IActionResult HandleUserNotAuthenticated()
     {
-        return Unauthorized(ApiResponse.FailureResponse("User not authenticated"));
+        return Unauthorized(ApiResponse.FailureResponse(ApplicationConstants.ErrorMessages.UnauthorizedAccess));
     }
 
     protected static (int page, int pageSize, int skip) ValidatePaginationParameters(int page, int pageSize)
     {
         if (page < 1) page = 1;
-        if (pageSize < 1 || pageSize > 100) pageSize = 50;
+        if (pageSize < 1 || pageSize > 100) pageSize = 50; // TODO: Move to constants
         var skip = (page - 1) * pageSize;
         return (page, pageSize, skip);
     }
