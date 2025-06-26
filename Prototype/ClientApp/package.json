@@ -2,18 +2,8 @@
   "name": "prototype",
   "version": "0.1.0",
   "private": true,
-  "proxy": {
-    "/progressHub": {
-      "target": "http://backend:8080",
-      "ws": true,
-      "changeOrigin": true
-    },
-    "/api": {
-      "target": "http://backend:8080",
-      "changeOrigin": true
-      }
-    },
-    "dependencies": {
+  "proxy": "http://backend:8080",
+  "dependencies": {
     "@microsoft/signalr": "^8.0.7",
     "@tailwindcss/vite": "^4.1.10",
     "bootstrap": "^5.3.7",
