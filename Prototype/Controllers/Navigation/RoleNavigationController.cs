@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -70,7 +70,7 @@ public class RoleNavigationController(
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateRole([FromBody] CreateRoleDto dto)
+    public async Task<IActionResult> CreateRole([FromBody] RoleRequestDto requestDto)
     {
         return await ExecuteInTransactionAsync<object>(async () =>
         {
@@ -80,7 +80,7 @@ public class RoleNavigationController(
 
             // Check if role already exists using the same context
             var roleExists = await context.UserRoles
-                .AnyAsync(r => r.Role.ToLower() == dto.RoleName.ToLower());
+                .AnyAsync(r => r.Role.ToLower() == requestDto.RoleName.ToLower());
             if (roleExists)
                 return new { success = false, message = "A role with this name already exists" };
 
@@ -88,13 +88,13 @@ public class RoleNavigationController(
             var role = new UserRoleModel
             {
                 UserRoleId = Guid.NewGuid(),
-                Role = dto.RoleName,
+                Role = requestDto.RoleName,
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = currentUser.Username
             };
             context.UserRoles.Add(role);
             
-            Logger.LogInformation("Role created in transaction, now creating logs for role: {RoleName}", dto.RoleName);
+            Logger.LogInformation("Role created in transaction, now creating logs for role: {RoleName}", requestDto.RoleName);
             
             // Create audit logs in the same transaction using the same context
             var activityLog = new UserActivityLogModel
@@ -105,7 +105,7 @@ public class RoleNavigationController(
                 IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
                 DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
                 ActionType = ActionTypeEnum.RoleCreated,
-                Description = $"User created role: {dto.RoleName}",
+                Description = $"User created role: {requestDto.RoleName}",
                 Timestamp = DateTime.UtcNow
             };
             context.UserActivityLogs.Add(activityLog);
@@ -116,7 +116,7 @@ public class RoleNavigationController(
             {
                 AuditLogId = Guid.NewGuid(),
                 ActionType = ActionTypeEnum.RoleCreated,
-                Metadata = $"Role '{dto.RoleName}' created by user {currentUser.Username}. Role ID: {role.UserRoleId}",
+                Metadata = $"Role '{requestDto.RoleName}' created by user {currentUser.Username}. Role ID: {role.UserRoleId}",
                 UserId = currentUser.UserId,
                 User = null,
                 CreatedAt = DateTime.UtcNow
@@ -125,7 +125,7 @@ public class RoleNavigationController(
             Logger.LogInformation("Added AuditLog for role creation");
             
             // All changes will be committed together by the transaction service
-            Logger.LogInformation("Transaction will commit role and logs together for: {RoleName}", dto.RoleName);
+            Logger.LogInformation("Transaction will commit role and logs together for: {RoleName}", requestDto.RoleName);
             
             var roleDto = new RoleDto
             {
@@ -135,13 +135,13 @@ public class RoleNavigationController(
                 CreatedBy = role.CreatedBy
             };
 
-            Logger.LogInformation("Role '{RoleName}' created by user {Username}", dto.RoleName, currentUser.Username);
+            Logger.LogInformation("Role '{RoleName}' created by user {Username}", requestDto.RoleName, currentUser.Username);
             return new { success = true, message = "Role created successfully", role = roleDto };
         });
     }
 
     [HttpPut("{roleId}")]
-    public async Task<IActionResult> UpdateRole(Guid roleId, [FromBody] CreateRoleDto dto)
+    public async Task<IActionResult> UpdateRole(Guid roleId, [FromBody] RoleRequestDto requestDto)
     {
         return await ExecuteInTransactionAsync<object>(async () =>
         {
@@ -157,16 +157,16 @@ public class RoleNavigationController(
 
             // Check if another role with the same name exists using the same context
             var roleWithSameName = await context.UserRoles
-                .AnyAsync(r => r.Role.ToLower() == dto.RoleName.ToLower());
-            if (roleWithSameName && !existingRole.Role.Equals(dto.RoleName, StringComparison.OrdinalIgnoreCase))
+                .AnyAsync(r => r.Role.ToLower() == requestDto.RoleName.ToLower());
+            if (roleWithSameName && !existingRole.Role.Equals(requestDto.RoleName, StringComparison.OrdinalIgnoreCase))
                 return new { success = false, message = "A role with this name already exists" };
 
             var oldRoleName = existingRole.Role;
             
             // Update role directly in the controller's context (within transaction)
-            existingRole.Role = dto.RoleName;
+            existingRole.Role = requestDto.RoleName;
             
-            Logger.LogInformation("Role updated in transaction, now creating logs for role update: {OldName} -> {NewName}", oldRoleName, dto.RoleName);
+            Logger.LogInformation("Role updated in transaction, now creating logs for role update: {OldName} -> {NewName}", oldRoleName, requestDto.RoleName);
             
             // Create audit logs in the same transaction using the same context
             var activityLog = new UserActivityLogModel
@@ -177,7 +177,7 @@ public class RoleNavigationController(
                 IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
                 DeviceInformation = HttpContext.Request.Headers.UserAgent.ToString(),
                 ActionType = ActionTypeEnum.RoleUpdated,
-                Description = $"User updated role from '{oldRoleName}' to '{dto.RoleName}'",
+                Description = $"User updated role from '{oldRoleName}' to '{requestDto.RoleName}'",
                 Timestamp = DateTime.UtcNow
             };
             context.UserActivityLogs.Add(activityLog);
@@ -188,7 +188,7 @@ public class RoleNavigationController(
             {
                 AuditLogId = Guid.NewGuid(),
                 ActionType = ActionTypeEnum.RoleUpdated,
-                Metadata = $"Role updated from '{oldRoleName}' to '{dto.RoleName}' by user {currentUser.Username}. Role ID: {roleId}",
+                Metadata = $"Role updated from '{oldRoleName}' to '{requestDto.RoleName}' by user {currentUser.Username}. Role ID: {roleId}",
                 UserId = currentUser.UserId,
                 User = null,
                 CreatedAt = DateTime.UtcNow
@@ -197,7 +197,7 @@ public class RoleNavigationController(
             Logger.LogInformation("Added AuditLog for role update");
             
             // All changes will be committed together by the transaction service
-            Logger.LogInformation("Transaction will commit role update and logs together for: {OldName} -> {NewName}", oldRoleName, dto.RoleName);
+            Logger.LogInformation("Transaction will commit role update and logs together for: {OldName} -> {NewName}", oldRoleName, requestDto.RoleName);
 
             var roleDto = new RoleDto
             {
@@ -207,7 +207,7 @@ public class RoleNavigationController(
                 CreatedBy = existingRole.CreatedBy
             };
 
-            Logger.LogInformation("Role '{OldRoleName}' updated to '{NewRoleName}' by user {Username}", oldRoleName, dto.RoleName, currentUser.Username);
+            Logger.LogInformation("Role '{OldRoleName}' updated to '{NewRoleName}' by user {Username}", oldRoleName, requestDto.RoleName, currentUser.Username);
             return new { success = true, message = "Role updated successfully", role = roleDto };
         });
     }

@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
 using Prototype.Enum;
 using Prototype.Models;
+using Prototype.Services.Interfaces;
 using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
@@ -14,6 +14,7 @@ namespace Prototype.Controllers.Navigation;
 public class UserProvisioningNavigationController(
     SentinelContext context,
     IAuthenticatedUserAccessor userAccessor,
+    ICacheService cacheService,
     ILogger<UserProvisioningNavigationController> logger)
     : ControllerBase
 {
@@ -26,7 +27,22 @@ public class UserProvisioningNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first
+            var cacheKey = "user-provisioning:overview";
+            var cachedOverview = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedOverview != null)
+            {
+                logger.LogDebug("User provisioning overview cache hit");
+                return Ok(new { success = true, data = cachedOverview });
+            }
+
             var overview = await CollectProvisioningMetrics();
+            
+            // Cache for 10 minutes (provisioning data changes moderately)
+            await cacheService.SetAsync(cacheKey, overview, TimeSpan.FromMinutes(10));
+            logger.LogDebug("User provisioning overview cached");
+            
             return Ok(new { success = true, data = overview });
         }
         catch (Exception ex)
@@ -45,7 +61,22 @@ public class UserProvisioningNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first
+            var cacheKey = $"user-provisioning:pending-requests:page:{page}:size:{pageSize}";
+            var cachedRequests = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedRequests != null)
+            {
+                logger.LogDebug("Pending provisioning requests cache hit for page: {Page}, pageSize: {PageSize}", page, pageSize);
+                return Ok(new { success = true, data = cachedRequests });
+            }
+
             var pendingRequests = await GetPendingProvisioningRequests(page, pageSize);
+            
+            // Cache for 5 minutes (pending requests change frequently)
+            await cacheService.SetAsync(cacheKey, pendingRequests, TimeSpan.FromMinutes(5));
+            logger.LogDebug("Pending provisioning requests cached for page: {Page}, pageSize: {PageSize}", page, pageSize);
+            
             return Ok(new { success = true, data = pendingRequests });
         }
         catch (Exception ex)
@@ -83,7 +114,22 @@ public class UserProvisioningNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first
+            var cacheKey = "user-provisioning:templates";
+            var cachedTemplates = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedTemplates != null)
+            {
+                logger.LogDebug("Provisioning templates cache hit");
+                return Ok(new { success = true, data = cachedTemplates });
+            }
+
             var templates = await GetTemplates();
+            
+            // Cache for 30 minutes (templates change infrequently)
+            await cacheService.SetAsync(cacheKey, templates, TimeSpan.FromMinutes(30));
+            logger.LogDebug("Provisioning templates cached");
+            
             return Ok(new { success = true, data = templates });
         }
         catch (Exception ex)
@@ -325,6 +371,11 @@ public class UserProvisioningNavigationController(
         }
 
         await context.SaveChangesAsync();
+
+        // Invalidate related caches after auto-provisioning
+        await cacheService.RemoveByPatternAsync("user-provisioning:*");
+        await cacheService.RemoveByPatternAsync("dashboard:*");
+        await cacheService.RemoveByPatternAsync("analytics:*");
 
         return new
         {

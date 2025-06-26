@@ -1,4 +1,5 @@
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
 

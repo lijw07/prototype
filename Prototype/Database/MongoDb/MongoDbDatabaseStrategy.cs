@@ -2,6 +2,7 @@ using MongoDB.Driver;
 using MongoDB.Bson;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -30,26 +31,26 @@ public class MongoDbDatabaseStrategy(
         };
     }
 
-    public string BuildConnectionString(ConnectionSourceDto source)
+    public string BuildConnectionString(ConnectionSourceRequestDto sourceRequest)
     {
         var builder = new MongoUrlBuilder();
         
         // Basic connection info
-        builder.Server = new MongoServerAddress(source.Host, int.Parse(source.Port));
+        builder.Server = new MongoServerAddress(sourceRequest.Host, int.Parse(sourceRequest.Port));
         
         // Authentication
-        switch (source.AuthenticationType)
+        switch (sourceRequest.AuthenticationType)
         {
             case AuthenticationTypeEnum.UserPassword:
             case AuthenticationTypeEnum.ScramSha1:
             case AuthenticationTypeEnum.ScramSha256:
-                builder.Username = source.Username;
-                builder.Password = source.Password;
-                builder.AuthenticationSource = source.AuthenticationDatabase ?? "admin";
+                builder.Username = sourceRequest.Username;
+                builder.Password = sourceRequest.Password;
+                builder.AuthenticationSource = sourceRequest.AuthenticationDatabase ?? "admin";
                 
-                if (source.AuthenticationType == AuthenticationTypeEnum.ScramSha1)
+                if (sourceRequest.AuthenticationType == AuthenticationTypeEnum.ScramSha1)
                     builder.AuthenticationMechanism = "SCRAM-SHA-1";
-                else if (source.AuthenticationType == AuthenticationTypeEnum.ScramSha256)
+                else if (sourceRequest.AuthenticationType == AuthenticationTypeEnum.ScramSha256)
                     builder.AuthenticationMechanism = "SCRAM-SHA-256";
                 break;
                 
@@ -60,21 +61,21 @@ public class MongoDbDatabaseStrategy(
                 
             case AuthenticationTypeEnum.GssApi:
                 builder.AuthenticationMechanism = "GSSAPI";
-                builder.Username = source.Principal;
+                builder.Username = sourceRequest.Principal;
                 // Note: Authentication mechanism properties require more complex setup
                 // This is a simplified implementation
                 break;
                 
             case AuthenticationTypeEnum.Plain:
                 builder.AuthenticationMechanism = "PLAIN";
-                builder.Username = source.Username;
-                builder.Password = source.Password;
+                builder.Username = sourceRequest.Username;
+                builder.Password = sourceRequest.Password;
                 break;
                 
             case AuthenticationTypeEnum.AwsIam:
                 builder.AuthenticationMechanism = "MONGODB-AWS";
-                builder.Username = source.AwsAccessKeyId;
-                builder.Password = source.AwsSecretAccessKey;
+                builder.Username = sourceRequest.AwsAccessKeyId;
+                builder.Password = sourceRequest.AwsSecretAccessKey;
                 // Note: AWS session token setup requires more complex configuration
                 break;
                 
@@ -83,26 +84,26 @@ public class MongoDbDatabaseStrategy(
                 break;
                 
             default:
-                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for MongoDB.");
+                throw new NotSupportedException($"Authentication type '{sourceRequest.AuthenticationType}' is not supported for MongoDB.");
         }
 
         // Database name
-        if (!string.IsNullOrEmpty(source.DatabaseName))
+        if (!string.IsNullOrEmpty(sourceRequest.DatabaseName))
         {
-            builder.DatabaseName = source.DatabaseName;
+            builder.DatabaseName = sourceRequest.DatabaseName;
         }
 
         // Additional options
         builder.ConnectTimeout = TimeSpan.FromSeconds(30);
         builder.ServerSelectionTimeout = TimeSpan.FromSeconds(30);
-        builder.UseTls = source.Host != "localhost" && source.Host != "127.0.0.1";
+        builder.UseTls = sourceRequest.Host != "localhost" && sourceRequest.Host != "127.0.0.1";
 
         return builder.ToString();
     }
 
     public string BuildConnectionString(ApplicationConnectionModel source)
     {
-        var dto = new ConnectionSourceDto
+        var dto = new ConnectionSourceRequestDto
         {
             Host = source.Host,
             Port = source.Port,

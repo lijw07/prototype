@@ -1,8 +1,8 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
-using Prototype.Helpers;
+using Prototype.Models;
+using Prototype.Utility;
 
 namespace Prototype.Services.BulkUpload;
 

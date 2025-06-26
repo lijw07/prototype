@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
 using Prototype.Common;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Services.Interfaces;
 
@@ -89,9 +90,9 @@ public class ValidationService : IValidationService
         if (!System.Enum.IsDefined(typeof(DataSourceTypeEnum), request.DataSourceType))
             errors.Add("Invalid data source type");
 
-        if (request.ConnectionSource != null)
+        if (request.ConnectionSourceRequest != null)
         {
-            var connectionValidation = ValidateConnectionSource(request.ConnectionSource);
+            var connectionValidation = ValidateConnectionSource(request.ConnectionSourceRequest);
             if (!connectionValidation.IsSuccess)
                 errors.AddRange(connectionValidation.Errors);
         }
@@ -103,7 +104,7 @@ public class ValidationService : IValidationService
         return errors.Count == 0 ? Common.Result.Success() : Common.Result.Failure(errors);
     }
 
-    public Result ValidateConnectionSource(ConnectionSourceDto request)
+    public Result ValidateConnectionSource(ConnectionSourceRequestDto request)
     {
         var errors = new List<string>();
 
@@ -129,7 +130,7 @@ public class ValidationService : IValidationService
         return errors.Count == 0 ? Common.Result.Success() : Common.Result.Failure(errors);
     }
 
-    private static void ValidateAuthenticationSpecificFields(ConnectionSourceDto request, List<string> errors)
+    private static void ValidateAuthenticationSpecificFields(ConnectionSourceRequestDto request, List<string> errors)
     {
         var requiresUsername = new[]
         {
@@ -186,15 +187,15 @@ public class ValidationService : IValidationService
     }
 
     // Interface implementation for generic validation
-    public async Task<Prototype.Helpers.Result<T>> ValidateAsync<T>(T entity) where T : class
+    public async Task<Utility.Result<T>> ValidateAsync<T>(T entity) where T : class
     {
         var errors = await GetValidationErrorsAsync(entity);
         return errors.Any() 
-            ? Prototype.Helpers.Result<T>.Failure(errors) 
-            : Prototype.Helpers.Result<T>.Success(entity);
+            ? Utility.Result<T>.Failure(errors) 
+            : Utility.Result<T>.Success(entity);
     }
 
-    public async Task<Prototype.Helpers.Result<bool>> ValidatePropertyAsync<T>(T entity, string propertyName, object value) where T : class
+    public async Task<Utility.Result<bool>> ValidatePropertyAsync<T>(T entity, string propertyName, object value) where T : class
     {
         var context = new ValidationContext(entity) { MemberName = propertyName };
         var results = new List<ValidationResult>();
@@ -203,11 +204,11 @@ public class ValidationService : IValidationService
         
         if (isValid)
         {
-            return Prototype.Helpers.Result<bool>.Success(true);
+            return Utility.Result<bool>.Success(true);
         }
         
         var errors = results.Select(r => r.ErrorMessage ?? "Validation error").ToList();
-        return Prototype.Helpers.Result<bool>.Failure(errors);
+        return Utility.Result<bool>.Failure(errors);
     }
 
     public async Task<List<string>> GetValidationErrorsAsync<T>(T entity) where T : class

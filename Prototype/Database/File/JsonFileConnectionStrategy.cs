@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -26,17 +27,17 @@ public class JsonFileConnectionStrategy(
         };
     }
 
-    public async Task<object> ReadDataAsync(ConnectionSourceDto source)
+    public async Task<object> ReadDataAsync(ConnectionSourceRequestDto sourceRequest)
     {
         try
         {
-            var filePath = GetFilePath(source);
+            var filePath = GetFilePath(sourceRequest);
             if (!System.IO.File.Exists(filePath))
             {
                 throw new FileNotFoundException($"JSON file not found: {filePath}");
             }
 
-            var encoding = GetEncoding(source.Encoding ?? "UTF-8");
+            var encoding = GetEncoding(sourceRequest.Encoding ?? "UTF-8");
             var jsonContent = await System.IO.File.ReadAllTextAsync(filePath, encoding);
 
             var options = new JsonSerializerOptions
@@ -104,7 +105,7 @@ public class JsonFileConnectionStrategy(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to read JSON file: {FilePath}", source.FilePath);
+            logger.LogError(ex, "Failed to read JSON file: {FilePath}", sourceRequest.FilePath);
             throw;
         }
     }
@@ -115,11 +116,11 @@ public class JsonFileConnectionStrategy(
         return await ReadDataAsync(dto);
     }
 
-    public async Task<bool> TestConnectionAsync(ConnectionSourceDto source)
+    public async Task<bool> TestConnectionAsync(ConnectionSourceRequestDto sourceRequest)
     {
         try
         {
-            var filePath = GetFilePath(source);
+            var filePath = GetFilePath(sourceRequest);
             
             // Check if file exists and is accessible
             if (!System.IO.File.Exists(filePath))
@@ -127,7 +128,7 @@ public class JsonFileConnectionStrategy(
                 return false;
             }
 
-            var encoding = GetEncoding(source.Encoding ?? "UTF-8");
+            var encoding = GetEncoding(sourceRequest.Encoding ?? "UTF-8");
             var jsonContent = await System.IO.File.ReadAllTextAsync(filePath, encoding);
 
             // Try to parse JSON to validate format
@@ -143,7 +144,7 @@ public class JsonFileConnectionStrategy(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "JSON connection test failed for {FilePath}", source.FilePath);
+            logger.LogError(ex, "JSON connection test failed for {FilePath}", sourceRequest.FilePath);
             return false;
         }
     }
@@ -159,21 +160,21 @@ public class JsonFileConnectionStrategy(
         return "JSON file connection supporting arrays and objects with various encodings";
     }
 
-    private string GetFilePath(ConnectionSourceDto source)
+    private string GetFilePath(ConnectionSourceRequestDto sourceRequest)
     {
-        if (!string.IsNullOrEmpty(source.FilePath))
+        if (!string.IsNullOrEmpty(sourceRequest.FilePath))
         {
-            return source.FilePath;
+            return sourceRequest.FilePath;
         }
 
-        if (!string.IsNullOrEmpty(source.Url))
+        if (!string.IsNullOrEmpty(sourceRequest.Url))
         {
             // Handle file:// URLs
-            if (source.Url.StartsWith("file://"))
+            if (sourceRequest.Url.StartsWith("file://"))
             {
-                return source.Url.Substring(7);
+                return sourceRequest.Url.Substring(7);
             }
-            return source.Url;
+            return sourceRequest.Url;
         }
 
         throw new ArgumentException("Either FilePath or Url must be provided for JSON file connection");
@@ -226,9 +227,9 @@ public class JsonFileConnectionStrategy(
         };
     }
 
-    private ConnectionSourceDto MapToDto(ApplicationConnectionModel source)
+    private ConnectionSourceRequestDto MapToDto(ApplicationConnectionModel source)
     {
-        return new ConnectionSourceDto
+        return new ConnectionSourceRequestDto
         {
             Host = source.Host,
             Port = source.Port,

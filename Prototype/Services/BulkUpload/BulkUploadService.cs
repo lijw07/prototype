@@ -7,12 +7,11 @@ using CsvHelper.Configuration;
 using OfficeOpenXml;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Prototype.Data;
 using Prototype.DTOs.BulkUpload;
-using Prototype.Helpers;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
 using System.Diagnostics;
+using Prototype.Utility;
 
 namespace Prototype.Services.BulkUpload;
 
@@ -1123,8 +1122,9 @@ public class BulkUploadService : IBulkUploadService
                     try
                     {
                         await _context.SaveChangesAsync(cancellationToken);
-                        _logger.LogDebug("Saved batch {BatchIndex}/{TotalBatches} - {BatchProcessed} records", 
-                            batchIndex + 1, totalBatches, batchProcessed);
+                        if (_logger.IsEnabled(LogLevel.Debug))
+                            _logger.LogDebug("Saved batch {BatchIndex}/{TotalBatches} - {BatchProcessed} records", 
+                                batchIndex + 1, totalBatches, batchProcessed);
                     }
                     catch (Exception ex)
                     {
@@ -1349,8 +1349,9 @@ public class BulkUploadService : IBulkUploadService
                 // Progress reporting every 10 batches to reduce log noise
                 if (batchIndex % 10 == 0 || batchIndex == totalBatches - 1)
                 {
-                    _logger.LogDebug("Processed batch {BatchIndex}/{TotalBatches} - {BatchProcessed} records total: {TotalProcessed}", 
-                        batchIndex + 1, totalBatches, batchProcessed, successfullyProcessed);
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                        _logger.LogDebug("Processed batch {BatchIndex}/{TotalBatches} - {BatchProcessed} records total: {TotalProcessed}", 
+                            batchIndex + 1, totalBatches, batchProcessed, successfullyProcessed);
                 }
             }
             

@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.DTOs.Responses;
 using Prototype.Enum;
 using Prototype.Models;
@@ -16,14 +16,14 @@ public class AuthenticationService(
     ILogger<AuthenticationService> logger)
     : IAuthenticationService
 {
-    public async Task<LoginResponse> AuthenticateAsync(LoginRequestDto request)
+    public async Task<LoginResponseDto> AuthenticateAsync(LoginRequestDto request)
     {
         try
         {
             // Validation
             var validationResult = validationService.ValidateLoginRequest(request);
             if (!validationResult.IsSuccess)
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = false,
                     Message = "Validation failed"
@@ -36,7 +36,7 @@ public class AuthenticationService(
             if (user == null || !passwordService.VerifyPassword(request.Password, user.PasswordHash))
             {
                 logger.LogWarning("Failed login attempt for username: {Username}", request.Username);
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = false,
                     Message = "Invalid username or password"
@@ -47,7 +47,7 @@ public class AuthenticationService(
             user.LastLogin = DateTime.UtcNow;
             user.UpdatedAt = DateTime.UtcNow;
 
-            // Create activity log
+            // Create an activity log
             var userActivityLog = new UserActivityLogModel
             {
                 UserActivityLogId = Guid.NewGuid(),
@@ -67,7 +67,7 @@ public class AuthenticationService(
             var token = jwtTokenService.BuildUserClaims(user, ActionTypeEnum.Login);
             
             logger.LogInformation("Successful login for user: {Username}", user.Username);
-            return new LoginResponse
+            return new LoginResponseDto
             {
                 Success = true,
                 Message = "Login successful",
@@ -77,7 +77,7 @@ public class AuthenticationService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Error during authentication for username: {Username}", request.Username);
-            return new LoginResponse
+            return new LoginResponseDto
             {
                 Success = false,
                 Message = "An error occurred during authentication"

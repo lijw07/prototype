@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -26,24 +27,24 @@ public class SqlServerDatabaseStrategy(
         };
     }
 
-    public string BuildConnectionString(ConnectionSourceDto source)
+    public string BuildConnectionString(ConnectionSourceRequestDto sourceRequest)
     {
         var builder = new SqlConnectionStringBuilder
         {
-            DataSource = IsLocalDbInstance(source.Host) ? source.Host : $"{source.Host},{source.Port}",
-            InitialCatalog = source.DatabaseName ?? "master",
+            DataSource = IsLocalDbInstance(sourceRequest.Host) ? sourceRequest.Host : $"{sourceRequest.Host},{sourceRequest.Port}",
+            InitialCatalog = sourceRequest.DatabaseName ?? "master",
             TrustServerCertificate = true,
             ConnectTimeout = 30,
             CommandTimeout = 30
         };
 
-        switch (source.AuthenticationType)
+        switch (sourceRequest.AuthenticationType)
         {
             case AuthenticationTypeEnum.UserPassword:
-                if (string.IsNullOrEmpty(source.Username) || string.IsNullOrEmpty(source.Password))
+                if (string.IsNullOrEmpty(sourceRequest.Username) || string.IsNullOrEmpty(sourceRequest.Password))
                     throw new ArgumentException("Username and password are required for UserPassword authentication.");
-                builder.UserID = source.Username;
-                builder.Password = source.Password;
+                builder.UserID = sourceRequest.Username;
+                builder.Password = sourceRequest.Password;
                 break;
 
             case AuthenticationTypeEnum.WindowsIntegrated:
@@ -51,10 +52,10 @@ public class SqlServerDatabaseStrategy(
                 break;
 
             case AuthenticationTypeEnum.AzureAdPassword:
-                if (string.IsNullOrEmpty(source.Username) || string.IsNullOrEmpty(source.Password))
+                if (string.IsNullOrEmpty(sourceRequest.Username) || string.IsNullOrEmpty(sourceRequest.Password))
                     throw new ArgumentException("Username and password are required for Azure AD Password authentication.");
-                builder.UserID = source.Username;
-                builder.Password = source.Password;
+                builder.UserID = sourceRequest.Username;
+                builder.Password = sourceRequest.Password;
                 builder.Authentication = SqlAuthenticationMethod.ActiveDirectoryPassword;
                 break;
 
@@ -63,7 +64,7 @@ public class SqlServerDatabaseStrategy(
                 break;
 
             default:
-                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for SQL Server.");
+                throw new NotSupportedException($"Authentication type '{sourceRequest.AuthenticationType}' is not supported for SQL Server.");
         }
 
         return builder.ConnectionString;

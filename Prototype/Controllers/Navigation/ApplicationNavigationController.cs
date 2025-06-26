@@ -2,9 +2,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -49,7 +49,7 @@ public class ApplicationNavigationController(
                 var application = applicationFactory.CreateApplication(applicationId, dto);
                 
                 // Create connection
-                var connection = connectionFactory.CreateApplicationConnection(applicationId, dto.ConnectionSource);
+                var connection = connectionFactory.CreateApplicationConnection(applicationId, dto.ConnectionSourceRequest);
                 
                 // Create a user-application relationship
                 var userApplication = new UserApplicationModel
@@ -382,7 +382,7 @@ public class ApplicationNavigationController(
                 DataSourceTypeEnum dataSourceType;
                 Guid? testingApplicationId = null;
                 ApplicationConnectionModel? existingConnection = null;
-                ConnectionSourceDto? newConnectionSource = null;
+                ConnectionSourceRequestDto? newConnectionSource = null;
                 
                 // Check if this is a request by applicationId or full data
                 var jsonElement = (System.Text.Json.JsonElement)requestData;
@@ -427,17 +427,17 @@ public class ApplicationNavigationController(
                     {
                         var dto = System.Text.Json.JsonSerializer.Deserialize<ApplicationRequestDto>(jsonElement.GetRawText(), options);
                         Logger.LogInformation("Deserialized DTO: ApplicationName={ApplicationName}, DataSourceType={DataSourceType}, ConnectionSource null={ConnectionSourceNull}", 
-                            dto?.ApplicationName, dto?.DataSourceType, dto?.ConnectionSource == null);
+                            dto?.ApplicationName, dto?.DataSourceType, dto?.ConnectionSourceRequest == null);
                         
-                        if (dto?.ConnectionSource == null)
+                        if (dto?.ConnectionSourceRequest == null)
                         {
                             Logger.LogWarning("ConnectionSource is null in deserialized DTO");
                             return new { success = false, message = "Invalid connection data" };
                         }
                         
-                        newConnectionSource = dto.ConnectionSource;
-                        host = dto.ConnectionSource.Host;
-                        port = dto.ConnectionSource.Port;
+                        newConnectionSource = dto.ConnectionSourceRequest;
+                        host = dto.ConnectionSourceRequest.Host;
+                        port = dto.ConnectionSourceRequest.Port;
                         description = $"tested connection to new application {dto.ApplicationName}";
                         dataSourceType = dto.DataSourceType;
                         
@@ -594,16 +594,16 @@ public class ApplicationNavigationController(
     [HttpPost("test-application-connection-old")]
     public async Task<IActionResult> TestApplicationConnectionOld([FromBody] object requestData)
     {
-        Logger.LogCritical("=== CONNECTION TEST METHOD CALLED ===");
+        Logger.LogDebug("Connection test method called for application");
         
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
-            Logger.LogCritical("=== INSIDE CONNECTION TEST EXECUTION ===");
+            Logger.LogDebug("Executing connection test for user {UserId}", currentUser?.UserId);
             
             var currentUser = await UserAccessor!.GetCurrentUserAsync(User);
             if (currentUser == null)
             {
-                Logger.LogCritical("=== USER NOT AUTHENTICATED ===");
+                Logger.LogWarning("Connection test attempted without authentication");
                 return new { success = false, message = "User not authenticated" };
             }
 
@@ -614,7 +614,7 @@ public class ApplicationNavigationController(
                 DataSourceTypeEnum dataSourceType;
                 Guid? testingApplicationId = null;
                 ApplicationConnectionModel? existingConnection = null;
-                ConnectionSourceDto? newConnectionSource = null;
+                ConnectionSourceRequestDto? newConnectionSource = null;
                 
                 // Check if this is a request by applicationId or full data
                 var jsonElement = (System.Text.Json.JsonElement)requestData;
@@ -659,17 +659,17 @@ public class ApplicationNavigationController(
                     {
                         var dto = System.Text.Json.JsonSerializer.Deserialize<ApplicationRequestDto>(jsonElement.GetRawText(), options);
                         Logger.LogInformation("Deserialized DTO: ApplicationName={ApplicationName}, DataSourceType={DataSourceType}, ConnectionSource null={ConnectionSourceNull}", 
-                            dto?.ApplicationName, dto?.DataSourceType, dto?.ConnectionSource == null);
+                            dto?.ApplicationName, dto?.DataSourceType, dto?.ConnectionSourceRequest == null);
                         
-                        if (dto?.ConnectionSource == null)
+                        if (dto?.ConnectionSourceRequest == null)
                         {
                             Logger.LogWarning("ConnectionSource is null in deserialized DTO");
                             return new { success = false, message = "Invalid connection data" };
                         }
                         
-                        newConnectionSource = dto.ConnectionSource;
-                        host = dto.ConnectionSource.Host;
-                        port = dto.ConnectionSource.Port;
+                        newConnectionSource = dto.ConnectionSourceRequest;
+                        host = dto.ConnectionSourceRequest.Host;
+                        port = dto.ConnectionSourceRequest.Port;
                         description = $"tested connection to new application {dto.ApplicationName}";
                         dataSourceType = dto.DataSourceType;
                         

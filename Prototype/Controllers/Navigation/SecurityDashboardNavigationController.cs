@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
+using Prototype.DTOs.Cache;
 using Prototype.Enum;
+using Prototype.Models;
+using Prototype.Services.Interfaces;
 using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
@@ -13,6 +15,7 @@ namespace Prototype.Controllers.Navigation;
 public class SecurityDashboardNavigationController(
     SentinelContext context,
     IAuthenticatedUserAccessor userAccessor,
+    ICacheService cacheService,
     ILogger<SecurityDashboardNavigationController> logger)
     : ControllerBase
 {
@@ -24,6 +27,16 @@ public class SecurityDashboardNavigationController(
             var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
+
+            // Check cache first
+            var cacheKey = "security:dashboard:overview";
+            var cachedData = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedData != null)
+            {
+                logger.LogDebug("Security dashboard cache hit for user: {Username}", currentUser.Username);
+                return Ok(new { success = true, data = cachedData, fromCache = true });
+            }
 
             var now = DateTime.UtcNow;
             var last24Hours = now.AddHours(-24);
@@ -88,34 +101,36 @@ public class SecurityDashboardNavigationController(
             
             var riskScore = CalculateRiskScore(failedLoginsToday, suspiciousIps.Count, unverifiedUsers);
 
-            return Ok(new
+            var securityData = new
             {
-                success = true,
-                data = new
+                overview = new
                 {
-                    overview = new
-                    {
-                        riskScore = riskScore,
-                        riskLevel = GetRiskLevel(riskScore),
-                        activeSessions = activeSessions,
-                        unverifiedUsers = unverifiedUsers,
-                        failedLoginsToday = failedLoginsToday,
-                        successfulLoginsToday = successfulLoginsToday,
-                        applicationChanges = applicationChanges
-                    },
-                    threats = new
-                    {
-                        suspiciousIps = suspiciousIps.Take(5),
-                        failedLoginsByIp = failedLoginsByIp.Take(5)
-                    },
-                    recentEvents = securityEvents,
-                    trends = new
-                    {
-                        failedLoginsLast7Days = await GetFailedLoginsTrend(last7Days),
-                        successfulLoginsLast7Days = await GetSuccessfulLoginsTrend(last7Days)
-                    }
+                    riskScore = riskScore,
+                    riskLevel = GetRiskLevel(riskScore),
+                    activeSessions = activeSessions,
+                    unverifiedUsers = unverifiedUsers,
+                    failedLoginsToday = failedLoginsToday,
+                    successfulLoginsToday = successfulLoginsToday,
+                    applicationChanges = applicationChanges
+                },
+                threats = new
+                {
+                    suspiciousIps = suspiciousIps.Take(5),
+                    failedLoginsByIp = failedLoginsByIp.Take(5)
+                },
+                recentEvents = securityEvents,
+                trends = new
+                {
+                    failedLoginsLast7Days = await GetFailedLoginsTrend(last7Days),
+                    successfulLoginsLast7Days = await GetSuccessfulLoginsTrend(last7Days)
                 }
-            });
+            };
+
+            // Cache for 10 minutes (security data should be relatively fresh)
+            await cacheService.SetAsync(cacheKey, securityData, TimeSpan.FromMinutes(10));
+            logger.LogDebug("Security dashboard cached for user: {Username}", currentUser.Username);
+
+            return Ok(new { success = true, data = securityData, fromCache = false });
         }
         catch (Exception ex)
         {
@@ -133,6 +148,16 @@ public class SecurityDashboardNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first - include days parameter in cache key
+            var cacheKey = $"security:failed-logins:{days}";
+            var cachedData = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedData != null)
+            {
+                logger.LogDebug("Failed logins cache hit for user: {Username}, days: {Days}", currentUser.Username, days);
+                return Ok(new { success = true, data = cachedData, fromCache = true });
+            }
+
             var cutoffDate = DateTime.UtcNow.AddDays(-days);
 
             var failedLogins = await context.UserActivityLogs
@@ -148,7 +173,11 @@ public class SecurityDashboardNavigationController(
                 })
                 .ToListAsync();
 
-            return Ok(new { success = true, data = failedLogins });
+            // Cache for 5 minutes (failed logins data changes more frequently)
+            await cacheService.SetAsync(cacheKey, failedLogins, TimeSpan.FromMinutes(5));
+            logger.LogDebug("Failed logins cached for user: {Username}, days: {Days}", currentUser.Username, days);
+
+            return Ok(new { success = true, data = failedLogins, fromCache = false });
         }
         catch (Exception ex)
         {
@@ -191,6 +220,7 @@ public class SecurityDashboardNavigationController(
             .GroupBy(log => log.Timestamp.Date)
             .Select(g => new { Date = g.Key, Count = g.Count() })
             .OrderBy(x => x.Date)
+            .Take(365) // Limit to max 365 days of trend data
             .ToListAsync();
 
         return dailyData.Cast<object>().ToList();
@@ -203,6 +233,7 @@ public class SecurityDashboardNavigationController(
             .GroupBy(log => log.Timestamp.Date)
             .Select(g => new { Date = g.Key, Count = g.Count() })
             .OrderBy(x => x.Date)
+            .Take(365) // Limit to max 365 days of trend data
             .ToListAsync();
 
         return dailyData.Cast<object>().ToList();

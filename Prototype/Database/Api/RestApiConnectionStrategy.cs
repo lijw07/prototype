@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -31,9 +32,9 @@ public class RestApiConnectionStrategy(
         };
     }
 
-    public async Task<object> ExecuteRequestAsync(ConnectionSourceDto source)
+    public async Task<object> ExecuteRequestAsync(ConnectionSourceRequestDto sourceRequest)
     {
-        var request = CreateHttpRequest(source);
+        var request = CreateHttpRequest(sourceRequest);
         var response = await httpClient.SendAsync(request);
         
         var content = await response.Content.ReadAsStringAsync();
@@ -53,11 +54,11 @@ public class RestApiConnectionStrategy(
         return await ExecuteRequestAsync(dto);
     }
 
-    public async Task<bool> TestConnectionAsync(ConnectionSourceDto source)
+    public async Task<bool> TestConnectionAsync(ConnectionSourceRequestDto sourceRequest)
     {
         try
         {
-            var request = CreateHttpRequest(source, true);
+            var request = CreateHttpRequest(sourceRequest, true);
             request.Method = HttpMethod.Head; // Use HEAD for testing
             
             var response = await httpClient.SendAsync(request);
@@ -65,7 +66,7 @@ public class RestApiConnectionStrategy(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "REST API connection test failed for {Endpoint}", source.ApiEndpoint);
+            logger.LogError(ex, "REST API connection test failed for {Endpoint}", sourceRequest.ApiEndpoint);
             return false;
         }
     }
@@ -81,27 +82,27 @@ public class RestApiConnectionStrategy(
         return "REST API connection supporting GET, POST, PUT, DELETE operations with various authentication methods";
     }
 
-    private HttpRequestMessage CreateHttpRequest(ConnectionSourceDto source, bool isTest = false)
+    private HttpRequestMessage CreateHttpRequest(ConnectionSourceRequestDto sourceRequest, bool isTest = false)
     {
-        var uri = !string.IsNullOrEmpty(source.ApiEndpoint) 
-            ? source.ApiEndpoint 
-            : $"{source.Url}";
+        var uri = !string.IsNullOrEmpty(sourceRequest.ApiEndpoint) 
+            ? sourceRequest.ApiEndpoint 
+            : $"{sourceRequest.Url}";
 
         var request = new HttpRequestMessage
         {
             RequestUri = new Uri(uri),
-            Method = GetHttpMethod(source.HttpMethod ?? "GET")
+            Method = GetHttpMethod(sourceRequest.HttpMethod ?? "GET")
         };
 
         // Add authentication
-        AddAuthentication(request, source);
+        AddAuthentication(request, sourceRequest);
 
         // Add headers
-        if (!string.IsNullOrEmpty(source.Headers))
+        if (!string.IsNullOrEmpty(sourceRequest.Headers))
         {
             try
             {
-                var headers = JsonSerializer.Deserialize<Dictionary<string, string>>(source.Headers);
+                var headers = JsonSerializer.Deserialize<Dictionary<string, string>>(sourceRequest.Headers);
                 if (headers != null)
                 {
                     foreach (var header in headers)
@@ -112,51 +113,51 @@ public class RestApiConnectionStrategy(
             }
             catch (JsonException ex)
             {
-                logger.LogWarning(ex, "Failed to parse headers JSON: {Headers}", source.Headers);
+                logger.LogWarning(ex, "Failed to parse headers JSON: {Headers}", sourceRequest.Headers);
             }
         }
 
         // Add request body (except for test requests or GET/HEAD)
-        if (!isTest && !string.IsNullOrEmpty(source.RequestBody) && 
+        if (!isTest && !string.IsNullOrEmpty(sourceRequest.RequestBody) && 
             request.Method != HttpMethod.Get && request.Method != HttpMethod.Head)
         {
-            request.Content = new StringContent(source.RequestBody, Encoding.UTF8, "application/json");
+            request.Content = new StringContent(sourceRequest.RequestBody, Encoding.UTF8, "application/json");
         }
 
         return request;
     }
 
-    private void AddAuthentication(HttpRequestMessage request, ConnectionSourceDto source)
+    private void AddAuthentication(HttpRequestMessage request, ConnectionSourceRequestDto sourceRequest)
     {
-        switch (source.AuthenticationType)
+        switch (sourceRequest.AuthenticationType)
         {
             case AuthenticationTypeEnum.ApiKey:
-                if (!string.IsNullOrEmpty(source.ApiKey))
+                if (!string.IsNullOrEmpty(sourceRequest.ApiKey))
                 {
-                    request.Headers.Add("X-API-Key", source.ApiKey);
+                    request.Headers.Add("X-API-Key", sourceRequest.ApiKey);
                 }
                 break;
 
             case AuthenticationTypeEnum.BearerToken:
             case AuthenticationTypeEnum.JwtToken:
-                if (!string.IsNullOrEmpty(source.BearerToken))
+                if (!string.IsNullOrEmpty(sourceRequest.BearerToken))
                 {
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", source.BearerToken);
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", sourceRequest.BearerToken);
                 }
                 break;
 
             case AuthenticationTypeEnum.BasicAuth:
-                if (!string.IsNullOrEmpty(source.Username) && !string.IsNullOrEmpty(source.Password))
+                if (!string.IsNullOrEmpty(sourceRequest.Username) && !string.IsNullOrEmpty(sourceRequest.Password))
                 {
-                    var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{source.Username}:{source.Password}"));
+                    var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{sourceRequest.Username}:{sourceRequest.Password}"));
                     request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
                 }
                 break;
 
             case AuthenticationTypeEnum.OAuth2:
-                if (!string.IsNullOrEmpty(source.BearerToken))
+                if (!string.IsNullOrEmpty(sourceRequest.BearerToken))
                 {
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", source.BearerToken);
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", sourceRequest.BearerToken);
                 }
                 break;
 
@@ -182,9 +183,9 @@ public class RestApiConnectionStrategy(
         };
     }
 
-    private ConnectionSourceDto MapToDto(ApplicationConnectionModel source)
+    private ConnectionSourceRequestDto MapToDto(ApplicationConnectionModel source)
     {
-        return new ConnectionSourceDto
+        return new ConnectionSourceRequestDto
         {
             Host = source.Host,
             Port = source.Port,

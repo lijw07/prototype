@@ -3,6 +3,7 @@ using System.Text;
 using System.Xml;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -29,9 +30,9 @@ public class SoapApiConnectionStrategy(
         };
     }
 
-    public async Task<object> ExecuteRequestAsync(ConnectionSourceDto source)
+    public async Task<object> ExecuteRequestAsync(ConnectionSourceRequestDto sourceRequest)
     {
-        var request = CreateSoapRequest(source);
+        var request = CreateSoapRequest(sourceRequest);
         var response = await httpClient.SendAsync(request);
         
         var content = await response.Content.ReadAsStringAsync();
@@ -52,14 +53,14 @@ public class SoapApiConnectionStrategy(
         return await ExecuteRequestAsync(dto);
     }
 
-    public async Task<bool> TestConnectionAsync(ConnectionSourceDto source)
+    public async Task<bool> TestConnectionAsync(ConnectionSourceRequestDto sourceRequest)
     {
         try
         {
             // Try to get WSDL first
-            var wsdlUri = GetWsdlUri(source);
+            var wsdlUri = GetWsdlUri(sourceRequest);
             var wsdlRequest = new HttpRequestMessage(HttpMethod.Get, wsdlUri);
-            AddAuthentication(wsdlRequest, source);
+            AddAuthentication(wsdlRequest, sourceRequest);
 
             var wsdlResponse = await httpClient.SendAsync(wsdlRequest);
             
@@ -71,18 +72,18 @@ public class SoapApiConnectionStrategy(
 
             // If WSDL not available, try a basic SOAP request
             var testSoapEnvelope = CreateTestSoapEnvelope();
-            var testSource = new ConnectionSourceDto
+            var testSource = new ConnectionSourceRequestDto
             {
-                Host = source.Host,
-                Port = source.Port,
-                Url = source.Url,
-                ApiEndpoint = source.ApiEndpoint,
-                AuthenticationType = source.AuthenticationType,
-                Username = source.Username,
-                Password = source.Password,
-                ApiKey = source.ApiKey,
-                BearerToken = source.BearerToken,
-                Headers = source.Headers,
+                Host = sourceRequest.Host,
+                Port = sourceRequest.Port,
+                Url = sourceRequest.Url,
+                ApiEndpoint = sourceRequest.ApiEndpoint,
+                AuthenticationType = sourceRequest.AuthenticationType,
+                Username = sourceRequest.Username,
+                Password = sourceRequest.Password,
+                ApiKey = sourceRequest.ApiKey,
+                BearerToken = sourceRequest.BearerToken,
+                Headers = sourceRequest.Headers,
                 RequestBody = testSoapEnvelope,
                 HttpMethod = "POST"
             };
@@ -97,7 +98,7 @@ public class SoapApiConnectionStrategy(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "SOAP API connection test failed for {Endpoint}", source.ApiEndpoint ?? source.Url);
+            logger.LogError(ex, "SOAP API connection test failed for {Endpoint}", sourceRequest.ApiEndpoint ?? sourceRequest.Url);
             return false;
         }
     }
@@ -113,11 +114,11 @@ public class SoapApiConnectionStrategy(
         return "SOAP API connection with WSDL support and various authentication methods";
     }
 
-    private HttpRequestMessage CreateSoapRequest(ConnectionSourceDto source)
+    private HttpRequestMessage CreateSoapRequest(ConnectionSourceRequestDto sourceRequest)
     {
-        var uri = !string.IsNullOrEmpty(source.ApiEndpoint) 
-            ? source.ApiEndpoint 
-            : $"{source.Url}";
+        var uri = !string.IsNullOrEmpty(sourceRequest.ApiEndpoint) 
+            ? sourceRequest.ApiEndpoint 
+            : $"{sourceRequest.Url}";
 
         var request = new HttpRequestMessage
         {
@@ -126,17 +127,17 @@ public class SoapApiConnectionStrategy(
         };
 
         // Add authentication
-        AddAuthentication(request, source);
+        AddAuthentication(request, sourceRequest);
 
         // Add SOAP-specific headers
         request.Headers.Add("SOAPAction", "\"\""); // Default empty SOAPAction
         
         // Add custom headers (might override SOAPAction)
-        if (!string.IsNullOrEmpty(source.Headers))
+        if (!string.IsNullOrEmpty(sourceRequest.Headers))
         {
             try
             {
-                var headers = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(source.Headers);
+                var headers = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(sourceRequest.Headers);
                 if (headers != null)
                 {
                     foreach (var header in headers)
@@ -155,42 +156,42 @@ public class SoapApiConnectionStrategy(
             }
             catch (System.Text.Json.JsonException ex)
             {
-                logger.LogWarning(ex, "Failed to parse headers JSON: {Headers}", source.Headers);
+                logger.LogWarning(ex, "Failed to parse headers JSON: {Headers}", sourceRequest.Headers);
             }
         }
 
         // Add SOAP envelope in request body
-        if (!string.IsNullOrEmpty(source.RequestBody))
+        if (!string.IsNullOrEmpty(sourceRequest.RequestBody))
         {
-            request.Content = new StringContent(source.RequestBody, Encoding.UTF8, "text/xml");
+            request.Content = new StringContent(sourceRequest.RequestBody, Encoding.UTF8, "text/xml");
         }
 
         return request;
     }
 
-    private void AddAuthentication(HttpRequestMessage request, ConnectionSourceDto source)
+    private void AddAuthentication(HttpRequestMessage request, ConnectionSourceRequestDto sourceRequest)
     {
-        switch (source.AuthenticationType)
+        switch (sourceRequest.AuthenticationType)
         {
             case AuthenticationTypeEnum.BasicAuth:
-                if (!string.IsNullOrEmpty(source.Username) && !string.IsNullOrEmpty(source.Password))
+                if (!string.IsNullOrEmpty(sourceRequest.Username) && !string.IsNullOrEmpty(sourceRequest.Password))
                 {
-                    var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{source.Username}:{source.Password}"));
+                    var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{sourceRequest.Username}:{sourceRequest.Password}"));
                     request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
                 }
                 break;
 
             case AuthenticationTypeEnum.BearerToken:
-                if (!string.IsNullOrEmpty(source.BearerToken))
+                if (!string.IsNullOrEmpty(sourceRequest.BearerToken))
                 {
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", source.BearerToken);
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", sourceRequest.BearerToken);
                 }
                 break;
 
             case AuthenticationTypeEnum.ApiKey:
-                if (!string.IsNullOrEmpty(source.ApiKey))
+                if (!string.IsNullOrEmpty(sourceRequest.ApiKey))
                 {
-                    request.Headers.Add("X-API-Key", source.ApiKey);
+                    request.Headers.Add("X-API-Key", sourceRequest.ApiKey);
                 }
                 break;
 
@@ -201,11 +202,11 @@ public class SoapApiConnectionStrategy(
         }
     }
 
-    private string GetWsdlUri(ConnectionSourceDto source)
+    private string GetWsdlUri(ConnectionSourceRequestDto sourceRequest)
     {
-        var baseUri = !string.IsNullOrEmpty(source.ApiEndpoint) 
-            ? source.ApiEndpoint 
-            : source.Url;
+        var baseUri = !string.IsNullOrEmpty(sourceRequest.ApiEndpoint) 
+            ? sourceRequest.ApiEndpoint 
+            : sourceRequest.Url;
 
         // Common WSDL URL patterns
         if (baseUri.Contains("?wsdl", StringComparison.OrdinalIgnoreCase))
@@ -287,9 +288,9 @@ public class SoapApiConnectionStrategy(
         return nsmgr;
     }
 
-    private ConnectionSourceDto MapToDto(ApplicationConnectionModel source)
+    private ConnectionSourceRequestDto MapToDto(ApplicationConnectionModel source)
     {
-        return new ConnectionSourceDto
+        return new ConnectionSourceRequestDto
         {
             Host = source.Host,
             Port = source.Port,

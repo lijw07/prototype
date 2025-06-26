@@ -4,7 +4,7 @@ using CsvHelper;
 using CsvHelper.Configuration;
 using OfficeOpenXml;
 using Prototype.DTOs.BulkUpload;
-using Prototype.Data;
+using Prototype.Models;
 
 namespace Prototype.Services.BulkUpload;
 

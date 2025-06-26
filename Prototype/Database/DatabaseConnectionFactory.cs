@@ -1,5 +1,6 @@
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 
@@ -10,10 +11,10 @@ public class DatabaseConnectionFactory(
     ILogger<DatabaseConnectionFactory> logger)
     : IDatabaseConnectionFactory
 {
-    public string BuildConnectionString(DataSourceTypeEnum databaseType, ConnectionSourceDto source)
+    public string BuildConnectionString(DataSourceTypeEnum databaseType, ConnectionSourceRequestDto sourceRequest)
     {
         var strategy = GetStrategy(databaseType);
-        return strategy.BuildConnectionString(source);
+        return strategy.BuildConnectionString(sourceRequest);
     }
 
     public string BuildConnectionString(DataSourceTypeEnum databaseType, ApplicationConnectionModel source)

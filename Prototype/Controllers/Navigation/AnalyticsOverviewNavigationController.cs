@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
+using Prototype.DTOs.Cache;
 using Prototype.Enum;
+using Prototype.Models;
+using Prototype.Services.Interfaces;
 using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
@@ -13,6 +15,7 @@ namespace Prototype.Controllers.Navigation;
 public class AnalyticsOverviewNavigationController(
     SentinelContext context,
     IAuthenticatedUserAccessor userAccessor,
+    ICacheService cacheService,
     ILogger<AnalyticsOverviewNavigationController> logger)
     : ControllerBase
 {
@@ -25,9 +28,23 @@ public class AnalyticsOverviewNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first
+            var cacheKey = "analytics:overview:metrics";
+            var cachedData = await cacheService.GetAsync<AnalyticsMetricsCacheDto>(cacheKey);
+            
+            if (cachedData != null)
+            {
+                logger.LogDebug("Analytics overview cache hit for user: {Username}", currentUser.Username);
+                return Ok(new { success = true, data = cachedData, fromCache = true });
+            }
+
             var analyticsData = await CollectAnalyticsMetrics();
             
-            return Ok(new { success = true, data = analyticsData });
+            // Cache for 20 minutes (analytics data changes less frequently)
+            await cacheService.SetAsync(cacheKey, analyticsData, TimeSpan.FromMinutes(20));
+            logger.LogDebug("Analytics overview cached for user: {Username}", currentUser.Username);
+            
+            return Ok(new { success = true, data = analyticsData, fromCache = false });
         }
         catch (Exception ex)
         {
@@ -45,9 +62,23 @@ public class AnalyticsOverviewNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first
+            var cacheKey = "analytics:business:metrics";
+            var cachedData = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedData != null)
+            {
+                logger.LogDebug("Business metrics cache hit for user: {Username}", currentUser.Username);
+                return Ok(new { success = true, data = cachedData, fromCache = true });
+            }
+
             var businessMetrics = await CollectBusinessMetrics();
             
-            return Ok(new { success = true, data = businessMetrics });
+            // Cache for 15 minutes (business metrics update more frequently)
+            await cacheService.SetAsync(cacheKey, businessMetrics, TimeSpan.FromMinutes(15));
+            logger.LogDebug("Business metrics cached for user: {Username}", currentUser.Username);
+            
+            return Ok(new { success = true, data = businessMetrics, fromCache = false });
         }
         catch (Exception ex)
         {
@@ -65,9 +96,23 @@ public class AnalyticsOverviewNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first - include months parameter in cache key
+            var cacheKey = $"analytics:growth:trends:{months}";
+            var cachedData = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedData != null)
+            {
+                logger.LogDebug("Growth trends cache hit for user: {Username}, months: {Months}", currentUser.Username, months);
+                return Ok(new { success = true, data = cachedData, fromCache = true });
+            }
+
             var trends = await CollectGrowthTrends(months);
             
-            return Ok(new { success = true, data = trends });
+            // Cache for 30 minutes (growth trends are historical and change slowly)
+            await cacheService.SetAsync(cacheKey, trends, TimeSpan.FromMinutes(30));
+            logger.LogDebug("Growth trends cached for user: {Username}, months: {Months}", currentUser.Username, months);
+            
+            return Ok(new { success = true, data = trends, fromCache = false });
         }
         catch (Exception ex)
         {
@@ -76,7 +121,7 @@ public class AnalyticsOverviewNavigationController(
         }
     }
 
-    private async Task<object> CollectAnalyticsMetrics()
+    private async Task<AnalyticsMetricsCacheDto> CollectAnalyticsMetrics()
     {
         var now = DateTime.UtcNow;
         var last30Days = now.AddDays(-30);
@@ -126,9 +171,9 @@ public class AnalyticsOverviewNavigationController(
         var costSavings = CalculateCostSavings(totalUsers, totalApplications);
         var productivityGain = CalculateProductivityGain(totalUsers, averageUserSessions);
 
-        return new
+        return new AnalyticsMetricsCacheDto
         {
-            summary = new
+            Summary = new
             {
                 totalUsers = totalUsers,
                 totalApplications = totalApplications,
@@ -136,7 +181,7 @@ public class AnalyticsOverviewNavigationController(
                 systemHealth = systemHealth,
                 timeframe = "Last 30 Days"
             },
-            userMetrics = new
+            UserMetrics = new
             {
                 total = totalUsers,
                 verified = verifiedUsers,
@@ -145,7 +190,7 @@ public class AnalyticsOverviewNavigationController(
                 growthRate = await CalculateUserGrowthRate(),
                 adoptionRate = totalUsers > 0 ? (double)verifiedUsers / totalUsers * 100 : 0
             },
-            applicationMetrics = new
+            ApplicationMetrics = new
             {
                 total = totalApplications,
                 active = activeApplications,
@@ -154,7 +199,7 @@ public class AnalyticsOverviewNavigationController(
                 averageConnectionsPerApp = totalApplications > 0 ? 
                     Math.Round((double)await context.ApplicationConnections.CountAsync() / totalApplications, 1) : 0
             },
-            securityMetrics = new
+            SecurityMetrics = new
             {
                 score = securityScore,
                 status = GetSecurityStatus(securityScore),
@@ -163,7 +208,7 @@ public class AnalyticsOverviewNavigationController(
                 securityEvents = securityEvents,
                 complianceScore = CalculateComplianceScore(totalUsers, verifiedUsers)
             },
-            operationalMetrics = new
+            OperationalMetrics = new
             {
                 systemHealth = systemHealth,
                 averageUserSessions = averageUserSessions,
@@ -171,13 +216,14 @@ public class AnalyticsOverviewNavigationController(
                 dataIntegrity = 98.5, // Simulated
                 uptime = 99.9 // Simulated
             },
-            businessValue = new
+            BusinessValue = new
             {
                 estimatedCostSavings = costSavings,
                 productivityGain = productivityGain,
                 riskReduction = CalculateRiskReduction(securityScore),
                 complianceReadiness = CalculateComplianceScore(totalUsers, verifiedUsers)
-            }
+            },
+            GeneratedAt = DateTime.UtcNow
         };
     }
 

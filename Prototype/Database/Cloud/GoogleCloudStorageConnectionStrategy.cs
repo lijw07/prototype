@@ -7,6 +7,7 @@ using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
 using System.Text;
+using Prototype.DTOs.Request;
 
 namespace Prototype.Database.Cloud;
 
@@ -27,13 +28,13 @@ public class GoogleCloudStorageConnectionStrategy(
         };
     }
 
-    public async Task<object> ReadDataAsync(ConnectionSourceDto source)
+    public async Task<object> ReadDataAsync(ConnectionSourceRequestDto sourceRequest)
     {
         try
         {
-            var storageClient = await CreateStorageClientAsync(source);
-            var bucketName = ExtractBucketName(source.FilePath);
-            var objectName = ExtractObjectName(source.FilePath);
+            var storageClient = await CreateStorageClientAsync(sourceRequest);
+            var bucketName = ExtractBucketName(sourceRequest.FilePath);
+            var objectName = ExtractObjectName(sourceRequest.FilePath);
 
             var gcsObject = await storageClient.GetObjectAsync(bucketName, objectName);
             
@@ -55,7 +56,7 @@ public class GoogleCloudStorageConnectionStrategy(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to read GCS object: {FilePath}", source.FilePath);
+            logger.LogError(ex, "Failed to read GCS object: {FilePath}", sourceRequest.FilePath);
             throw;
         }
     }
@@ -66,17 +67,17 @@ public class GoogleCloudStorageConnectionStrategy(
         return await ReadDataAsync(dto);
     }
 
-    public async Task<bool> TestConnectionAsync(ConnectionSourceDto source)
+    public async Task<bool> TestConnectionAsync(ConnectionSourceRequestDto sourceRequest)
     {
         try
         {
-            var storageClient = await CreateStorageClientAsync(source);
+            var storageClient = await CreateStorageClientAsync(sourceRequest);
 
-            if (!string.IsNullOrEmpty(source.FilePath))
+            if (!string.IsNullOrEmpty(sourceRequest.FilePath))
             {
                 // Test specific object access
-                var bucketName = ExtractBucketName(source.FilePath);
-                var objectName = ExtractObjectName(source.FilePath);
+                var bucketName = ExtractBucketName(sourceRequest.FilePath);
+                var objectName = ExtractObjectName(sourceRequest.FilePath);
 
                 try
                 {
@@ -93,7 +94,7 @@ public class GoogleCloudStorageConnectionStrategy(
             else
             {
                 // Test general access by listing buckets
-                var projectId = ExtractProjectId(source);
+                var projectId = ExtractProjectId(sourceRequest);
                 var buckets = storageClient.ListBucketsAsync(projectId);
                 var enumerator = buckets.GetAsyncEnumerator();
                 try
@@ -134,19 +135,19 @@ public class GoogleCloudStorageConnectionStrategy(
         return "Google Cloud Storage connection with Service Account and Access Key authentication support";
     }
 
-    private async Task<StorageClient> CreateStorageClientAsync(ConnectionSourceDto source)
+    private async Task<StorageClient> CreateStorageClientAsync(ConnectionSourceRequestDto sourceRequest)
     {
-        switch (source.AuthenticationType)
+        switch (sourceRequest.AuthenticationType)
         {
             case AuthenticationTypeEnum.ServicePrincipal:
-                if (string.IsNullOrEmpty(source.GcpServiceAccountJson))
+                if (string.IsNullOrEmpty(sourceRequest.GcpServiceAccountJson))
                     throw new ArgumentException("GCP Service Account JSON is required for Service Principal authentication.");
                 
-                var credential = GoogleCredential.FromJson(source.GcpServiceAccountJson);
+                var credential = GoogleCredential.FromJson(sourceRequest.GcpServiceAccountJson);
                 return await StorageClient.CreateAsync(credential);
 
             case AuthenticationTypeEnum.AccessKey:
-                if (string.IsNullOrEmpty(source.GcpAccessKeyId) || string.IsNullOrEmpty(source.GcpSecretAccessKey))
+                if (string.IsNullOrEmpty(sourceRequest.GcpAccessKeyId) || string.IsNullOrEmpty(sourceRequest.GcpSecretAccessKey))
                     throw new ArgumentException("GCP Access Key ID and Secret Access Key are required for Access Key authentication.");
                 
                 // Note: GCS doesn't directly support HMAC keys in the same way as S3
@@ -154,7 +155,7 @@ public class GoogleCloudStorageConnectionStrategy(
                 throw new NotSupportedException("HMAC key authentication for GCS is not yet implemented. Use Service Principal instead.");
 
             default:
-                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for Google Cloud Storage.");
+                throw new NotSupportedException($"Authentication type '{sourceRequest.AuthenticationType}' is not supported for Google Cloud Storage.");
         }
     }
 
@@ -192,14 +193,14 @@ public class GoogleCloudStorageConnectionStrategy(
         return parts.Length > 1 ? parts[1] : "";
     }
 
-    private string ExtractProjectId(ConnectionSourceDto source)
+    private string ExtractProjectId(ConnectionSourceRequestDto sourceRequest)
     {
         // Try to extract project ID from custom properties
-        if (!string.IsNullOrEmpty(source.CustomProperties))
+        if (!string.IsNullOrEmpty(sourceRequest.CustomProperties))
         {
             try
             {
-                var properties = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(source.CustomProperties);
+                var properties = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(sourceRequest.CustomProperties);
                 if (properties?.ContainsKey("ProjectId") == true)
                 {
                     return properties["ProjectId"];
@@ -207,16 +208,16 @@ public class GoogleCloudStorageConnectionStrategy(
             }
             catch (System.Text.Json.JsonException ex)
             {
-                logger.LogWarning(ex, "Failed to parse GCS custom properties: {Properties}", source.CustomProperties);
+                logger.LogWarning(ex, "Failed to parse GCS custom properties: {Properties}", sourceRequest.CustomProperties);
             }
         }
 
         // Try to extract from service account JSON
-        if (!string.IsNullOrEmpty(source.GcpServiceAccountJson))
+        if (!string.IsNullOrEmpty(sourceRequest.GcpServiceAccountJson))
         {
             try
             {
-                var serviceAccountData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(source.GcpServiceAccountJson);
+                var serviceAccountData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(sourceRequest.GcpServiceAccountJson);
                 if (serviceAccountData?.ContainsKey("project_id") == true)
                 {
                     return serviceAccountData["project_id"].ToString() ?? "";
@@ -231,9 +232,9 @@ public class GoogleCloudStorageConnectionStrategy(
         throw new ArgumentException("Project ID is required for Google Cloud Storage. Provide it in CustomProperties or Service Account JSON.");
     }
 
-    private ConnectionSourceDto MapToDto(ApplicationConnectionModel source)
+    private ConnectionSourceRequestDto MapToDto(ApplicationConnectionModel source)
     {
-        return new ConnectionSourceDto
+        return new ConnectionSourceRequestDto
         {
             Host = source.Host,
             Port = source.Port,

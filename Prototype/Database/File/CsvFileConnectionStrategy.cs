@@ -4,6 +4,7 @@ using CsvHelper;
 using CsvHelper.Configuration;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -28,23 +29,23 @@ public class CsvFileConnectionStrategy(
         };
     }
 
-    public async Task<object> ReadDataAsync(ConnectionSourceDto source)
+    public async Task<object> ReadDataAsync(ConnectionSourceRequestDto sourceRequest)
     {
         try
         {
-            var filePath = GetFilePath(source);
+            var filePath = GetFilePath(sourceRequest);
             if (!System.IO.File.Exists(filePath))
             {
                 throw new FileNotFoundException($"CSV file not found: {filePath}");
             }
 
-            var encoding = GetEncoding(source.Encoding ?? "UTF-8");
-            var delimiter = source.Delimiter ?? ",";
+            var encoding = GetEncoding(sourceRequest.Encoding ?? "UTF-8");
+            var delimiter = sourceRequest.Delimiter ?? ",";
 
             var config = new CsvConfiguration(CultureInfo.InvariantCulture)
             {
                 Delimiter = delimiter,
-                HasHeaderRecord = source.HasHeader,
+                HasHeaderRecord = sourceRequest.HasHeader,
                 MissingFieldFound = null,
                 BadDataFound = null
             };
@@ -54,7 +55,7 @@ public class CsvFileConnectionStrategy(
 
             var records = new List<Dictionary<string, object>>();
             
-            if (source.HasHeader)
+            if (sourceRequest.HasHeader)
             {
                 await csv.ReadAsync();
                 csv.ReadHeader();
@@ -91,12 +92,12 @@ public class CsvFileConnectionStrategy(
                 FilePath = filePath,
                 Encoding = encoding.EncodingName,
                 Delimiter = delimiter,
-                HasHeader = source.HasHeader
+                HasHeader = sourceRequest.HasHeader
             };
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to read CSV file: {FilePath}", source.FilePath);
+            logger.LogError(ex, "Failed to read CSV file: {FilePath}", sourceRequest.FilePath);
             throw;
         }
     }
@@ -107,11 +108,11 @@ public class CsvFileConnectionStrategy(
         return await ReadDataAsync(dto);
     }
 
-    public async Task<bool> TestConnectionAsync(ConnectionSourceDto source)
+    public async Task<bool> TestConnectionAsync(ConnectionSourceRequestDto sourceRequest)
     {
         try
         {
-            var filePath = GetFilePath(source);
+            var filePath = GetFilePath(sourceRequest);
             
             // Check if file exists and is accessible
             if (!System.IO.File.Exists(filePath))
@@ -120,13 +121,13 @@ public class CsvFileConnectionStrategy(
             }
 
             // Try to read the first few lines to validate format
-            var encoding = GetEncoding(source.Encoding ?? "UTF-8");
-            var delimiter = source.Delimiter ?? ",";
+            var encoding = GetEncoding(sourceRequest.Encoding ?? "UTF-8");
+            var delimiter = sourceRequest.Delimiter ?? ",";
 
             var config = new CsvConfiguration(CultureInfo.InvariantCulture)
             {
                 Delimiter = delimiter,
-                HasHeaderRecord = source.HasHeader,
+                HasHeaderRecord = sourceRequest.HasHeader,
                 MissingFieldFound = null,
                 BadDataFound = null
             };
@@ -135,7 +136,7 @@ public class CsvFileConnectionStrategy(
             using var csv = new CsvReader(reader, config);
 
             // Try to read at least one record
-            if (source.HasHeader)
+            if (sourceRequest.HasHeader)
             {
                 await csv.ReadAsync();
                 csv.ReadHeader();
@@ -146,7 +147,7 @@ public class CsvFileConnectionStrategy(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "CSV connection test failed for {FilePath}", source.FilePath);
+            logger.LogError(ex, "CSV connection test failed for {FilePath}", sourceRequest.FilePath);
             return false;
         }
     }
@@ -162,21 +163,21 @@ public class CsvFileConnectionStrategy(
         return "CSV file connection supporting various delimiters, encodings, and header configurations";
     }
 
-    private string GetFilePath(ConnectionSourceDto source)
+    private string GetFilePath(ConnectionSourceRequestDto sourceRequest)
     {
-        if (!string.IsNullOrEmpty(source.FilePath))
+        if (!string.IsNullOrEmpty(sourceRequest.FilePath))
         {
-            return source.FilePath;
+            return sourceRequest.FilePath;
         }
 
-        if (!string.IsNullOrEmpty(source.Url))
+        if (!string.IsNullOrEmpty(sourceRequest.Url))
         {
             // Handle file:// URLs
-            if (source.Url.StartsWith("file://"))
+            if (sourceRequest.Url.StartsWith("file://"))
             {
-                return source.Url.Substring(7);
+                return sourceRequest.Url.Substring(7);
             }
-            return source.Url;
+            return sourceRequest.Url;
         }
 
         throw new ArgumentException("Either FilePath or Url must be provided for CSV file connection");
@@ -194,9 +195,9 @@ public class CsvFileConnectionStrategy(
         };
     }
 
-    private ConnectionSourceDto MapToDto(ApplicationConnectionModel source)
+    private ConnectionSourceRequestDto MapToDto(ApplicationConnectionModel source)
     {
-        return new ConnectionSourceDto
+        return new ConnectionSourceRequestDto
         {
             Host = source.Host,
             Port = source.Port,

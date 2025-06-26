@@ -2,6 +2,7 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -26,13 +27,13 @@ public class AmazonS3ConnectionStrategy(
         };
     }
 
-    public async Task<object> ReadDataAsync(ConnectionSourceDto source)
+    public async Task<object> ReadDataAsync(ConnectionSourceRequestDto sourceRequest)
     {
         try
         {
-            using var s3Client = CreateS3Client(source);
-            var bucketName = ExtractBucketName(source.FilePath);
-            var objectKey = ExtractObjectKey(source.FilePath);
+            using var s3Client = CreateS3Client(sourceRequest);
+            var bucketName = ExtractBucketName(sourceRequest.FilePath);
+            var objectKey = ExtractObjectKey(sourceRequest.FilePath);
 
             var request = new GetObjectRequest
             {
@@ -57,7 +58,7 @@ public class AmazonS3ConnectionStrategy(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to read S3 object: {FilePath}", source.FilePath);
+            logger.LogError(ex, "Failed to read S3 object: {FilePath}", sourceRequest.FilePath);
             throw;
         }
     }
@@ -68,17 +69,17 @@ public class AmazonS3ConnectionStrategy(
         return await ReadDataAsync(dto);
     }
 
-    public async Task<bool> TestConnectionAsync(ConnectionSourceDto source)
+    public async Task<bool> TestConnectionAsync(ConnectionSourceRequestDto sourceRequest)
     {
         try
         {
-            using var s3Client = CreateS3Client(source);
+            using var s3Client = CreateS3Client(sourceRequest);
 
-            if (!string.IsNullOrEmpty(source.FilePath))
+            if (!string.IsNullOrEmpty(sourceRequest.FilePath))
             {
                 // Test specific object access
-                var bucketName = ExtractBucketName(source.FilePath);
-                var objectKey = ExtractObjectKey(source.FilePath);
+                var bucketName = ExtractBucketName(sourceRequest.FilePath);
+                var objectKey = ExtractObjectKey(sourceRequest.FilePath);
 
                 var request = new GetObjectMetadataRequest
                 {
@@ -120,16 +121,16 @@ public class AmazonS3ConnectionStrategy(
         return "Amazon S3 storage connection with IAM, Access Key, and Session Token authentication support";
     }
 
-    private AmazonS3Client CreateS3Client(ConnectionSourceDto source)
+    private AmazonS3Client CreateS3Client(ConnectionSourceRequestDto sourceRequest)
     {
         var config = new AmazonS3Config();
 
         // Set region if specified in custom properties
-        if (!string.IsNullOrEmpty(source.CustomProperties))
+        if (!string.IsNullOrEmpty(sourceRequest.CustomProperties))
         {
             try
             {
-                var properties = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(source.CustomProperties);
+                var properties = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(sourceRequest.CustomProperties);
                 if (properties?.ContainsKey("Region") == true)
                 {
                     config.RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(properties["Region"]);
@@ -145,30 +146,30 @@ public class AmazonS3ConnectionStrategy(
             }
             catch (System.Text.Json.JsonException ex)
             {
-                logger.LogWarning(ex, "Failed to parse S3 custom properties: {Properties}", source.CustomProperties);
+                logger.LogWarning(ex, "Failed to parse S3 custom properties: {Properties}", sourceRequest.CustomProperties);
             }
         }
 
-        switch (source.AuthenticationType)
+        switch (sourceRequest.AuthenticationType)
         {
             case AuthenticationTypeEnum.AwsAccessKey:
-                if (string.IsNullOrEmpty(source.AwsAccessKeyId) || string.IsNullOrEmpty(source.AwsSecretAccessKey))
+                if (string.IsNullOrEmpty(sourceRequest.AwsAccessKeyId) || string.IsNullOrEmpty(sourceRequest.AwsSecretAccessKey))
                     throw new ArgumentException("AWS Access Key ID and Secret Access Key are required for AWS Access Key authentication.");
                 
-                return new AmazonS3Client(source.AwsAccessKeyId, source.AwsSecretAccessKey, config);
+                return new AmazonS3Client(sourceRequest.AwsAccessKeyId, sourceRequest.AwsSecretAccessKey, config);
 
             case AuthenticationTypeEnum.AwsSessionToken:
-                if (string.IsNullOrEmpty(source.AwsAccessKeyId) || string.IsNullOrEmpty(source.AwsSecretAccessKey) || string.IsNullOrEmpty(source.AwsSessionToken))
+                if (string.IsNullOrEmpty(sourceRequest.AwsAccessKeyId) || string.IsNullOrEmpty(sourceRequest.AwsSecretAccessKey) || string.IsNullOrEmpty(sourceRequest.AwsSessionToken))
                     throw new ArgumentException("AWS Access Key ID, Secret Access Key, and Session Token are required for AWS Session Token authentication.");
                 
-                return new AmazonS3Client(source.AwsAccessKeyId, source.AwsSecretAccessKey, source.AwsSessionToken, config);
+                return new AmazonS3Client(sourceRequest.AwsAccessKeyId, sourceRequest.AwsSecretAccessKey, sourceRequest.AwsSessionToken, config);
 
             case AuthenticationTypeEnum.AwsIam:
                 // Use default credential chain (IAM roles, environment variables, etc.)
                 return new AmazonS3Client(config);
 
             default:
-                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for Amazon S3.");
+                throw new NotSupportedException($"Authentication type '{sourceRequest.AuthenticationType}' is not supported for Amazon S3.");
         }
     }
 
@@ -206,9 +207,9 @@ public class AmazonS3ConnectionStrategy(
         return parts.Length > 1 ? parts[1] : "";
     }
 
-    private ConnectionSourceDto MapToDto(ApplicationConnectionModel source)
+    private ConnectionSourceRequestDto MapToDto(ApplicationConnectionModel source)
     {
-        return new ConnectionSourceDto
+        return new ConnectionSourceRequestDto
         {
             Host = source.Host,
             Port = source.Port,

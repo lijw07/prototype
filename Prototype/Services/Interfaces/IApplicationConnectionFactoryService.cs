@@ -1,9 +1,10 @@
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Models;
 
 namespace Prototype.Services.Interfaces;
 
 public interface IApplicationConnectionFactoryService
 {
-    ApplicationConnectionModel CreateApplicationConnection(Guid applicationId, ConnectionSourceDto dto);
+    ApplicationConnectionModel CreateApplicationConnection(Guid applicationId, ConnectionSourceRequestDto requestDto);
 }

@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Data.SqlClient;
-using Prototype.Data;
 using Prototype.Database;
 using Prototype.Database.Interface;
 using Prototype.Database.MicrosoftSQLServer;
@@ -22,17 +21,21 @@ using Prototype.Database.Api;
 using Prototype.Database.File;
 using Prototype.Database.Cloud;
 using Prototype.Middleware;
+using Prototype.Models;
 using Prototype.POCO;
 using Prototype.Services;
 using Prototype.Services.Factory;
 using Prototype.Services.Interfaces;
 using Prototype.Services.BulkUpload;
 using Prototype.Services.BulkUpload.Mappers;
+using Prototype.Services.Common;
+using Prototype.Repositories;
+using Prototype.Configuration;
 using Prototype.Utility;
+using Prototype.Utility.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Configure Services (Dependency Injection)
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -41,7 +44,6 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Register CORS for development (open for local Docker/dev use)
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddCors(options =>
@@ -51,12 +53,10 @@ if (builder.Environment.IsDevelopment())
             policy.WithOrigins("http://localhost:3000", "http://localhost:8080")
                   .AllowAnyMethod()
                   .AllowAnyHeader()
-                  .AllowCredentials(); // Required for SignalR
+                  .AllowCredentials();
         });
     });
 }
-
-// Build connection string from environment variables for Docker compatibility
 var dbHost = Environment.GetEnvironmentVariable("DB_HOST") ?? "localhost";
 var dbPort = Environment.GetEnvironmentVariable("DB_PORT") ?? "1433";
 var dbName = Environment.GetEnvironmentVariable("DB_NAME") ?? "PrototypeDb";
@@ -65,21 +65,21 @@ var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "YourStron
 
 var connectionString = $"Server={dbHost},{dbPort};Database={dbName};User={dbUser};Password={dbPassword};TrustServerCertificate=True;MultipleActiveResultSets=True;Connection Timeout=300;Max Pool Size=200;Min Pool Size=10;Pooling=True;Command Timeout=300";
 
+const int BulkOperationTimeoutSeconds = 300;
+const int MaxRetryCount = 3;
+const int MaxRetryDelaySeconds = 30;
+
 builder.Services.AddDbContext<SentinelContext>(options =>
     options.UseSqlServer(connectionString, sqlOptions =>
     {
-        sqlOptions.CommandTimeout(300); // 5 minutes timeout for bulk operations
-        sqlOptions.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(30), null);
+        sqlOptions.CommandTimeout(BulkOperationTimeoutSeconds);
+        sqlOptions.EnableRetryOnFailure(MaxRetryCount, TimeSpan.FromSeconds(MaxRetryDelaySeconds), null);
     })
     .EnableSensitiveDataLogging(builder.Environment.IsDevelopment())
     .EnableDetailedErrors(builder.Environment.IsDevelopment())
     .ConfigureWarnings(warnings => warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.FirstWithoutOrderByAndFilterWarning)));
 
-// Bind SMTP Settings
-builder.Services.Configure<SmtpSettingsPoco>(
-    builder.Configuration.GetSection("Smtp"));
-
-// Register Application Services
+builder.Services.Configure<SmtpSettingsPoco>(builder.Configuration.GetSection("Smtp"));
 builder.Services.AddScoped<IEmailNotificationFactoryService, EmailNotificationFactoryService>();
 builder.Services.AddScoped<IUserRecoveryRequestFactoryService, UserRecoveryFactoryService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -119,10 +119,68 @@ builder.Services.AddHttpContextAccessor();
 // Add Memory Cache
 builder.Services.AddMemoryCache();
 
+// Configure Redis Distributed Cache
+var redisConnectionString = Environment.GetEnvironmentVariable("REDIS_CONNECTION_STRING") ?? 
+                           "localhost:6379";
+
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = redisConnectionString;
+    options.InstanceName = "CAMS";
+});
+
+// Register Redis connection for direct access
+builder.Services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(sp =>
+{
+    var configuration = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString, true);
+    configuration.AbortOnConnectFail = false;
+    configuration.ConnectRetry = 3;
+    configuration.ConnectTimeout = 5000;
+    configuration.SyncTimeout = 2000;
+    return StackExchange.Redis.ConnectionMultiplexer.Connect(configuration);
+});
+
+// Add Data Protection for cache encryption
+builder.Services.AddDataProtection()
+    .PersistKeysToStackExchangeRedis(sp => sp.GetService<StackExchange.Redis.IConnectionMultiplexer>()!)
+    .SetApplicationName("CAMS");
+
+// Register Caching Services
+builder.Services.AddSingleton<ICacheMetricsService, CacheMetricsService>();
+builder.Services.AddScoped<ICacheService, CacheService>();
+builder.Services.AddScoped<ICacheInvalidationService, CacheInvalidationService>();
+builder.Services.AddScoped<ICacheWarmupService, CacheWarmupService>();
+
+// Configure settings
+builder.Services.Configure<BulkUploadSettings>(builder.Configuration.GetSection(BulkUploadSettings.SectionName));
+
+// Add common services for DRY optimization
+builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<IMappingService, MappingService>();
+builder.Services.AddScoped<IErrorHandlerService, ErrorHandlerService>();
+builder.Services.AddScoped<IRetryPolicyService, RetryPolicyService>();
+
+// Add refactored user services for Single Responsibility Principle
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IUserActivityService, UserActivityService>();
+builder.Services.AddScoped<IDeviceInformationService, DeviceInformationService>();
+builder.Services.AddScoped<IUserAuthenticationService, UserAuthenticationService>();
+
+builder.Services.AddScoped<IFileParsingService, FileParsingService>();
+builder.Services.AddScoped<IProgressTrackingService, ProgressTrackingService>();
+builder.Services.AddScoped<IBulkValidationService, BulkValidationService>();
+
+// Add business logic services for Navigation controllers (SRP compliance)
+builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+
+// Add specialized logging services (Clean Code - Extract logging concerns)
+builder.Services.AddScoped<IBulkUploadLogger, BulkUploadLogger>();
+
 // Add SignalR
 builder.Services.AddSignalR();
-
-// SQL Server connection strategies are now self-contained in SqlServerDatabaseStrategy
 
 // Add Database Connection Strategies
 builder.Services.AddScoped<IDatabaseConnectionStrategy, SqlServerDatabaseStrategy>();
@@ -138,7 +196,6 @@ builder.Services.AddScoped<IDatabaseConnectionStrategy, ElasticSearchDatabaseStr
 
 // Add API Connection Strategies
 builder.Services.AddScoped<IApiConnectionStrategy, RestApiConnectionStrategy>();
-// builder.Services.AddScoped<IApiConnectionStrategy, GraphQLConnectionStrategy>(); // TODO: Implement GraphQLConnectionStrategy
 builder.Services.AddScoped<IApiConnectionStrategy, SoapApiConnectionStrategy>();
 
 // Add File Connection Strategies
@@ -152,7 +209,6 @@ builder.Services.AddScoped<IFileConnectionStrategy, GoogleCloudStorageConnection
 
 // Add HttpClient for API connections
 builder.Services.AddHttpClient<RestApiConnectionStrategy>();
-// builder.Services.AddHttpClient<GraphQLConnectionStrategy>(); // TODO: Implement GraphQLConnectionStrategy
 builder.Services.AddHttpClient<SoapApiConnectionStrategy>();
 
 // Add Database Connection Factory
@@ -235,10 +291,8 @@ using (var scope = app.Services.CreateScope())
         {
             logger.LogDebug("Database initialization attempt {Attempt} of {MaxAttempts}...", i + 1, maxRetries);
             
-            // First ensure the database exists by creating it if necessary
             try
             {
-                // Create database using a master connection
                 var masterConnectionString = connectionString.Replace($"Database={dbName}", "Database=master");
                 using (var connection = new SqlConnection(masterConnectionString))
                 {
@@ -256,8 +310,6 @@ using (var scope = app.Services.CreateScope())
                 logger.LogWarning(dbCreateEx, "Could not create database using master connection. Will try EnsureCreated.");
             }
             
-            // Apply migrations (this will create the database schema)
-            // Note: Don't use EnsureCreated with migrations - they conflict!
             try
             {
                 await context.Database.MigrateAsync();
@@ -266,26 +318,19 @@ using (var scope = app.Services.CreateScope())
             catch (Exception migrationEx)
             {
                 logger.LogWarning(migrationEx, "Migration failed, possibly due to existing schema. Checking if database is accessible...");
-                
-                // If migration fails, just check if we can connect
                 var isConnected = await context.Database.CanConnectAsync();
                 if (!isConnected)
                 {
                     throw new Exception("Cannot connect to database after migration failure", migrationEx);
                 }
             }
-            
-            // Test database connection
             var canConnect = await context.Database.CanConnectAsync();
             if (canConnect)
             {
                 logger.LogDebug("Database connection verified successfully.");
-                
-                // Seed database with initial data
                 var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
                 await seeder.SeedAsync();
                 
-                // Success - exit the retry loop
                 break;
             }
             else
@@ -347,13 +392,12 @@ if (!app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ENSURE THE BE DOESN'T CONNECT TO THE DB BEFORE IT STARTS
 app.MapGet("/health", () => Results.Ok("Healthy!"));
 app.MapGet("/test-bulk", () => Results.Ok("Bulk upload route test working!"));
 
 app.MapControllers();
 
 // Map SignalR Hub
-app.MapHub<Prototype.Hubs.ProgressHub>("/progressHub");
+app.MapHub<ProgressHub>("/progressHub");
 
 app.Run();
