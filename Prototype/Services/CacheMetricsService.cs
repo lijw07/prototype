@@ -94,21 +94,4 @@ public class CacheMetricsService(
             logger.LogError(ex, "Error logging cache access for operation: {Operation}", operation);
         }
     }
-
-    public CacheStatisticsDto GetStatistics()
-    {
-        var latencyArray = _latencyMetrics.ToArray();
-        
-        return new CacheStatisticsDto
-        {
-            HitRatio = GetHitRatio(),
-            TotalQueries = GetTotalQueries(),
-            AverageLatencyMs = latencyArray.Length > 0 ? latencyArray.Average() : 0,
-            MaxLatencyMs = latencyArray.Length > 0 ? latencyArray.Max() : 0,
-            MinLatencyMs = latencyArray.Length > 0 ? latencyArray.Min() : 0,
-            TotalHits = _cacheHits.Values.Sum(),
-            TotalMisses = _cacheMisses.Values.Sum(),
-            TopMissedKeys = _cacheMisses.OrderByDescending(kvp => kvp.Value).Take(10).ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
-        };
-    }
 }

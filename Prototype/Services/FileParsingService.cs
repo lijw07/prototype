@@ -112,8 +112,8 @@ public class FileParsingService(ILogger<FileParsingService> logger) : IFileParsi
 
                 // Memory-optimized batch processing
                 var batchSize = CalculateMemoryOptimizedBatchSize(
-                    GetAvailableMemoryMB(), 
-                    EstimateRowSizeMB(colCount));
+                    GetAvailableMemoryMb(), 
+                    EstimateRowSizeMb(colCount));
                 
                 for (int startRow = 2; startRow <= rowCount; startRow += batchSize)
                 {
@@ -314,18 +314,18 @@ public class FileParsingService(ILogger<FileParsingService> logger) : IFileParsi
         return _supportedExtensions.Contains(fileExtension.ToLower());
     }
 
-    public int CalculateMemoryOptimizedBatchSize(int availableMemoryMB, int estimatedRowSizeMB)
+    public int CalculateMemoryOptimizedBatchSize(int availableMemoryMb, int estimatedRowSizeMb)
     {
         // Calculate safe batch size based on available memory
         // Use 25% of available memory to be conservative
-        var safeMemoryMB = availableMemoryMB / 4;
-        var batchSize = Math.Max(100, safeMemoryMB / Math.Max(1, estimatedRowSizeMB));
+        var safeMemoryMb = availableMemoryMb / 4;
+        var batchSize = Math.Max(100, safeMemoryMb / Math.Max(1, estimatedRowSizeMb));
         
         // Cap at reasonable limits
         return Math.Min(batchSize, 10000);
     }
 
-    private int GetAvailableMemoryMB()
+    private int GetAvailableMemoryMb()
     {
         // Estimate available memory (simplified)
         var totalMemory = GC.GetTotalMemory(false);
@@ -333,7 +333,7 @@ public class FileParsingService(ILogger<FileParsingService> logger) : IFileParsi
         return Math.Min(availableMemory, 512); // Cap at 512MB for safety
     }
 
-    private int EstimateRowSizeMB(int columnCount)
+    private int EstimateRowSizeMb(int columnCount)
     {
         // Rough estimate: assume average 50 characters per column
         var estimatedRowSizeBytes = columnCount * 50 * sizeof(char);

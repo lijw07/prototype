@@ -9,7 +9,6 @@ public class BulkUploadResponseDto
     public DateTime ProcessedAt { get; set; }
     public List<BulkUploadErrorDto> Errors { get; set; } = new List<BulkUploadErrorDto>();
     public TimeSpan ProcessingTime { get; set; }
-    
     public string? FileName { get; set; }
     public int? FileIndex { get; set; }
     public int? TotalFiles { get; set; }

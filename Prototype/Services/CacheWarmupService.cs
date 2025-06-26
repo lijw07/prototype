@@ -41,7 +41,7 @@ public class CacheWarmupService(
                 context.TemporaryUsers.CountAsync(),
                 context.UserRoles.CountAsync(),
                 context.UserActivityLogs
-                    .Where(log => log.ActivityDate >= DateTime.UtcNow.AddDays(-30))
+                    .Where(log => log.Timestamp >= DateTime.UtcNow.AddDays(-30))
                     .CountAsync(),
                 context.Applications.CountAsync()
             };
@@ -82,8 +82,8 @@ public class CacheWarmupService(
                 context.Users.CountAsync(),
                 context.Applications.CountAsync(),
                 context.UserApplications.CountAsync(),
-                context.UserActivityLogs.Where(log => log.ActivityDate >= thirtyDaysAgo).CountAsync(),
-                context.UserActivityLogs.Where(log => log.ActivityDate >= sevenDaysAgo).CountAsync()
+                context.UserActivityLogs.Where(log => log.Timestamp >= thirtyDaysAgo).CountAsync(),
+                context.UserActivityLogs.Where(log => log.Timestamp >= sevenDaysAgo).CountAsync()
             };
 
             await Task.WhenAll(tasks);
@@ -125,7 +125,7 @@ public class CacheWarmupService(
                     LastName = u.LastName,
                     Role = u.Role,
                     IsActive = u.IsActive,
-                    LastLoginDate = u.LastLoginDate,
+                    LastLoginDate = u.LastLogin,
                     CreatedAt = u.CreatedAt,
                     UpdatedAt = u.UpdatedAt
                 })
@@ -152,7 +152,7 @@ public class CacheWarmupService(
 
             // Warm up cache for users who logged in today
             var activeUsers = await context.Users
-                .Where(u => u.LastLoginDate >= DateTime.UtcNow.AddDays(-1))
+                .Where(u => u.LastLogin >= DateTime.UtcNow.AddDays(-1))
                 .Take(100) // Limit to prevent memory spike
                 .Select(u => new UserCacheDto
                 {
@@ -163,7 +163,7 @@ public class CacheWarmupService(
                     LastName = u.LastName,
                     Role = u.Role,
                     IsActive = u.IsActive,
-                    LastLoginDate = u.LastLoginDate,
+                    LastLoginDate = u.LastLogin,
                     CreatedAt = u.CreatedAt,
                     UpdatedAt = u.UpdatedAt
                 })
