@@ -27,36 +27,36 @@ public class ApplicationFactoryService(PasswordEncryptionService encryptionServi
         application.UpdatedAt = DateTime.UtcNow;
         
         var conn = connectionSource;
-        conn.Instance = requestDto.ConnectionSource.Instance;
-        conn.Host = requestDto.ConnectionSource.Host;
-        conn.Port = requestDto.ConnectionSource.Port;
-        conn.AuthenticationType = requestDto.ConnectionSource.AuthenticationType;
-        conn.DatabaseName = requestDto.ConnectionSource.DatabaseName;
-        conn.Url = requestDto.ConnectionSource.Url;
-        conn.Username = requestDto.ConnectionSource.Username;
+        conn.Instance = requestDto.ConnectionSourceRequest.Instance;
+        conn.Host = requestDto.ConnectionSourceRequest.Host;
+        conn.Port = requestDto.ConnectionSourceRequest.Port;
+        conn.AuthenticationType = requestDto.ConnectionSourceRequest.AuthenticationType;
+        conn.DatabaseName = requestDto.ConnectionSourceRequest.DatabaseName;
+        conn.Url = requestDto.ConnectionSourceRequest.Url;
+        conn.Username = requestDto.ConnectionSourceRequest.Username;
         // Only update password if provided (not empty)
-        if (!string.IsNullOrEmpty(requestDto.ConnectionSource.Password))
+        if (!string.IsNullOrEmpty(requestDto.ConnectionSourceRequest.Password))
         {
-            conn.Password = encryptionService.Encrypt(requestDto.ConnectionSource.Password);
+            conn.Password = encryptionService.Encrypt(requestDto.ConnectionSourceRequest.Password);
         }
-        conn.AuthenticationDatabase = requestDto.ConnectionSource.AuthenticationDatabase;
+        conn.AuthenticationDatabase = requestDto.ConnectionSourceRequest.AuthenticationDatabase;
         // Only update AWS credentials if provided
-        if (!string.IsNullOrEmpty(requestDto.ConnectionSource.AwsAccessKeyId))
+        if (!string.IsNullOrEmpty(requestDto.ConnectionSourceRequest.AwsAccessKeyId))
         {
-            conn.AwsAccessKeyId = encryptionService.Encrypt(requestDto.ConnectionSource.AwsAccessKeyId);
+            conn.AwsAccessKeyId = encryptionService.Encrypt(requestDto.ConnectionSourceRequest.AwsAccessKeyId);
         }
-        if (!string.IsNullOrEmpty(requestDto.ConnectionSource.AwsSecretAccessKey))
+        if (!string.IsNullOrEmpty(requestDto.ConnectionSourceRequest.AwsSecretAccessKey))
         {
-            conn.AwsSecretAccessKey = encryptionService.Encrypt(requestDto.ConnectionSource.AwsSecretAccessKey);
+            conn.AwsSecretAccessKey = encryptionService.Encrypt(requestDto.ConnectionSourceRequest.AwsSecretAccessKey);
         }
-        if (!string.IsNullOrEmpty(requestDto.ConnectionSource.AwsSessionToken))
+        if (!string.IsNullOrEmpty(requestDto.ConnectionSourceRequest.AwsSessionToken))
         {
-            conn.AwsSessionToken = encryptionService.Encrypt(requestDto.ConnectionSource.AwsSessionToken);
+            conn.AwsSessionToken = encryptionService.Encrypt(requestDto.ConnectionSourceRequest.AwsSessionToken);
         }
-        conn.Principal = requestDto.ConnectionSource.Principal;
-        conn.ServiceName = requestDto.ConnectionSource.ServiceName;
-        conn.ServiceRealm = requestDto.ConnectionSource.ServiceRealm;
-        conn.CanonicalizeHostName = requestDto.ConnectionSource.CanonicalizeHostName;
+        conn.Principal = requestDto.ConnectionSourceRequest.Principal;
+        conn.ServiceName = requestDto.ConnectionSourceRequest.ServiceName;
+        conn.ServiceRealm = requestDto.ConnectionSourceRequest.ServiceRealm;
+        conn.CanonicalizeHostName = requestDto.ConnectionSourceRequest.CanonicalizeHostName;
         conn.UpdatedAt = DateTime.UtcNow;
 
         return application;

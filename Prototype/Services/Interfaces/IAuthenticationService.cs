@@ -1,9 +1,10 @@
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.DTOs.Responses;
 
 namespace Prototype.Services.Interfaces;
 
 public interface IAuthenticationService
 {
-    Task<LoginResponse> AuthenticateAsync(LoginRequestDto request);
+    Task<LoginResponseDto> AuthenticateAsync(LoginRequestDto request);
 }

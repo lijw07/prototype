@@ -2,8 +2,9 @@ using System.Diagnostics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
 using Prototype.Enum;
+using Prototype.Models;
+using Prototype.Services.Interfaces;
 using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
@@ -14,6 +15,7 @@ namespace Prototype.Controllers.Navigation;
 public class SystemHealthNavigationController(
     SentinelContext context,
     IAuthenticatedUserAccessor userAccessor,
+    ICacheService cacheService,
     ILogger<SystemHealthNavigationController> logger)
     : ControllerBase
 {
@@ -26,7 +28,21 @@ public class SystemHealthNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first
+            var cacheKey = "system-health:overview";
+            var cachedData = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedData != null)
+            {
+                logger.LogDebug("System health overview cache hit");
+                return Ok(new { success = true, data = cachedData });
+            }
+
             var healthData = await CollectHealthMetrics();
+            
+            // Cache for 2 minutes (system health changes frequently)
+            await cacheService.SetAsync(cacheKey, healthData, TimeSpan.FromMinutes(2));
+            logger.LogDebug("System health overview cached");
             
             return Ok(new { success = true, data = healthData });
         }
@@ -46,7 +62,21 @@ public class SystemHealthNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first
+            var cacheKey = "system-health:database-connections";
+            var cachedConnections = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedConnections != null)
+            {
+                logger.LogDebug("Database connections health cache hit");
+                return Ok(new { success = true, data = cachedConnections });
+            }
+
             var connections = await TestDatabaseConnections();
+            
+            // Cache for 5 minutes (connection tests are expensive)
+            await cacheService.SetAsync(cacheKey, connections, TimeSpan.FromMinutes(5));
+            logger.LogDebug("Database connections health cached");
             
             return Ok(new { success = true, data = connections });
         }
@@ -66,7 +96,21 @@ public class SystemHealthNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first
+            var cacheKey = "system-health:performance-metrics";
+            var cachedMetrics = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedMetrics != null)
+            {
+                logger.LogDebug("Performance metrics cache hit");
+                return Ok(new { success = true, data = cachedMetrics });
+            }
+
             var metrics = await CollectPerformanceMetrics();
+            
+            // Cache for 3 minutes (performance metrics change moderately)
+            await cacheService.SetAsync(cacheKey, metrics, TimeSpan.FromMinutes(3));
+            logger.LogDebug("Performance metrics cached");
             
             return Ok(new { success = true, data = metrics });
         }

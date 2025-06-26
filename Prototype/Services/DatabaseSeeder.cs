@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
 using Prototype.Models;
 using Prototype.Services;
 
@@ -123,28 +122,28 @@ public class DatabaseSeeder(
             new UserRoleModel
             {
                     UserRoleId = Guid.NewGuid(),
-                    Role = "Platform Admin",
+                    RoleName = "Platform Admin",
                     CreatedAt = DateTime.UtcNow.AddDays(-7),
                     CreatedBy = "Seed"
             },
             new UserRoleModel
             {
                     UserRoleId = Guid.NewGuid(),
-                    Role = "Admin",
+                    RoleName = "Admin",
                     CreatedAt = DateTime.UtcNow.AddDays(-7),
                     CreatedBy = "Seed"
             },
             new UserRoleModel
             {
                     UserRoleId = Guid.NewGuid(),
-                    Role = "User",
+                    RoleName = "User",
                     CreatedAt = DateTime.UtcNow.AddDays(-7),
                     CreatedBy = "Seed"
             },
              new UserRoleModel
             {
                     UserRoleId = Guid.NewGuid(),
-                    Role = "Manager",
+                    RoleName = "Manager",
                     CreatedAt = DateTime.UtcNow.AddDays(-7),
                     CreatedBy = "Seed"
             },

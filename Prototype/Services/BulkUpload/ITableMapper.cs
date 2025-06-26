@@ -1,6 +1,6 @@
 using System.Data;
 using Prototype.DTOs.BulkUpload;
-using Prototype.Helpers;
+using Prototype.Utility;
 
 namespace Prototype.Services.BulkUpload;
 

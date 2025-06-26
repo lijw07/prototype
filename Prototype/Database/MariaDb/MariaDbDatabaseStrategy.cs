@@ -1,6 +1,7 @@
 using System.Data.Odbc;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -26,14 +27,14 @@ public class MariaDbDatabaseStrategy(
         };
     }
 
-    public string BuildConnectionString(ConnectionSourceDto source)
+    public string BuildConnectionString(ConnectionSourceRequestDto sourceRequest)
     {
-        var connectionString = $"DRIVER={{MariaDB ODBC 3.1 Driver}};SERVER={source.Host};PORT={source.Port};DATABASE={source.DatabaseName};";
+        var connectionString = $"DRIVER={{MariaDB ODBC 3.1 Driver}};SERVER={sourceRequest.Host};PORT={sourceRequest.Port};DATABASE={sourceRequest.DatabaseName};";
 
-        switch (source.AuthenticationType)
+        switch (sourceRequest.AuthenticationType)
         {
             case AuthenticationTypeEnum.UserPassword:
-                connectionString += $"UID={source.Username};PWD={source.Password};";
+                connectionString += $"UID={sourceRequest.Username};PWD={sourceRequest.Password};";
                 break;
                 
             case AuthenticationTypeEnum.NoAuth:
@@ -41,7 +42,7 @@ public class MariaDbDatabaseStrategy(
                 break;
                 
             default:
-                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for MariaDB.");
+                throw new NotSupportedException($"Authentication type '{sourceRequest.AuthenticationType}' is not supported for MariaDB.");
         }
 
         // MariaDB ODBC options

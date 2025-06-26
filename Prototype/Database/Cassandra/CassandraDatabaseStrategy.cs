@@ -2,6 +2,7 @@ using System.Text.Json;
 using Cassandra;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -27,21 +28,21 @@ public class CassandraDatabaseStrategy(
         };
     }
 
-    public string BuildConnectionString(ConnectionSourceDto source)
+    public string BuildConnectionString(ConnectionSourceRequestDto sourceRequest)
     {
         // Cassandra doesn't use traditional connection strings, but we'll build a connection info string
-        var contactPoints = source.Host.Split(',').Select(h => h.Trim()).ToArray();
-        var port = int.Parse(source.Port);
-        var keyspace = source.DatabaseName;
+        var contactPoints = sourceRequest.Host.Split(',').Select(h => h.Trim()).ToArray();
+        var port = int.Parse(sourceRequest.Port);
+        var keyspace = sourceRequest.DatabaseName;
 
         var connectionInfo = new
         {
             ContactPoints = contactPoints,
             Port = port,
             Keyspace = keyspace,
-            Username = source.Username,
-            Password = source.Password,
-            AuthenticationType = source.AuthenticationType
+            Username = sourceRequest.Username,
+            Password = sourceRequest.Password,
+            AuthenticationType = sourceRequest.AuthenticationType
         };
 
         return System.Text.Json.JsonSerializer.Serialize(connectionInfo);

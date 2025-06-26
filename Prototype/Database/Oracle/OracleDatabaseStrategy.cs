@@ -1,6 +1,7 @@
 using System.Data.Odbc;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -26,18 +27,18 @@ public class OracleDatabaseStrategy(
         };
     }
 
-    public string BuildConnectionString(ConnectionSourceDto source)
+    public string BuildConnectionString(ConnectionSourceRequestDto sourceRequest)
     {
-        var connectionString = $"DRIVER={{Oracle in XE}};DBQ={source.Host}:{source.Port}/{source.DatabaseName};";
+        var connectionString = $"DRIVER={{Oracle in XE}};DBQ={sourceRequest.Host}:{sourceRequest.Port}/{sourceRequest.DatabaseName};";
 
-        switch (source.AuthenticationType)
+        switch (sourceRequest.AuthenticationType)
         {
             case AuthenticationTypeEnum.UserPassword:
-                connectionString += $"UID={source.Username};PWD={source.Password};";
+                connectionString += $"UID={sourceRequest.Username};PWD={sourceRequest.Password};";
                 break;
                 
             default:
-                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for Oracle.");
+                throw new NotSupportedException($"Authentication type '{sourceRequest.AuthenticationType}' is not supported for Oracle.");
         }
 
         return connectionString;

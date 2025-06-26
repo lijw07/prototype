@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using Prototype.DTOs.BulkUpload;
-using Prototype.Hubs;
+using Prototype.Utility;
 
 namespace Prototype.Services.BulkUpload;
 

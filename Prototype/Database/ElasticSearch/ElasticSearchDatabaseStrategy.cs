@@ -1,6 +1,7 @@
 using Nest;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -26,16 +27,16 @@ public class ElasticSearchDatabaseStrategy(
         };
     }
 
-    public string BuildConnectionString(ConnectionSourceDto source)
+    public string BuildConnectionString(ConnectionSourceRequestDto sourceRequest)
     {
         var connectionInfo = new
         {
-            Host = source.Host,
-            Port = source.Port,
-            Username = source.Username,
-            Password = source.Password,
-            AuthenticationType = source.AuthenticationType,
-            Index = source.DatabaseName // ElasticSearch uses indices instead of databases
+            Host = sourceRequest.Host,
+            Port = sourceRequest.Port,
+            Username = sourceRequest.Username,
+            Password = sourceRequest.Password,
+            AuthenticationType = sourceRequest.AuthenticationType,
+            Index = sourceRequest.DatabaseName // ElasticSearch uses indices instead of databases
         };
 
         return System.Text.Json.JsonSerializer.Serialize(connectionInfo);

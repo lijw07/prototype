@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.DTOs.Responses;
 using Prototype.Enum;
 using Prototype.Models;
@@ -16,7 +16,8 @@ public class UserAccountService(
     TransactionService transactionService,
     PasswordEncryptionService passwordService,
     ILogger<UserAccountService> logger,
-    IHttpContextAccessor httpContextAccessor)
+    IHttpContextAccessor httpContextAccessor,
+    ICacheInvalidationService cacheInvalidation)
     : IUserAccountService
 {
     private readonly ValidationService _validationService = validationService;
@@ -43,14 +44,14 @@ public class UserAccountService(
             .ToListAsync();
     }
 
-    public async Task<LoginResponse> RegisterTemporaryUserAsync(RegisterRequestDto request)
+    public async Task<LoginResponseDto> RegisterTemporaryUserAsync(RegisterRequestDto request)
     {
         return await transactionService.ExecuteInTransactionAsync(async () =>
         {
             var existingUser = await GetUserByEmailAsync(request.Email);
             if (existingUser != null)
             {
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = false,
                     Message = "User already exists"
@@ -87,10 +88,9 @@ public class UserAccountService(
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Failed to send verification email to {Email}, but user was created", request.Email);
-                // TODO: Continue even if email fails - user can be verified manually
             }
             
-            return new LoginResponse
+            return new LoginResponseDto
             {
                 Success = true,
                 Message = "Temporary user account created successfully. A verification email has been sent to complete the registration.",
@@ -99,14 +99,14 @@ public class UserAccountService(
         });
     }
 
-    public async Task<LoginResponse> ForgotPasswordAsync(ForgotUserRequestDto request)
+    public async Task<LoginResponseDto> ForgotPasswordAsync(ForgotUserRequestDto request)
     {
         return await transactionService.ExecuteInTransactionAsync(async () =>
         {
             var user = await GetUserByEmailAsync(request.Email);
             if (user == null)
             {
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = false,
                     Message = "User not found"
@@ -139,11 +139,6 @@ public class UserAccountService(
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to send password reset email to {Email}. Recovery request {RecoveryId} was saved but email failed.", request.Email, userRecovery.UserRecoveryRequestId);
-                
-                // TODO:
-                // Don't return error here - the recovery request was saved successfully
-                // User can still use the token if they have it, or admin can manually send
-                // Just log the email failure and continue
             }
 
             await CreateAuditLogAsync(user.UserId, ActionTypeEnum.ForgotPassword, "Password reset requested");
@@ -152,7 +147,7 @@ public class UserAccountService(
             // Save all changes made by audit and activity logging
             await context.SaveChangesAsync();
 
-            return new LoginResponse
+            return new LoginResponseDto
             {
                 Success = true,
                 Message = "Password reset email sent"
@@ -160,13 +155,13 @@ public class UserAccountService(
         });
     }
 
-    public async Task<LoginResponse> ResetPasswordAsync(ResetPasswordRequestDto request)
+    public async Task<LoginResponseDto> ResetPasswordAsync(ResetPasswordRequestDto request)
     {
         return await transactionService.ExecuteInTransactionAsync(async () =>
         {
             if (!jwtTokenService.ValidateToken(request.Token, out var principal))
             {
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = false,
                     Message = "Invalid or expired token"
@@ -176,7 +171,7 @@ public class UserAccountService(
             var email = principal.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
             if (string.IsNullOrEmpty(email))
             {
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = false,
                     Message = "Invalid token"
@@ -186,7 +181,7 @@ public class UserAccountService(
             var user = await GetUserByEmailAsync(email);
             if (user == null)
             {
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = false,
                     Message = "User not found"
@@ -203,7 +198,7 @@ public class UserAccountService(
             // Create a user activity log for password reset
             await CreateUserActivityLogAsync(user.UserId, ActionTypeEnum.ResetPassword, "Password reset");
 
-            return new LoginResponse
+            return new LoginResponseDto
             {
                 Success = true,
                 Message = "Password reset successful"
@@ -211,13 +206,13 @@ public class UserAccountService(
         });
     }
 
-    public async Task<LoginResponse> RegisterNewUser(string token)
+    public async Task<LoginResponseDto> RegisterNewUser(string token)
     {
         return await transactionService.ExecuteInTransactionAsync(async () =>
         {
             if (!jwtTokenService.ValidateToken(token, out var principal))
             {
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = false,
                     Message = "Invalid or expired token"
@@ -227,7 +222,7 @@ public class UserAccountService(
             var email = principal.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
             if (string.IsNullOrEmpty(email))
             {
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = false,
                     Message = "Invalid token"
@@ -265,14 +260,14 @@ public class UserAccountService(
                 await CreateUserActivityLogAsync(newUser.UserId, ActionTypeEnum.ResetPassword,
                     "Account activated and password set");
 
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = true,
                     Message = "Password set successfully! Your account is now active and you can login."
                 };
             }
 
-            return new LoginResponse
+            return new LoginResponseDto
             {
                 Success = false,
                 Message = "User not found or already registered"
@@ -374,14 +369,14 @@ public class UserAccountService(
         return deviceInfo.Count > 0 ? string.Join(", ", deviceInfo) : "Unknown";
     }
 
-    public async Task<LoginResponse> UpdateUserAsync(UpdateUserRequestDto request)
+    public async Task<LoginResponseDto> UpdateUserAsync(UpdateUserRequestDto request)
     {
         return await transactionService.ExecuteInTransactionAsync(async () =>
         {
             var user = await GetUserByIdAsync(request.UserId);
             if (user == null)
             {
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = false,
                     Message = "User not found"
@@ -393,7 +388,7 @@ public class UserAccountService(
                 .FirstOrDefaultAsync(u => u.Username == request.Username && u.UserId != request.UserId);
             if (existingUserWithUsername != null)
             {
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = false,
                     Message = "Username is already taken"
@@ -405,7 +400,7 @@ public class UserAccountService(
                 .FirstOrDefaultAsync(u => u.Email == request.Email && u.UserId != request.UserId);
             if (existingUserWithEmail != null)
             {
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = false,
                     Message = "Email is already taken"
@@ -413,6 +408,10 @@ public class UserAccountService(
             }
 
             // Update user properties
+            // Store old values for cache invalidation
+            var oldEmail = user.Email;
+            var oldUsername = user.Username;
+
             user.FirstName = request.FirstName;
             user.LastName = request.LastName;
             user.Username = request.Username;
@@ -424,7 +423,18 @@ public class UserAccountService(
 
             await context.SaveChangesAsync();
 
-            return new LoginResponse
+            // Invalidate cache for both old and new values
+            await cacheInvalidation.InvalidateUserCacheAsync(user.UserId, oldEmail, oldUsername);
+            
+            if (oldEmail != user.Email || oldUsername != user.Username)
+            {
+                await cacheInvalidation.InvalidateUserCacheAsync(user.UserId, user.Email, user.Username);
+            }
+
+            // Invalidate dashboard stats if user count might change
+            await cacheInvalidation.InvalidateDashboardCacheAsync();
+
+            return new LoginResponseDto
             {
                 Success = true,
                 Message = "User updated successfully"
@@ -432,25 +442,36 @@ public class UserAccountService(
         });
     }
 
-    public async Task<LoginResponse> DeleteUserAsync(Guid userId)
+    public async Task<LoginResponseDto> DeleteUserAsync(Guid userId)
     {
         return await transactionService.ExecuteInTransactionAsync(async () =>
         {
             var user = await GetUserByIdAsync(userId);
             if (user == null)
             {
-                return new LoginResponse
+                return new LoginResponseDto
                 {
                     Success = false,
                     Message = "User not found"
                 };
             }
 
+            // Store user data for cache invalidation
+            var userEmail = user.Email;
+            var userUsername = user.Username;
+
             // Remove user from database
             context.Users.Remove(user);
             await context.SaveChangesAsync();
 
-            return new LoginResponse
+            // Invalidate all user-related cache
+            await cacheInvalidation.InvalidateAllUserSpecificCacheAsync(userId);
+            
+            // Invalidate global statistics
+            await cacheInvalidation.InvalidateDashboardCacheAsync();
+            await cacheInvalidation.InvalidateAnalyticsCacheAsync();
+
+            return new LoginResponseDto
             {
                 Success = true,
                 Message = "User deleted successfully"

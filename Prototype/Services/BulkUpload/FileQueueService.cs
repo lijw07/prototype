@@ -5,7 +5,6 @@ using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
 using OfficeOpenXml;
-using Prototype.Data;
 using Prototype.DTOs.BulkUpload;
 using Prototype.Enum;
 using Prototype.Models;

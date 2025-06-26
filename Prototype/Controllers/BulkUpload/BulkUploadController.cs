@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Prototype.Data;
 using Prototype.Models;
 using Prototype.DTOs;
 using Prototype.DTOs.BulkUpload;
@@ -10,7 +9,6 @@ using Prototype.Enum;
 using Prototype.Services.BulkUpload;
 using Prototype.Services.Interfaces;
 using Prototype.Utility;
-using Prototype.Helpers;
 
 namespace Prototype.Controllers.BulkUpload
 {
@@ -40,7 +38,6 @@ namespace Prototype.Controllers.BulkUpload
             
             try
             {
-                // Temporary: Use admin user for testing
                 var currentUser = await context.Users.FirstOrDefaultAsync(u => u.Username == "admin");
                 if (currentUser == null)
                 {
@@ -113,13 +110,12 @@ namespace Prototype.Controllers.BulkUpload
                         Data = null
                     };
                     
-                    logger.LogWarning("Returning error bulk upload response: {Response}", 
-                        System.Text.Json.JsonSerializer.Serialize(errorResponse));
+                    logger.LogWarning("Bulk upload failed: {ErrorMessage}, ValidationErrors: {ErrorCount}", 
+                        uploadResult.ErrorMessage, uploadResult.Data?.Errors?.Count ?? 0);
                     
                     return BadRequest(errorResponse);
                 }
 
-                // Add file context to response
                 if (uploadResult.Data != null)
                 {
                     uploadResult.Data.FileName = requestDto.File.FileName;
@@ -134,8 +130,8 @@ namespace Prototype.Controllers.BulkUpload
                     Data = uploadResult.Data
                 };
                 
-                logger.LogInformation("Returning successful bulk upload response: {Response}", 
-                    System.Text.Json.JsonSerializer.Serialize(response));
+                logger.LogInformation("Bulk upload completed successfully: ProcessedRecords={ProcessedRecords}, FileName={FileName}", 
+                    uploadResult.Data?.ProcessedRecords ?? 0, requestDto.File.FileName);
                 
                 return Ok(response);
             }
@@ -158,7 +154,6 @@ namespace Prototype.Controllers.BulkUpload
             
             try
             {
-                // Temporary: Use admin user for testing
                 var currentUser = await context.Users.FirstOrDefaultAsync(u => u.Username == "admin");
                 if (currentUser == null)
                 {
@@ -180,14 +175,11 @@ namespace Prototype.Controllers.BulkUpload
                     });
                 }
 
-                // Use provided job ID or generated a new one for progress tracking
                 var jobId = !string.IsNullOrEmpty(requestDto.JobId) ? requestDto.JobId : progressService.GenerateJobId();
 
-                // Read file data immediately
                 var fileData = await ReadFileDataAsync(requestDto.File);
                 var fileExtension = Path.GetExtension(requestDto.File.FileName).ToLowerInvariant();
                 
-                // Detect a table type immediately
                 var detectedTable = await tableDetectionService.DetectTableTypeAsync(fileData, fileExtension);
                 if (detectedTable == null)
                 {
@@ -199,12 +191,10 @@ namespace Prototype.Controllers.BulkUpload
                     });
                 }
 
-                // Create a cancellation token for this job
                 var cancellationTokenSource = jobCancellationService.CreateJobCancellation(jobId);
                 
                 try
                 {
-                    // Generate job ID for progress tracking and return with a result
                     var uploadResult = await bulkUploadService.ProcessBulkDataWithProgressAsync(
                         fileData, 
                         detectedTable.TableType, 
@@ -233,7 +223,6 @@ namespace Prototype.Controllers.BulkUpload
                 await LogBulkUploadActivity(currentUser.UserId, detectedTable.TableType, 
                     uploadResult.Data!.ProcessedRecords, uploadResult.IsSuccess);
 
-                // Add file context to response
                 if (uploadResult.Data != null)
                 {
                     uploadResult.Data.FileName = requestDto.File.FileName;
@@ -262,7 +251,6 @@ namespace Prototype.Controllers.BulkUpload
                 }
                 finally
                 {
-                    // Clean up the cancellation token
                     jobCancellationService.RemoveJob(jobId);
                 }
             }
@@ -283,7 +271,6 @@ namespace Prototype.Controllers.BulkUpload
         {
             try
             {
-                // Temporary: Use admin user for testing
                 var currentUser = await context.Users.FirstOrDefaultAsync(u => u.Username == "admin");
                 if (currentUser == null)
                 {
@@ -331,10 +318,8 @@ namespace Prototype.Controllers.BulkUpload
                 var processedFiles = 0;
                 var failedFiles = 0;
 
-                // Process files sequentially or in parallel based on request
                 if (requestDto.ProcessFilesSequentially)
                 {
-                    // Sequential processing
                     for (int i = 0; i < requestDto.Files.Count; i++)
                     {
                         var file = requestDto.Files[i];
@@ -372,8 +357,6 @@ namespace Prototype.Controllers.BulkUpload
                 }
                 else
                 {
-                    // Parallel processing (if needed in future)
-                    // This can be implemented later for better performance
                     return BadRequest(new ApiResponseDto<object>
                     {
                         Success = false,
@@ -387,7 +370,6 @@ namespace Prototype.Controllers.BulkUpload
                 response.TotalProcessingTime = DateTime.UtcNow - overallStartTime;
                 response.OverallSuccess = failedFiles == 0 && response.GlobalErrors.Count == 0;
 
-                // Log the overall activity
                 await LogMultipleBulkUploadActivity(currentUser.UserId, response);
 
                 return Ok(new ApiResponseDto<MultipleBulkUploadResponseDto>
@@ -416,7 +398,6 @@ namespace Prototype.Controllers.BulkUpload
         {
             try
             {
-                // Temporary: Use admin user for testing
                 var currentUser = await context.Users.FirstOrDefaultAsync(u => u.Username == "admin");
                 if (currentUser == null)
                 {
@@ -438,7 +419,6 @@ namespace Prototype.Controllers.BulkUpload
                     });
                 }
 
-                // Validate all files first
                 var allowedExtensions = new[] { ".csv", ".xml", ".json", ".xlsx", ".xls" };
                 foreach (var file in requestDto.Files)
                 {
@@ -456,7 +436,6 @@ namespace Prototype.Controllers.BulkUpload
 
                 logger.LogInformation("Queueing {FileCount} files for processing", requestDto.Files.Count);
 
-                // Create queue request
                 var queueRequest = new QueuedFileUploadRequestDto
                 {
                     Files = requestDto.Files,
@@ -465,7 +444,6 @@ namespace Prototype.Controllers.BulkUpload
                     ContinueOnError = requestDto.ContinueOnError
                 };
 
-                // Queue the files for processing
                 var jobId = await fileQueueService.QueueMultipleFilesAsync(queueRequest);
 
                 return Ok(new ApiResponseDto<object>
@@ -666,7 +644,7 @@ namespace Prototype.Controllers.BulkUpload
                 }
 
                 var history = await bulkUploadService.GetUploadHistoryAsync(currentUser.UserId, page, pageSize);
-                return Ok(new ApiResponseDto<PaginatedResult<BulkUploadHistory>>
+                return Ok(new ApiResponseDto<PaginatedResult<BulkUploadHistoryDto>>
                 {
                     Success = true,
                     Message = "Upload history retrieved successfully",
@@ -715,14 +693,12 @@ namespace Prototype.Controllers.BulkUpload
                 throw new InvalidOperationException($"Processing failed for {file.FileName}: {processResult.ErrorMessage}");
             }
 
-            // Add file context to the result
             if (processResult.Data != null)
             {
                 processResult.Data.FileName = file.FileName;
                 processResult.Data.FileIndex = fileIndex;
                 processResult.Data.TotalFiles = totalFiles;
                 
-                // Add file name to all errors
                 foreach (var error in processResult.Data.Errors)
                 {
                     error.FileName = file.FileName;
@@ -777,15 +753,12 @@ namespace Prototype.Controllers.BulkUpload
 
                 logger.LogInformation("Cancellation requested for job {JobId} by user {UserId}", jobId, currentUser.UserId);
 
-                // Cancel the job using the cancellation service
                 var wasCancelled = jobCancellationService.CancelJob(jobId);
                 
                 if (wasCancelled)
                 {
-                    // Notify through SignalR that the job was canceled
                     await progressService.NotifyError(jobId, "Migration cancelled by user");
                     
-                    // Log the cancellation activity
                     await LogBulkUploadActivity(currentUser.UserId, "Migration", 0, false);
 
                     return Ok(new ApiResponseDto<object>
@@ -819,7 +792,6 @@ namespace Prototype.Controllers.BulkUpload
 
         private async Task<UserModel?> GetCurrentUserAsync()
         {
-            // Temporary: Return admin user for testing when authorization is disabled
             return await context.Users.FirstOrDefaultAsync(u => u.Username == "admin");
         }
 
@@ -830,7 +802,7 @@ namespace Prototype.Controllers.BulkUpload
                 UserActivityLogId = Guid.NewGuid(),
                 UserId = userId,
                 DeviceInformation = HttpContext.Request.Headers["User-Agent"].ToString(),
-                ActionType = Enum.ActionTypeEnum.Create,
+                ActionType = ActionTypeEnum.Create,
                 Description = $"Bulk upload to {tableType} table. Records: {recordCount}. Success: {success}",
                 Timestamp = DateTime.UtcNow,
                 IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()

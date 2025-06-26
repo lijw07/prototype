@@ -8,7 +8,7 @@ public class UserRoleModel
     public required Guid UserRoleId { get; set; }
     
     [Required]
-    public required string Role { get; set; }
+    public required string RoleName { get; set; }
 
     [Required]
     public required DateTime CreatedAt { get; set; }

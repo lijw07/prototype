@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
 using Prototype.Enum;
 using Prototype.Models;
+using Prototype.Services.Interfaces;
 using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
@@ -14,6 +14,7 @@ namespace Prototype.Controllers.Navigation;
 public class UserRequestsNavigationController(
     SentinelContext context,
     IAuthenticatedUserAccessor userAccessor,
+    ICacheService cacheService,
     ILogger<UserRequestsNavigationController> logger)
     : ControllerBase
 {
@@ -25,6 +26,16 @@ public class UserRequestsNavigationController(
             var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
+
+            // Check cache first - user-specific cache
+            var cacheKey = $"user-requests:user:{currentUser.UserId}";
+            var cachedRequests = await cacheService.GetSecureAsync<object>(cacheKey, currentUser.UserId);
+            
+            if (cachedRequests != null)
+            {
+                logger.LogDebug("User requests cache hit for user: {UserId}", currentUser.UserId);
+                return Ok(new { success = true, data = cachedRequests });
+            }
 
             var userRequests = await context.UserRequests
                 .Where(ur => ur.UserId == currentUser.UserId)
@@ -44,6 +55,10 @@ public class UserRequestsNavigationController(
                     userId = ur.UserId
                 })
                 .ToListAsync();
+
+            // Cache for 10 minutes with user-specific encryption
+            await cacheService.SetSecureAsync(cacheKey, userRequests, currentUser.UserId, TimeSpan.FromMinutes(10));
+            logger.LogDebug("User requests cached for user: {UserId}", currentUser.UserId);
 
             return Ok(new { success = true, data = userRequests });
         }
@@ -88,6 +103,9 @@ public class UserRequestsNavigationController(
 
             context.UserRequests.Add(userRequest);
             await context.SaveChangesAsync();
+
+            // Invalidate user-specific cache
+            await cacheService.InvalidateUserCacheAsync(currentUser.UserId);
 
             // Log the request for audit purposes
             await LogUserActivity(currentUser.UserId, ActionTypeEnum.ApplicationAdded, 
@@ -189,6 +207,9 @@ public class UserRequestsNavigationController(
 
             await context.SaveChangesAsync();
 
+            // Invalidate user-specific cache for the request owner
+            await cacheService.InvalidateUserCacheAsync(userRequest.UserId);
+
             await LogUserActivity(currentUser.UserId, ActionTypeEnum.Update, 
                 $"Updated request {id} status to {request.Status}");
 
@@ -218,6 +239,16 @@ public class UserRequestsNavigationController(
             var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
+
+            // Check cache first (static data)
+            var cacheKey = "user-requests:available-tools";
+            var cachedTools = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedTools != null)
+            {
+                logger.LogDebug("Available tools cache hit");
+                return Ok(new { success = true, data = cachedTools });
+            }
 
             var availableTools = new[]
             {
@@ -254,6 +285,10 @@ public class UserRequestsNavigationController(
                 }
             };
 
+            // Cache for 1 hour (static data, rarely changes)
+            await cacheService.SetAsync(cacheKey, availableTools, TimeSpan.FromHours(1));
+            logger.LogDebug("Available tools cached");
+
             return Ok(new { success = true, data = availableTools });
         }
         catch (Exception ex)
@@ -289,6 +324,9 @@ public class UserRequestsNavigationController(
             userRequest.UpdatedAt = DateTime.UtcNow;
 
             await context.SaveChangesAsync();
+
+            // Invalidate user-specific cache
+            await cacheService.InvalidateUserCacheAsync(currentUser.UserId);
 
             await LogUserActivity(currentUser.UserId, ActionTypeEnum.ApplicationRemoved, 
                 $"Cancelled request {id}");

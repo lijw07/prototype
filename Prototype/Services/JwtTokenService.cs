@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services.Interfaces;

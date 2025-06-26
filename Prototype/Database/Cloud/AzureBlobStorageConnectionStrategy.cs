@@ -1,6 +1,7 @@
 using Azure.Storage.Blobs;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -25,13 +26,13 @@ public class AzureBlobStorageConnectionStrategy(
         };
     }
 
-    public async Task<object> ReadDataAsync(ConnectionSourceDto source)
+    public async Task<object> ReadDataAsync(ConnectionSourceRequestDto sourceRequest)
     {
         try
         {
-            var blobClient = CreateBlobClient(source);
-            var containerName = ExtractContainerName(source.FilePath);
-            var blobName = ExtractBlobName(source.FilePath);
+            var blobClient = CreateBlobClient(sourceRequest);
+            var containerName = ExtractContainerName(sourceRequest.FilePath);
+            var blobName = ExtractBlobName(sourceRequest.FilePath);
 
             var containerClient = blobClient.GetBlobContainerClient(containerName);
             var blobClientFile = containerClient.GetBlobClient(blobName);
@@ -55,7 +56,7 @@ public class AzureBlobStorageConnectionStrategy(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to read Azure Blob: {FilePath}", source.FilePath);
+            logger.LogError(ex, "Failed to read Azure Blob: {FilePath}", sourceRequest.FilePath);
             throw;
         }
     }
@@ -66,17 +67,17 @@ public class AzureBlobStorageConnectionStrategy(
         return await ReadDataAsync(dto);
     }
 
-    public async Task<bool> TestConnectionAsync(ConnectionSourceDto source)
+    public async Task<bool> TestConnectionAsync(ConnectionSourceRequestDto sourceRequest)
     {
         try
         {
-            var blobClient = CreateBlobClient(source);
+            var blobClient = CreateBlobClient(sourceRequest);
 
-            if (!string.IsNullOrEmpty(source.FilePath))
+            if (!string.IsNullOrEmpty(sourceRequest.FilePath))
             {
                 // Test specific blob access
-                var containerName = ExtractContainerName(source.FilePath);
-                var blobName = ExtractBlobName(source.FilePath);
+                var containerName = ExtractContainerName(sourceRequest.FilePath);
+                var blobName = ExtractBlobName(sourceRequest.FilePath);
 
                 var containerClient = blobClient.GetBlobContainerClient(containerName);
                 var blobClientFile = containerClient.GetBlobClient(blobName);
@@ -127,33 +128,33 @@ public class AzureBlobStorageConnectionStrategy(
         return "Azure Blob Storage connection with Storage Key, SAS Token, and Azure AD authentication support";
     }
 
-    private BlobServiceClient CreateBlobClient(ConnectionSourceDto source)
+    private BlobServiceClient CreateBlobClient(ConnectionSourceRequestDto sourceRequest)
     {
-        switch (source.AuthenticationType)
+        switch (sourceRequest.AuthenticationType)
         {
             case AuthenticationTypeEnum.AzureStorageKey:
-                if (string.IsNullOrEmpty(source.AzureStorageAccountName) || string.IsNullOrEmpty(source.AzureStorageAccountKey))
+                if (string.IsNullOrEmpty(sourceRequest.AzureStorageAccountName) || string.IsNullOrEmpty(sourceRequest.AzureStorageAccountKey))
                     throw new ArgumentException("Azure Storage Account Name and Key are required for Storage Key authentication.");
                 
-                var connectionString = $"DefaultEndpointsProtocol=https;AccountName={source.AzureStorageAccountName};AccountKey={source.AzureStorageAccountKey};EndpointSuffix=core.windows.net";
+                var connectionString = $"DefaultEndpointsProtocol=https;AccountName={sourceRequest.AzureStorageAccountName};AccountKey={sourceRequest.AzureStorageAccountKey};EndpointSuffix=core.windows.net";
                 return new BlobServiceClient(connectionString);
 
             case AuthenticationTypeEnum.AzureSas:
-                if (string.IsNullOrEmpty(source.AzureSasToken))
+                if (string.IsNullOrEmpty(sourceRequest.AzureSasToken))
                     throw new ArgumentException("Azure SAS Token is required for SAS authentication.");
                 
-                var sasUri = new Uri(source.AzureSasToken);
+                var sasUri = new Uri(sourceRequest.AzureSasToken);
                 return new BlobServiceClient(sasUri);
 
             case AuthenticationTypeEnum.AzureAdDefault:
-                if (string.IsNullOrEmpty(source.AzureStorageAccountName))
+                if (string.IsNullOrEmpty(sourceRequest.AzureStorageAccountName))
                     throw new ArgumentException("Azure Storage Account Name is required for Azure AD authentication.");
                 
-                var accountUri = new Uri($"https://{source.AzureStorageAccountName}.blob.core.windows.net");
+                var accountUri = new Uri($"https://{sourceRequest.AzureStorageAccountName}.blob.core.windows.net");
                 return new BlobServiceClient(accountUri, new Azure.Identity.DefaultAzureCredential());
 
             default:
-                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for Azure Blob Storage.");
+                throw new NotSupportedException($"Authentication type '{sourceRequest.AuthenticationType}' is not supported for Azure Blob Storage.");
         }
     }
 
@@ -193,9 +194,9 @@ public class AzureBlobStorageConnectionStrategy(
         return parts.Length > 1 ? parts[1] : "";
     }
 
-    private ConnectionSourceDto MapToDto(ApplicationConnectionModel source)
+    private ConnectionSourceRequestDto MapToDto(ApplicationConnectionModel source)
     {
-        return new ConnectionSourceDto
+        return new ConnectionSourceRequestDto
         {
             Host = source.Host,
             Port = source.Port,

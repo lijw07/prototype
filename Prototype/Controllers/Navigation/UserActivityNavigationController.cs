@@ -1,11 +1,16 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
+using Prototype.DTOs.Cache;
+using Prototype.Models;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Controllers.Navigation;
 
 [Route("[controller]")]
-public class UserActivityNavigationController(SentinelContext context, ILogger<UserActivityNavigationController> logger)
+public class UserActivityNavigationController(
+    SentinelContext context, 
+    ICacheService cacheService,
+    ILogger<UserActivityNavigationController> logger)
     : BaseNavigationController(logger)
 {
     [HttpGet]
@@ -16,6 +21,16 @@ public class UserActivityNavigationController(SentinelContext context, ILogger<U
             // Validate pagination parameters
             if (page < 1) page = 1;
             if (pageSize < 1 || pageSize > 100) pageSize = 50;
+
+            // Check cache first - include pagination in cache key
+            var cacheKey = $"user-activity:logs:page:{page}:size:{pageSize}";
+            var cachedLogs = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedLogs != null)
+            {
+                Logger.LogDebug("User activity logs cache hit for page: {Page}, pageSize: {PageSize}", page, pageSize);
+                return Ok(cachedLogs);
+            }
 
             var skip = (page - 1) * pageSize;
 
@@ -40,6 +55,10 @@ public class UserActivityNavigationController(SentinelContext context, ILogger<U
             var totalCount = await context.UserActivityLogs.CountAsync();
 
             var result = CreatePaginatedResponse(logs, page, pageSize, totalCount);
+
+            // Cache for 5 minutes (activity logs change frequently)
+            await cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5));
+            Logger.LogDebug("User activity logs cached for page: {Page}, pageSize: {PageSize}", page, pageSize);
 
             return Ok(result);
         }

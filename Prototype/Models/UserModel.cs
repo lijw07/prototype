@@ -38,7 +38,7 @@ public class UserModel
     [StringLength(50)]
     public required string Role { get; set; } = "User";
     
-    public DateTime? LastLogin { get; set; }
+    public DateTime LastLogin { get; set; }
     
     [Required]
     public required DateTime CreatedAt { get; set; }

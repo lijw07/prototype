@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
-using Prototype.DTOs;
+using Prototype.DTOs.Request;
+using Prototype.Models;
 using Prototype.Services;
 using Prototype.Services.Interfaces;
 using Prototype.Utility;
@@ -14,6 +14,8 @@ public class UserNavigationController(
     ValidationService validationService,
     TransactionService transactionService,
     IUserAccountService userAccountService,
+    ICacheService cacheService,
+    ICacheInvalidationService cacheInvalidation,
     SentinelContext context,
     ILogger<UserNavigationController> logger)
     : BaseNavigationController(logger, userAccessor, validationService, transactionService)
@@ -134,6 +136,10 @@ public class UserNavigationController(
                 // Save changes to database
                 await context.SaveChangesAsync();
 
+                // Invalidate user-related caches
+                await cacheInvalidation.InvalidateUserCacheAsync(trackedUser.UserId, trackedUser.Email, trackedUser.Username);
+                await cacheInvalidation.InvalidateDashboardCacheAsync(); // User info might be shown in dashboard
+
                 // Create audit log for profile update
                 var changeDetails = new List<string>();
                 if (oldFirstName != dto.FirstName)
@@ -174,7 +180,7 @@ public class UserNavigationController(
                     await context.SaveChangesAsync();
                 }
 
-                var userDto = new UserDto
+                var userDto = new UserRequestDto
                 {
                     UserId = trackedUser.UserId,
                     FirstName = trackedUser.FirstName,
@@ -202,12 +208,22 @@ public class UserNavigationController(
             if (currentUser == null)
                 return new { success = false, message = "User not authenticated" };
 
-            // Get fresh data from database to avoid cached values
+            // Check cache first for user profile
+            var cacheKey = $"user:profile:full:{currentUser.UserId}";
+            var cachedProfile = await cacheService.GetSecureAsync<UserRequestDto>(cacheKey, currentUser.UserId);
+            
+            if (cachedProfile != null)
+            {
+                Logger.LogDebug("User profile cache hit for user: {Username}", currentUser.Username);
+                return new { success = true, user = cachedProfile, fromCache = true };
+            }
+
+            // Get fresh data from database
             var freshUser = await context.Users.FirstOrDefaultAsync(u => u.UserId == currentUser.UserId);
             if (freshUser == null)
                 return new { success = false, message = "User not found" };
 
-            var userDto = new UserDto
+            var userDto = new UserRequestDto
             {
                 UserId = freshUser.UserId,
                 FirstName = freshUser.FirstName,
@@ -221,7 +237,11 @@ public class UserNavigationController(
                 CreatedAt = freshUser.CreatedAt
             };
 
-            return new { success = true, user = userDto };
+            // Cache for 20 minutes (profile data changes occasionally)
+            await cacheService.SetSecureAsync(cacheKey, userDto, currentUser.UserId, TimeSpan.FromMinutes(20));
+            Logger.LogDebug("User profile cached for user: {Username}", currentUser.Username);
+
+            return new { success = true, user = userDto, fromCache = false };
         }, "retrieving profile");
     }
 
@@ -230,17 +250,34 @@ public class UserNavigationController(
     {
         return await ExecuteWithErrorHandlingAsync<object>(async () =>
         {
+            // Check cache first
+            var cacheKey = "users:counts:all";
+            var cachedCounts = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedCounts != null)
+            {
+                Logger.LogDebug("User counts cache hit");
+                return new { success = true, data = cachedCounts, fromCache = true };
+            }
+
             var totalVerifiedUsers = await context.Users.CountAsync();
             var totalTemporaryUsers = await context.TemporaryUsers.CountAsync();
             var totalUsers = totalVerifiedUsers + totalTemporaryUsers;
 
+            var countsData = new {
+                totalUsers = totalUsers,
+                totalVerifiedUsers = totalVerifiedUsers,
+                totalTemporaryUsers = totalTemporaryUsers
+            };
+
+            // Cache for 10 minutes (user counts change frequently)
+            await cacheService.SetAsync(cacheKey, countsData, TimeSpan.FromMinutes(10));
+            Logger.LogDebug("User counts cached");
+
             return new { 
                 success = true, 
-                data = new {
-                    totalUsers = totalUsers,
-                    totalVerifiedUsers = totalVerifiedUsers,
-                    totalTemporaryUsers = totalTemporaryUsers
-                }
+                data = countsData,
+                fromCache = false
             };
         }, "retrieving user counts");
     }
@@ -252,9 +289,24 @@ public class UserNavigationController(
         {
             var (validPage, validPageSize, skip) = ValidatePaginationParameters(page, pageSize);
 
-            // Get verified users
-            var users = await context.Users
-                .Select(user => new UserDto
+            // Check cache first - include pagination in cache key
+            var cacheKey = $"users:all:page:{validPage}:size:{validPageSize}";
+            var cachedUsers = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedUsers != null)
+            {
+                Logger.LogDebug("All users cache hit for page: {Page}, pageSize: {PageSize}", validPage, validPageSize);
+                return new { success = true, data = cachedUsers, fromCache = true };
+            }
+
+            // Get total count for pagination (separate optimized queries)
+            var totalVerifiedUsers = await context.Users.CountAsync();
+            var totalTempUsers = await context.TemporaryUsers.CountAsync();
+            var totalCount = totalVerifiedUsers + totalTempUsers;
+
+            // Create combined query using UNION for database-level pagination
+            var verifiedUsersQuery = context.Users
+                .Select(user => new UserRequestDto
                 {
                     UserId = user.UserId,
                     FirstName = user.FirstName,
@@ -267,12 +319,10 @@ public class UserNavigationController(
                     LastLogin = user.LastLogin,
                     CreatedAt = user.CreatedAt,
                     IsTemporary = false
-                })
-                .ToListAsync();
+                });
 
-            // Get temporary (unverified) users
-            var tempUsers = await context.TemporaryUsers
-                .Select(tempUser => new UserDto
+            var tempUsersQuery = context.TemporaryUsers
+                .Select(tempUser => new UserRequestDto
                 {
                     UserId = tempUser.TemporaryUserId,
                     FirstName = tempUser.FirstName,
@@ -285,22 +335,23 @@ public class UserNavigationController(
                     LastLogin = null, // Temporary users haven't logged in
                     CreatedAt = tempUser.CreatedAt,
                     IsTemporary = true
-                })
-                .ToListAsync();
+                });
 
-            // Combine and sort all users by creation date
-            var allUsers = users.Concat(tempUsers)
+            // Combine queries with UNION and apply database-level pagination
+            var paginatedUsers = await verifiedUsersQuery
+                .Union(tempUsersQuery)
                 .OrderByDescending(u => u.CreatedAt)
-                .ToList();
-
-            var totalCount = allUsers.Count;
-            var paginatedUsers = allUsers
                 .Skip(skip)
                 .Take(validPageSize)
-                .ToList();
+                .ToListAsync();
 
             var result = CreatePaginatedResponse(paginatedUsers, validPage, validPageSize, totalCount);
-            return new { success = true, data = result };
+            
+            // Cache for 8 minutes (user lists change frequently with new registrations)
+            await cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(8));
+            Logger.LogDebug("All users cached for page: {Page}, pageSize: {PageSize}", validPage, validPageSize);
+            
+            return new { success = true, data = result, fromCache = false };
         }, "retrieving all users");
     }
 
@@ -319,6 +370,10 @@ public class UserNavigationController(
             {
                 return new { success = false, message = result.Message };
             }
+            
+            // Invalidate user list caches (UserAccountService already handles user-specific cache)
+            await cacheService.RemoveByPatternAsync("users:all:*");
+            await cacheService.RemoveAsync("users:counts:all");
             
             // Log the user modification activity for the current user (administrator)
             var targetUser = await userAccountService.GetUserByIdAsync(dto.UserId);
@@ -360,7 +415,7 @@ public class UserNavigationController(
             var updatedUser = await userAccountService.GetUserByIdAsync(dto.UserId);
             if (updatedUser != null)
             {
-                var userDto = new UserDto
+                var userDto = new UserRequestDto
                 {
                     UserId = updatedUser.UserId,
                     FirstName = updatedUser.FirstName,
@@ -405,6 +460,10 @@ public class UserNavigationController(
             {
                 return new { success = false, message = result.Message };
             }
+            
+            // Invalidate user list caches (UserAccountService already handles user-specific cache)
+            await cacheService.RemoveByPatternAsync("users:all:*");
+            await cacheService.RemoveAsync("users:counts:all");
 
             // Log the user deletion activity for the current user (administrator)
             var metadata = $"Administrator deleted user account: {targetUser.FirstName} {targetUser.LastName} (ID: {targetUser.UserId}, Username: {targetUser.Username}, Email: {targetUser.Email})";
@@ -500,7 +559,7 @@ public class UserNavigationController(
                 };
 
                 // Create user activity log for the administrator
-                var activityLog = new Models.UserActivityLogModel
+                var activityLog = new UserActivityLogModel
                 {
                     UserActivityLogId = Guid.NewGuid(),
                     UserId = currentUser.UserId,
@@ -556,7 +615,7 @@ public class UserNavigationController(
             // Create audit log for the administrator who deleted the temporary user
             var metadata = $"Administrator deleted temporary user account: {deletedUserInfo}";
             
-            var auditLog = new Models.AuditLogModel
+            var auditLog = new AuditLogModel
             {
                 AuditLogId = Guid.NewGuid(),
                 UserId = currentUser.UserId,
@@ -567,7 +626,7 @@ public class UserNavigationController(
             };
 
             // Create user activity log for the administrator
-            var activityLog = new Models.UserActivityLogModel
+            var activityLog = new UserActivityLogModel
             {
                 UserActivityLogId = Guid.NewGuid(),
                 UserId = currentUser.UserId,

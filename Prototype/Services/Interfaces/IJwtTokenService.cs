@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 

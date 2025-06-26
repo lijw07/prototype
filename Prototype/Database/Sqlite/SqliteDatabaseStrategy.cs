@@ -1,6 +1,7 @@
 using System.Data.Odbc;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -26,18 +27,18 @@ public class SqliteDatabaseStrategy(
         };
     }
 
-    public string BuildConnectionString(ConnectionSourceDto source)
+    public string BuildConnectionString(ConnectionSourceRequestDto sourceRequest)
     {
         // SQLite uses file path instead of host/port/database
         string filePath;
-        if (!string.IsNullOrEmpty(source.DatabaseName))
+        if (!string.IsNullOrEmpty(sourceRequest.DatabaseName))
         {
-            filePath = source.DatabaseName;
+            filePath = sourceRequest.DatabaseName;
         }
-        else if (!string.IsNullOrEmpty(source.Host))
+        else if (!string.IsNullOrEmpty(sourceRequest.Host))
         {
             // If host is provided, treat it as file path
-            filePath = source.Host;
+            filePath = sourceRequest.Host;
         }
         else
         {
@@ -46,13 +47,13 @@ public class SqliteDatabaseStrategy(
 
         var connectionString = $"DRIVER={{SQLite3 ODBC Driver}};Database={filePath};";
 
-        switch (source.AuthenticationType)
+        switch (sourceRequest.AuthenticationType)
         {
             case AuthenticationTypeEnum.UserPassword:
                 // SQLite with password (encryption) - not standard in ODBC
-                if (!string.IsNullOrEmpty(source.Password))
+                if (!string.IsNullOrEmpty(sourceRequest.Password))
                 {
-                    connectionString += $"PWD={source.Password};";
+                    connectionString += $"PWD={sourceRequest.Password};";
                 }
                 break;
                 
@@ -61,7 +62,7 @@ public class SqliteDatabaseStrategy(
                 break;
                 
             default:
-                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for SQLite.");
+                throw new NotSupportedException($"Authentication type '{sourceRequest.AuthenticationType}' is not supported for SQLite.");
         }
 
         return connectionString;

@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Prototype.Data;
+using Prototype.DTOs.Cache;
 using Prototype.Enum;
 using Prototype.Models;
+using Prototype.Services.Interfaces;
 using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
@@ -14,6 +15,7 @@ namespace Prototype.Controllers.Navigation;
 public class ComplianceNavigationController(
     SentinelContext context,
     IAuthenticatedUserAccessor userAccessor,
+    ICacheService cacheService,
     ILogger<ComplianceNavigationController> logger)
     : ControllerBase
 {
@@ -26,8 +28,23 @@ public class ComplianceNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first
+            var cacheKey = "compliance:overview:metrics";
+            var cachedData = await cacheService.GetAsync<ComplianceMetricsCacheDto>(cacheKey);
+            
+            if (cachedData != null)
+            {
+                logger.LogDebug("Compliance overview cache hit for user: {Username}", currentUser.Username);
+                return Ok(new { success = true, data = cachedData, fromCache = true });
+            }
+
             var overview = await CollectComplianceMetrics();
-            return Ok(new { success = true, data = overview });
+            
+            // Cache for 25 minutes (compliance data changes less frequently)
+            await cacheService.SetAsync(cacheKey, overview, TimeSpan.FromMinutes(25));
+            logger.LogDebug("Compliance overview cached for user: {Username}", currentUser.Username);
+            
+            return Ok(new { success = true, data = overview, fromCache = false });
         }
         catch (Exception ex)
         {
@@ -45,8 +62,25 @@ public class ComplianceNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first - include period and format in cache key
+            var cacheKey = $"compliance:audit-report:{period}:{format}";
+            var cachedData = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedData != null)
+            {
+                logger.LogDebug("Audit report cache hit for user: {Username}, period: {Period}, format: {Format}", 
+                    currentUser.Username, period, format);
+                return Ok(new { success = true, data = cachedData, fromCache = true });
+            }
+
             var report = await GenerateComplianceAuditReport(int.Parse(period), format);
-            return Ok(new { success = true, data = report });
+            
+            // Cache for 20 minutes (audit reports are expensive to generate)
+            await cacheService.SetAsync(cacheKey, report, TimeSpan.FromMinutes(20));
+            logger.LogDebug("Audit report cached for user: {Username}, period: {Period}, format: {Format}", 
+                currentUser.Username, period, format);
+                
+            return Ok(new { success = true, data = report, fromCache = false });
         }
         catch (Exception ex)
         {
@@ -64,8 +98,25 @@ public class ComplianceNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first - include pagination in cache key
+            var cacheKey = $"compliance:violations:{page}:{pageSize}";
+            var cachedData = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedData != null)
+            {
+                logger.LogDebug("Policy violations cache hit for user: {Username}, page: {Page}, pageSize: {PageSize}", 
+                    currentUser.Username, page, pageSize);
+                return Ok(new { success = true, data = cachedData, fromCache = true });
+            }
+
             var violations = await GetComplianceViolations(page, pageSize);
-            return Ok(new { success = true, data = violations });
+            
+            // Cache for 10 minutes (violations change more frequently)
+            await cacheService.SetAsync(cacheKey, violations, TimeSpan.FromMinutes(10));
+            logger.LogDebug("Policy violations cached for user: {Username}, page: {Page}, pageSize: {PageSize}", 
+                currentUser.Username, page, pageSize);
+                
+            return Ok(new { success = true, data = violations, fromCache = false });
         }
         catch (Exception ex)
         {
@@ -83,8 +134,23 @@ public class ComplianceNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
+            // Check cache first
+            var cacheKey = "compliance:frameworks";
+            var cachedData = await cacheService.GetAsync<object>(cacheKey);
+            
+            if (cachedData != null)
+            {
+                logger.LogDebug("Compliance frameworks cache hit for user: {Username}", currentUser.Username);
+                return Ok(new { success = true, data = cachedData, fromCache = true });
+            }
+
             var frameworks = await GetSupportedFrameworks();
-            return Ok(new { success = true, data = frameworks });
+            
+            // Cache for 60 minutes (frameworks rarely change)
+            await cacheService.SetAsync(cacheKey, frameworks, TimeSpan.FromMinutes(60));
+            logger.LogDebug("Compliance frameworks cached for user: {Username}", currentUser.Username);
+            
+            return Ok(new { success = true, data = frameworks, fromCache = false });
         }
         catch (Exception ex)
         {
@@ -94,7 +160,7 @@ public class ComplianceNavigationController(
     }
 
     [HttpPost("generate-report")]
-    public async Task<IActionResult> GenerateCustomReport([FromBody] ReportRequest request)
+    public async Task<IActionResult> GenerateCustomReport([FromBody] ReportRequestDto requestDto)
     {
         try
         {
@@ -102,7 +168,7 @@ public class ComplianceNavigationController(
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
-            var report = await GenerateCustomComplianceReport(request, currentUser);
+            var report = await GenerateCustomComplianceReport(requestDto, currentUser);
             return Ok(new { success = true, data = report });
         }
         catch (Exception ex)
@@ -112,7 +178,7 @@ public class ComplianceNavigationController(
         }
     }
 
-    private async Task<object> CollectComplianceMetrics()
+    private async Task<ComplianceMetricsCacheDto> CollectComplianceMetrics()
     {
         var now = DateTime.UtcNow;
         var last30Days = now.AddDays(-30);
@@ -162,16 +228,16 @@ public class ComplianceNavigationController(
         var securityComplianceScore = CalculateSecurityComplianceScore(failedLogins, totalLogins);
         var overallScore = (auditComplianceScore + accessComplianceScore + securityComplianceScore) / 3;
 
-        return new
+        return new ComplianceMetricsCacheDto
         {
-            summary = new
+            Summary = new
             {
                 overallComplianceScore = Math.Round(overallScore, 1),
                 status = GetComplianceStatus(overallScore),
                 lastAssessment = DateTime.UtcNow,
                 criticalIssues = await CountCriticalIssues()
             },
-            scores = new
+            Scores = new
             {
                 auditTrail = auditComplianceScore,
                 accessManagement = accessComplianceScore,
@@ -179,7 +245,7 @@ public class ComplianceNavigationController(
                 dataRetention = CalculateDataRetentionScore(oldAuditLogs),
                 userVerification = Math.Round((double)verifiedUsers / totalUsers * 100, 1)
             },
-            metrics = new
+            Metrics = new
             {
                 auditLogsLast30Days = totalAuditLogs,
                 userActivityLogs = totalUserActivity,
@@ -187,8 +253,9 @@ public class ComplianceNavigationController(
                 activeUsersLast90Days = usersWithRecentActivity,
                 dataRetentionCompliance = oldAuditLogs == 0 ? 100 : Math.Max(0, 100 - (oldAuditLogs / 100))
             },
-            frameworks = await GetFrameworkCompliance(),
-            recommendations = GenerateComplianceRecommendations(overallScore, auditComplianceScore, accessComplianceScore, securityComplianceScore)
+            Frameworks = await GetFrameworkCompliance(),
+            Recommendations = GenerateComplianceRecommendations(overallScore, auditComplianceScore, accessComplianceScore, securityComplianceScore),
+            GeneratedAt = DateTime.UtcNow
         };
     }
 
@@ -415,48 +482,48 @@ public class ComplianceNavigationController(
         };
     }
 
-    private async Task<object> GenerateCustomComplianceReport(ReportRequest request, UserModel currentUser)
+    private async Task<object> GenerateCustomComplianceReport(ReportRequestDto requestDto, UserModel currentUser)
     {
-        var startDate = request.StartDate;
-        var endDate = request.EndDate;
+        var startDate = requestDto.StartDate;
+        var endDate = requestDto.EndDate;
 
         var reportData = new Dictionary<string, object>();
 
-        if (request.IncludeAuditTrail)
+        if (requestDto.IncludeAuditTrail)
         {
             reportData["auditTrail"] = await GetAuditTrailData(startDate, endDate);
         }
 
-        if (request.IncludeUserActivity)
+        if (requestDto.IncludeUserActivity)
         {
             reportData["userActivity"] = await GetUserActivityData(startDate, endDate);
         }
 
-        if (request.IncludeSecurityEvents)
+        if (requestDto.IncludeSecurityEvents)
         {
             reportData["securityEvents"] = await GetSecurityEventsData(startDate, endDate);
         }
 
-        if (request.IncludeViolations)
+        if (requestDto.IncludeViolations)
         {
             reportData["violations"] = await GetViolationsData(startDate, endDate);
         }
 
         // Log report generation
-        await LogReportGeneration(request, currentUser);
+        await LogReportGeneration(requestDto, currentUser);
 
         return new
         {
             reportId = Guid.NewGuid(),
             generatedBy = currentUser.Username,
             generatedAt = DateTime.UtcNow,
-            parameters = request,
+            parameters = requestDto,
             data = reportData,
             metadata = new
             {
                 recordCount = reportData.Values.Sum(v => v is IEnumerable<object> list ? list.Count() : 1),
-                framework = request.Framework,
-                format = request.Format
+                framework = requestDto.Framework,
+                format = requestDto.Format
             }
         };
     }
@@ -653,30 +720,17 @@ public class ComplianceNavigationController(
         };
     }
 
-    private async Task LogReportGeneration(ReportRequest request, UserModel user)
+    private async Task LogReportGeneration(ReportRequestDto requestDto, UserModel user)
     {
         var auditLog = new AuditLogModel
         {
             AuditLogId = Guid.NewGuid(),
             UserId = user.UserId,
             ActionType = ActionTypeEnum.ReportGenerated,
-            Metadata = $"Compliance report generated by {user.Username} for period {request.StartDate:yyyy-MM-dd} to {request.EndDate:yyyy-MM-dd}",
+            Metadata = $"Compliance report generated by {user.Username} for period {requestDto.StartDate:yyyy-MM-dd} to {requestDto.EndDate:yyyy-MM-dd}",
             CreatedAt = DateTime.UtcNow
         };
         context.AuditLogs.Add(auditLog);
         await context.SaveChangesAsync();
     }
-}
-
-// Request models
-public class ReportRequest
-{
-    public DateTime StartDate { get; set; }
-    public DateTime EndDate { get; set; }
-    public string Framework { get; set; } = "General";
-    public string Format { get; set; } = "JSON";
-    public bool IncludeAuditTrail { get; set; } = true;
-    public bool IncludeUserActivity { get; set; } = true;
-    public bool IncludeSecurityEvents { get; set; } = true;
-    public bool IncludeViolations { get; set; } = true;
 }

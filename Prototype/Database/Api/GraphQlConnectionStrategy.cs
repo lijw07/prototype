@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -31,9 +32,9 @@ public class GraphQlConnectionStrategy(
         };
     }
 
-    public async Task<object> ExecuteRequestAsync(ConnectionSourceDto source)
+    public async Task<object> ExecuteRequestAsync(ConnectionSourceRequestDto sourceRequest)
     {
-        var request = CreateGraphQLRequest(source);
+        var request = CreateGraphQLRequest(sourceRequest);
         var response = await httpClient.SendAsync(request);
         
         var content = await response.Content.ReadAsStringAsync();
@@ -54,7 +55,7 @@ public class GraphQlConnectionStrategy(
         return await ExecuteRequestAsync(dto);
     }
 
-    public async Task<bool> TestConnectionAsync(ConnectionSourceDto source)
+    public async Task<bool> TestConnectionAsync(ConnectionSourceRequestDto sourceRequest)
     {
         try
         {
@@ -69,18 +70,18 @@ public class GraphQlConnectionStrategy(
                 }"
             };
 
-            var testSource = new ConnectionSourceDto
+            var testSource = new ConnectionSourceRequestDto
             {
-                Host = source.Host,
-                Port = source.Port,
-                Url = source.Url,
-                ApiEndpoint = source.ApiEndpoint,
-                AuthenticationType = source.AuthenticationType,
-                Username = source.Username,
-                Password = source.Password,
-                ApiKey = source.ApiKey,
-                BearerToken = source.BearerToken,
-                Headers = source.Headers,
+                Host = sourceRequest.Host,
+                Port = sourceRequest.Port,
+                Url = sourceRequest.Url,
+                ApiEndpoint = sourceRequest.ApiEndpoint,
+                AuthenticationType = sourceRequest.AuthenticationType,
+                Username = sourceRequest.Username,
+                Password = sourceRequest.Password,
+                ApiKey = sourceRequest.ApiKey,
+                BearerToken = sourceRequest.BearerToken,
+                Headers = sourceRequest.Headers,
                 RequestBody = JsonSerializer.Serialize(introspectionQuery),
                 HttpMethod = "POST"
             };
@@ -99,7 +100,7 @@ public class GraphQlConnectionStrategy(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "GraphQL connection test failed for {Endpoint}", source.ApiEndpoint ?? source.Url);
+            logger.LogError(ex, "GraphQL connection test failed for {Endpoint}", sourceRequest.ApiEndpoint ?? sourceRequest.Url);
             return false;
         }
     }
@@ -115,11 +116,11 @@ public class GraphQlConnectionStrategy(
         return "GraphQL API connection with introspection support and various authentication methods";
     }
 
-    private HttpRequestMessage CreateGraphQLRequest(ConnectionSourceDto source)
+    private HttpRequestMessage CreateGraphQLRequest(ConnectionSourceRequestDto sourceRequest)
     {
-        var uri = !string.IsNullOrEmpty(source.ApiEndpoint) 
-            ? source.ApiEndpoint 
-            : $"{source.Url}";
+        var uri = !string.IsNullOrEmpty(sourceRequest.ApiEndpoint) 
+            ? sourceRequest.ApiEndpoint 
+            : $"{sourceRequest.Url}";
 
         var request = new HttpRequestMessage
         {
@@ -128,17 +129,17 @@ public class GraphQlConnectionStrategy(
         };
 
         // Add authentication
-        AddAuthentication(request, source);
+        AddAuthentication(request, sourceRequest);
 
         // Add standard GraphQL headers
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         // Add custom headers
-        if (!string.IsNullOrEmpty(source.Headers))
+        if (!string.IsNullOrEmpty(sourceRequest.Headers))
         {
             try
             {
-                var headers = JsonSerializer.Deserialize<Dictionary<string, string>>(source.Headers);
+                var headers = JsonSerializer.Deserialize<Dictionary<string, string>>(sourceRequest.Headers);
                 if (headers != null)
                 {
                     foreach (var header in headers)
@@ -149,50 +150,50 @@ public class GraphQlConnectionStrategy(
             }
             catch (JsonException ex)
             {
-                logger.LogWarning(ex, "Failed to parse headers JSON: {Headers}", source.Headers);
+                logger.LogWarning(ex, "Failed to parse headers JSON: {Headers}", sourceRequest.Headers);
             }
         }
 
         // Add GraphQL query/mutation in request body
-        if (!string.IsNullOrEmpty(source.RequestBody))
+        if (!string.IsNullOrEmpty(sourceRequest.RequestBody))
         {
-            request.Content = new StringContent(source.RequestBody, Encoding.UTF8, "application/json");
+            request.Content = new StringContent(sourceRequest.RequestBody, Encoding.UTF8, "application/json");
         }
 
         return request;
     }
 
-    private void AddAuthentication(HttpRequestMessage request, ConnectionSourceDto source)
+    private void AddAuthentication(HttpRequestMessage request, ConnectionSourceRequestDto sourceRequest)
     {
-        switch (source.AuthenticationType)
+        switch (sourceRequest.AuthenticationType)
         {
             case AuthenticationTypeEnum.ApiKey:
-                if (!string.IsNullOrEmpty(source.ApiKey))
+                if (!string.IsNullOrEmpty(sourceRequest.ApiKey))
                 {
-                    request.Headers.Add("X-API-Key", source.ApiKey);
+                    request.Headers.Add("X-API-Key", sourceRequest.ApiKey);
                 }
                 break;
 
             case AuthenticationTypeEnum.BearerToken:
             case AuthenticationTypeEnum.JwtToken:
-                if (!string.IsNullOrEmpty(source.BearerToken))
+                if (!string.IsNullOrEmpty(sourceRequest.BearerToken))
                 {
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", source.BearerToken);
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", sourceRequest.BearerToken);
                 }
                 break;
 
             case AuthenticationTypeEnum.BasicAuth:
-                if (!string.IsNullOrEmpty(source.Username) && !string.IsNullOrEmpty(source.Password))
+                if (!string.IsNullOrEmpty(sourceRequest.Username) && !string.IsNullOrEmpty(sourceRequest.Password))
                 {
-                    var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{source.Username}:{source.Password}"));
+                    var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{sourceRequest.Username}:{sourceRequest.Password}"));
                     request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
                 }
                 break;
 
             case AuthenticationTypeEnum.OAuth2:
-                if (!string.IsNullOrEmpty(source.BearerToken))
+                if (!string.IsNullOrEmpty(sourceRequest.BearerToken))
                 {
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", source.BearerToken);
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", sourceRequest.BearerToken);
                 }
                 break;
 
@@ -215,9 +216,9 @@ public class GraphQlConnectionStrategy(
         }
     }
 
-    private ConnectionSourceDto MapToDto(ApplicationConnectionModel source)
+    private ConnectionSourceRequestDto MapToDto(ApplicationConnectionModel source)
     {
-        return new ConnectionSourceDto
+        return new ConnectionSourceRequestDto
         {
             Host = source.Host,
             Port = source.Port,

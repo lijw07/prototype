@@ -1,6 +1,7 @@
 using StackExchange.Redis;
 using Prototype.Database.Interface;
 using Prototype.DTOs;
+using Prototype.DTOs.Request;
 using Prototype.Enum;
 using Prototype.Models;
 using Prototype.Services;
@@ -23,30 +24,30 @@ public class RedisDatabaseStrategy(
         };
     }
 
-    public string BuildConnectionString(ConnectionSourceDto source)
+    public string BuildConnectionString(ConnectionSourceRequestDto sourceRequest)
     {
         var config = new ConfigurationOptions
         {
-            EndPoints = { { source.Host, int.Parse(source.Port) } },
+            EndPoints = { { sourceRequest.Host, int.Parse(sourceRequest.Port) } },
             AbortOnConnectFail = false,
             ConnectTimeout = 5000,
             SyncTimeout = 5000,
             ConnectRetry = 3
         };
 
-        switch (source.AuthenticationType)
+        switch (sourceRequest.AuthenticationType)
         {
             case AuthenticationTypeEnum.UserPassword:
-                if (!string.IsNullOrEmpty(source.Username) && source.Username != "default")
+                if (!string.IsNullOrEmpty(sourceRequest.Username) && sourceRequest.Username != "default")
                 {
                     // Redis ACL (Redis 6.0+)
-                    config.User = source.Username;
-                    config.Password = source.Password;
+                    config.User = sourceRequest.Username;
+                    config.Password = sourceRequest.Password;
                 }
                 else
                 {
                     // Legacy AUTH
-                    config.Password = source.Password;
+                    config.Password = sourceRequest.Password;
                 }
                 break;
                 
@@ -55,17 +56,17 @@ public class RedisDatabaseStrategy(
                 break;
                 
             default:
-                throw new NotSupportedException($"Authentication type '{source.AuthenticationType}' is not supported for Redis.");
+                throw new NotSupportedException($"Authentication type '{sourceRequest.AuthenticationType}' is not supported for Redis.");
         }
 
         // Database selection (0-15)
-        if (!string.IsNullOrEmpty(source.DatabaseName) && int.TryParse(source.DatabaseName, out var dbNumber))
+        if (!string.IsNullOrEmpty(sourceRequest.DatabaseName) && int.TryParse(sourceRequest.DatabaseName, out var dbNumber))
         {
             config.DefaultDatabase = dbNumber;
         }
 
         // SSL/TLS
-        if (source.Host != "localhost" && source.Host != "127.0.0.1")
+        if (sourceRequest.Host != "localhost" && sourceRequest.Host != "127.0.0.1")
         {
             config.Ssl = true;
             config.SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13;
@@ -76,7 +77,7 @@ public class RedisDatabaseStrategy(
 
     public string BuildConnectionString(ApplicationConnectionModel source)
     {
-        var dto = new ConnectionSourceDto
+        var dto = new ConnectionSourceRequestDto
         {
             Host = source.Host,
             Port = source.Port,
