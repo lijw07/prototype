@@ -1,41 +1,15 @@
 import * as signalR from '@microsoft/signalr';
 
-export interface ProgressUpdate {
-  jobId: string;
-  progressPercentage: number;
-  status: string;
-  currentOperation?: string;
-  processedRecords: number;
-  totalRecords: number;
-  currentFileName?: string;
-  processedFiles: number;
-  totalFiles: number;
-  timestamp: string;
-  errors?: string[];
-}
+// Import types from centralized definitions that match backend exactly
+import {
+  BulkUploadProgress as ProgressUpdate,
+  BulkUploadJobStart as JobStart,
+  BulkUploadJobComplete as JobComplete,
+  BulkUploadJobError as JobError
+} from '../types/api.types';
 
-export interface JobStart {
-  jobId: string;
-  jobType: string;
-  totalFiles: number;
-  estimatedTotalRecords: number;
-  startTime: string;
-}
-
-export interface JobComplete {
-  jobId: string;
-  success: boolean;
-  message: string;
-  data?: any;
-  completedAt: string;
-  totalDuration: string;
-}
-
-export interface JobError {
-  jobId: string;
-  error: string;
-  timestamp: string;
-}
+// Re-export for backward compatibility
+export type { ProgressUpdate, JobStart, JobComplete, JobError };
 
 class ProgressService {
   private connection: signalR.HubConnection | null = null;
@@ -46,7 +20,10 @@ class ProgressService {
   }
 
   private initializeConnection() {
-    const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+    // Use the same logic as API service for consistent hostname resolution
+    const baseUrl = process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:8080'  // Force localhost in development
+      : (process.env.REACT_APP_API_URL || 'http://localhost:8080');
     const token = localStorage.getItem('authToken');
     
     this.connection = new signalR.HubConnectionBuilder()

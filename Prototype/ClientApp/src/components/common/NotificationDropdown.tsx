@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, RefreshCw, CheckCircle, AlertCircle, Upload, X, Clock } from 'lucide-react';
-import { useMigration } from '../../context/MigrationContext';
+import { useMigration } from '../../contexts/MigrationContext';
 
 interface Notification {
   id: string;

@@ -47,9 +47,9 @@ const Roles: React.FC = () => {
         try {
             // Fetch all roles by requesting a large page size
             const response = await roleApi.getAllRoles(1, 1000); // Large enough to get all
-            if (response && response.data) {
-                setAllRoles(response.data);
-                return response.data;
+            if (response && response.data?.data) {
+                setAllRoles(response.data.data);
+                return response.data.data;
             }
             console.error('Failed to fetch roles: Invalid response format');
             return [];
@@ -63,12 +63,12 @@ const Roles: React.FC = () => {
         setLoading(true);
         try {
             const response = await roleApi.getAllRoles(page, size);
-            if (response && response.data) {
-                setRoles(response.data);
-                setCurrentPage(response.page || page);
-                setPageSize(response.pageSize || size);
-                setTotalCount(response.totalCount || 0);
-                setTotalPages(response.totalPages || 1);
+            if (response && response.data?.data) {
+                setRoles(response.data.data);
+                setCurrentPage(response.data.page || page);
+                setPageSize(response.data.pageSize || size);
+                setTotalCount(response.data.totalCount || 0);
+                setTotalPages(response.data.totalPages || 1);
             }
         } catch (error) {
             console.error('Failed to fetch roles:', error);
@@ -81,8 +81,8 @@ const Roles: React.FC = () => {
     const refetchRoles = async () => {
         // First, check the current state after deletion
         const response = await roleApi.getAllRoles(currentPage, pageSize);
-        if (response && response.totalCount !== undefined) {
-            let totalItems = response.totalCount;
+        if (response && response.data?.totalCount !== undefined) {
+            let totalItems = response.data.totalCount;
             
             const newTotalPages = Math.ceil(totalItems / pageSize);
             
@@ -200,13 +200,13 @@ const Roles: React.FC = () => {
         
         try {
             const response = await roleApi.getRoleDeletionConstraints(role.userRoleId);
-            if (response) {
+            if (response && response.data) {
                 setDeletionConstraints({
-                    canDelete: response.canDelete,
-                    usersCount: response.usersCount,
-                    temporaryUsersCount: response.temporaryUsersCount,
-                    constraintMessage: response.constraintMessage,
-                    roleName: response.roleName
+                    canDelete: response.data.canDelete,
+                    usersCount: response.data.usersCount,
+                    temporaryUsersCount: response.data.temporaryUsersCount,
+                    constraintMessage: response.data.constraintMessage,
+                    roleName: response.data.roleName
                 });
             }
         } catch (error) {

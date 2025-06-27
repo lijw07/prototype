@@ -173,13 +173,14 @@ public abstract class BaseNavigationController : ControllerBase
 
     protected IActionResult SuccessResponse<T>(T data, string? message = null)
     {
-        return Ok(data);
+        var successMessage = message ?? ApplicationConstants.SuccessMessages.OperationSuccess;
+        return Ok(ApiResponse<T>.Success(data, successMessage));
     }
 
     protected IActionResult SuccessResponse(string? message = null)
     {
         var successMessage = message ?? ApplicationConstants.SuccessMessages.OperationSuccess;
-        return Ok(new { success = true, message = successMessage });
+        return Ok(ApiResponse.SuccessResponse(successMessage));
     }
 
     #endregion
@@ -266,7 +267,7 @@ public abstract class BaseNavigationController : ControllerBase
         try
         {
             var result = await TransactionService.ExecuteInTransactionAsync(operation);
-            return SuccessResponse(result, successMessage);
+            return Ok(ApiResponse<T>.Success(result, successMessage));
         }
         catch (Exception ex)
         {
@@ -302,7 +303,7 @@ public abstract class BaseNavigationController : ControllerBase
                     actionDescription);
             }
 
-            return SuccessResponse(result, successMessage);
+            return Ok(ApiResponse<T>.Success(result, successMessage));
         }
         catch (Exception ex)
         {

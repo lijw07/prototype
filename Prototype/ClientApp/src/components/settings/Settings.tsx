@@ -43,13 +43,13 @@ const SettingsDashboard: React.FC = () => {
         try {
             const response = await userApi.getProfile();
             console.log('User profile response:', response);
-            // Backend returns { success: true, user: userDto } directly
-            if (response.success && response.user) {
-                setUserSettings(response.user);
+            // Backend returns ApiResponse format
+            if (response.success && response.data?.user) {
+                setUserSettings(response.data.user);
                 setEditForm({
-                    firstName: response.user.firstName,
-                    lastName: response.user.lastName,
-                    email: response.user.email
+                    firstName: response.data.user.firstName,
+                    lastName: response.data.user.lastName,
+                    email: response.data.user.email
                 });
             }
         } catch (error) {
@@ -66,7 +66,7 @@ const SettingsDashboard: React.FC = () => {
     const handlePasswordChange = async () => {
         try {
             const response = await userApi.changePassword(passwordForm);
-            if (response.message && !response.message.toLowerCase().includes('error')) {
+            if (response.success && response.message && !response.message.toLowerCase().includes('error')) {
                 alert('Password changed successfully!');
                 setPasswordForm({ currentPassword: '', newPassword: '', reTypeNewPassword: '' });
             } else {
@@ -82,14 +82,14 @@ const SettingsDashboard: React.FC = () => {
     const handleProfileUpdate = async () => {
         try {
             const response = await userApi.updateProfile(editForm);
-            if (response.message && response.user) {
+            if (response.success && response.data?.user) {
                 alert('Profile updated successfully!');
                 // Update local state with the fresh user data from response
-                setUserSettings(response.user);
+                setUserSettings(response.data.user);
                 setEditForm({
-                    firstName: response.user.firstName,
-                    lastName: response.user.lastName,
-                    email: response.user.email
+                    firstName: response.data.user.firstName,
+                    lastName: response.data.user.lastName,
+                    email: response.data.user.email
                 });
                 // Also fetch fresh data to ensure consistency
                 fetchUserSettings();

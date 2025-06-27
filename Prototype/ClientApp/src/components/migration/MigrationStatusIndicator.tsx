@@ -1,6 +1,6 @@
 import React from 'react';
 import { RefreshCw, CheckCircle, AlertCircle, Upload } from 'lucide-react';
-import { useMigration } from '../../context/MigrationContext';
+import { useMigration } from '../../contexts/MigrationContext';
 
 interface MigrationStatusIndicatorProps {
   compact?: boolean;

@@ -1,8 +1,8 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { MigrationProvider } from './context/MigrationContext';
-import { NotificationProvider } from './context/NotificationContext';
+import { MigrationProvider } from './contexts/MigrationContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Accounts from './components/account/Accounts';

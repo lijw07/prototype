@@ -1,24 +1,26 @@
 // API Service Layer for centralized HTTP requests and error handling
 
-interface ApiResponse<T = any> {
-  success: boolean;
-  message: string;
-  data?: T;
-  errors?: string[];
-}
-
-interface ConnectionTestResponse {
-  success: boolean;
-  message: string;
-  connectionValid?: boolean;
-  errors?: string[];
-}
-
-interface ApiError {
-  message: string;
-  status: number;
-  errors?: string[];
-}
+// Import types from centralized type definitions
+import {
+  ApiResponse,
+  ApiError,
+  ConnectionTestResponse,
+  User,
+  TemporaryUser,
+  Role,
+  RoleDeletionConstraints,
+  Application,
+  PaginatedResponse,
+  LoginResponse,
+  RegisterRequest,
+  DashboardStatistics,
+  UserCounts,
+  AuditLog,
+  UserActivityLog,
+  ApplicationLog,
+  SecurityOverview,
+  SystemHealthMetrics
+} from '../types/api.types';
 
 class ApiService {
   private baseUrl: string;
@@ -109,20 +111,12 @@ export const api = new ApiService(getApiBaseUrl());
 // Authentication API
 export const authApi = {
   login: (credentials: { username: string; password: string }) =>
-    api.post<ApiResponse>('/login', credentials),
+    api.post<ApiResponse<LoginResponse>>('/login', credentials),
   
   logout: () =>
-    api.post<{ message: string }>('/logout'),
+    api.post<ApiResponse<{ message: string }>>('/logout'),
   
-  register: (userData: {
-    firstName: string;
-    lastName: string;
-    username: string;
-    email: string;
-    phoneNumber: string;
-    password: string;
-    reEnterPassword: string;
-  }) =>
+  register: (userData: RegisterRequest) =>
     api.post<ApiResponse>('/login/register', userData),
   
   forgotPassword: (email: string, userRecoveryType: string) =>
@@ -138,27 +132,27 @@ export const authApi = {
 // User Settings API
 export const userApi = {
   getProfile: () =>
-    api.get<{ success: boolean; user: any; message?: string }>('/settings/user-profile'),
+    api.get<ApiResponse<{ user: User }>>('/settings/user-profile'),
   
   updateProfile: (userData: {
     firstName: string;
     lastName: string;
     email: string;
   }) =>
-    api.put<{ message: string; user: any }>('/settings/user-profile', userData),
+    api.put<ApiResponse<{ user: User }>>('/settings/user-profile', userData),
   
   changePassword: (passwordData: {
     currentPassword: string;
     newPassword: string;
     reTypeNewPassword: string;
   }) =>
-    api.post<{ message: string }>('/settings/user-profile', passwordData),
+    api.post<ApiResponse<{ message: string }>>('/settings/user-profile', passwordData),
   
   getAllUsers: (page: number = 1, pageSize: number = 10) =>
-    api.get<{ data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }>(`/navigation/user-administration/all?page=${page}&pageSize=${pageSize}`),
+    api.get<ApiResponse<PaginatedResponse<User>>>(`/navigation/user-administration/all?page=${page}&pageSize=${pageSize}`),
 
   getUserCounts: () =>
-    api.get<{ totalUsers: number; totalVerifiedUsers: number; totalTemporaryUsers: number }>('/navigation/user-administration/counts'),
+    api.get<ApiResponse<UserCounts>>('/navigation/user-administration/counts'),
   
   updateUser: (userData: {
     userId: string;
@@ -170,11 +164,11 @@ export const userApi = {
     role: string;
     isActive: boolean;
   }) =>
-    api.put<{ message: string; user?: any }>('/navigation/user-administration/update', userData),
+    api.put<ApiResponse<{ message: string; user?: any }>>('/navigation/user-administration/update', userData),
   
   deleteUser: (userId: string) => {
     const url = `/navigation/user-administration/delete/${userId}`;
-    return api.delete<{ message: string }>(url);
+    return api.delete<ApiResponse<{ message: string }>>(url);
   },
   
   updateTemporaryUser: (userData: {
@@ -185,24 +179,24 @@ export const userApi = {
     email: string;
     phoneNumber?: string;
   }) =>
-    api.put<{ success: boolean; user?: any; message?: string }>('/navigation/temporary-user-management/update', userData),
+    api.put<ApiResponse<{ user: TemporaryUser }>>('/navigation/temporary-user-management/update', userData),
   
   deleteTemporaryUser: (temporaryUserId: string) => {
     const url = `/navigation/temporary-user-management/delete/${temporaryUserId}`;
-    return api.delete<{ success: boolean; message?: string }>(url);
+    return api.delete<ApiResponse<{ success: boolean; message?: string }>>(url);
   },
 };
 
 // Application Settings API
 export const applicationApi = {
   getApplications: (page: number = 1, pageSize: number = 10) =>
-    api.get<ApiResponse<any>>(`/navigation/applications/get-applications?page=${page}&pageSize=${pageSize}`),
+    api.get<ApiResponse<PaginatedResponse<Application>>>(`/navigation/applications/get-applications?page=${page}&pageSize=${pageSize}`),
   
-  createApplication: (applicationData: any) =>
-    api.post<ApiResponse>('/navigation/applications/new-application-connection', applicationData),
+  createApplication: (applicationData: Partial<Application>) =>
+    api.post<ApiResponse<{ application: Application }>>('/navigation/applications/new-application-connection', applicationData),
   
-  updateApplication: (applicationId: string, applicationData: any) =>
-    api.put<ApiResponse>(`/navigation/applications/update-application/${applicationId}`, applicationData),
+  updateApplication: (applicationId: string, applicationData: Partial<Application>) =>
+    api.put<ApiResponse<{ application: Application }>>(`/navigation/applications/update-application/${applicationId}`, applicationData),
   
   deleteApplication: (applicationId: string) =>
     api.delete<ApiResponse>(`/navigation/applications/delete-application/${applicationId}`),
@@ -214,67 +208,67 @@ export const applicationApi = {
 // Role Settings API
 export const roleApi = {
   getAllRoles: (page: number = 1, pageSize: number = 10) =>
-    api.get<{ data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }>(`/navigation/roles?page=${page}&pageSize=${pageSize}`),
+    api.get<ApiResponse<PaginatedResponse<Role>>>(`/navigation/roles?page=${page}&pageSize=${pageSize}`),
   
   getRoleById: (roleId: string) =>
-    api.get<{ role: any }>(`/navigation/roles/${roleId}`),
+    api.get<ApiResponse<{ role: Role }>>(`/navigation/roles/${roleId}`),
   
   createRole: (roleData: { roleName: string }) =>
-    api.post<{ message: string; role: any }>('/navigation/roles', roleData),
+    api.post<ApiResponse<{ message: string; role: Role }>>('/navigation/roles', roleData),
   
   updateRole: (roleId: string, roleData: { roleName: string }) =>
-    api.put<{ message: string; role: any }>(`/navigation/roles/${roleId}`, roleData),
+    api.put<ApiResponse<{ message: string; role: Role }>>(`/navigation/roles/${roleId}`, roleData),
   
   getRoleDeletionConstraints: (roleId: string) =>
-    api.get<{ canDelete: boolean; usersCount: number; temporaryUsersCount: number; constraintMessage: string; roleName: string }>(`/navigation/roles/${roleId}/deletion-constraints`),
+    api.get<ApiResponse<RoleDeletionConstraints>>(`/navigation/roles/${roleId}/deletion-constraints`),
   
   deleteRole: (roleId: string) =>
-    api.delete<{ message: string }>(`/navigation/roles/${roleId}`),
+    api.delete<ApiResponse<{ message: string }>>(`/navigation/roles/${roleId}`),
 };
 
 // Dashboard API
 export const dashboardApi = {
   getStatistics: () =>
-    api.get<{ success: boolean; data: any; message?: string }>('/navigation/dashboard/statistics'),
+    api.get<ApiResponse<DashboardStatistics>>('/navigation/dashboard/statistics'),
 };
 
 // Audit Logs API
 export const auditLogApi = {
   getAuditLogs: (page: number = 1, pageSize: number = 100) =>
-    api.get<{ data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }>(`/navigation/audit-log?page=${page}&pageSize=${pageSize}`),
+    api.get<ApiResponse<PaginatedResponse<AuditLog>>>(`/navigation/audit-log?page=${page}&pageSize=${pageSize}`),
 };
 
 // User Activity Logs API
 export const activityLogApi = {
   getActivityLogs: (page: number = 1, pageSize: number = 100) =>
-    api.get<{ data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }>(`/navigation/user-activity?page=${page}&pageSize=${pageSize}`),
+    api.get<ApiResponse<PaginatedResponse<UserActivityLog>>>(`/navigation/user-activity?page=${page}&pageSize=${pageSize}`),
 };
 
 // Application Logs API
 export const applicationLogApi = {
   getApplicationLogs: (page: number = 1, pageSize: number = 100) =>
-    api.get<{ success: boolean; data: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number } }>(`/navigation/application-log?page=${page}&pageSize=${pageSize}`),
+    api.get<ApiResponse<PaginatedResponse<ApplicationLog>>>(`/navigation/application-log?page=${page}&pageSize=${pageSize}`),
 };
 
 // Security Dashboard API
 export const securityDashboardApi = {
   getSecurityOverview: () =>
-    api.get<{ success: boolean; data: any }>('/navigation/security-dashboard/overview'),
+    api.get<ApiResponse<SecurityOverview>>('/navigation/security-dashboard/overview'),
   
   getFailedLogins: (days: number = 7) =>
-    api.get<{ success: boolean; data: any[] }>(`/navigation/security-dashboard/failed-logins?days=${days}`),
+    api.get<ApiResponse<UserActivityLog[]>>(`/navigation/security-dashboard/failed-logins?days=${days}`),
 };
 
 // System Health API
 export const systemHealthApi = {
   getHealthOverview: () =>
-    api.get<any>('/navigation/system-health/overview'),
+    api.get<ApiResponse<SystemHealthMetrics>>('/navigation/system-health/overview'),
     
   getDatabaseConnections: () =>
-    api.get<any[]>('/navigation/system-health/database-connections'),
+    api.get<ApiResponse<any[]>>('/navigation/system-health/database-connections'),
     
   getPerformanceMetrics: () =>
-    api.get<any>('/navigation/system-health/performance-metrics'),
+    api.get<ApiResponse<any>>('/navigation/system-health/performance-metrics'),
 };
 
 // Executive Dashboard API

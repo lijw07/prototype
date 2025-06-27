@@ -158,8 +158,8 @@ export default function Accounts() {
       while (hasMoreData) {
         const usersResponse = await userApi.getAllUsers(currentPage, maxPageSize);
         
-        if (usersResponse.data && usersResponse.data.length > 0) {
-          const transformedUsers: User[] = usersResponse.data.map((user: any) => ({
+        if (usersResponse.data?.data && usersResponse.data.data.length > 0) {
+          const transformedUsers: User[] = usersResponse.data.data.map((user: any) => ({
             userId: user.userId,
             firstName: user.firstName,
             lastName: user.lastName,
@@ -176,7 +176,7 @@ export default function Accounts() {
           allUsers = [...allUsers, ...transformedUsers];
           
           // Check if we've fetched all pages
-          const totalPages = usersResponse.totalPages || 1;
+          const totalPages = usersResponse.data?.totalPages || 1;
           hasMoreData = currentPage < totalPages;
           currentPage++;
         } else {
@@ -201,8 +201,8 @@ export default function Accounts() {
     try {
       const usersResponse = await userApi.getAllUsers(page, size);
       
-      if (usersResponse && usersResponse.data) {
-        const transformedUsers: User[] = usersResponse.data.map((user: any) => ({
+      if (usersResponse && usersResponse.data?.data) {
+        const transformedUsers: User[] = usersResponse.data.data.map((user: any) => ({
           userId: user.userId,
           firstName: user.firstName,
           lastName: user.lastName,
@@ -217,10 +217,10 @@ export default function Accounts() {
         }));
         
         setUsers(transformedUsers);
-        setCurrentPage(usersResponse.page || page);
-        setPageSize(usersResponse.pageSize || size);
-        setTotalCount(usersResponse.totalCount || 0);
-        setTotalPages(usersResponse.totalPages || 1);
+        setCurrentPage(usersResponse.data?.page || page);
+        setPageSize(usersResponse.data?.pageSize || size);
+        setTotalCount(usersResponse.data?.totalCount || 0);
+        setTotalPages(usersResponse.data?.totalPages || 1);
       } else {
         console.error('Failed to load users: Invalid response format');
         setUsers([]);
@@ -234,8 +234,8 @@ export default function Accounts() {
     try {
       const rolesResponse = await roleApi.getAllRoles(1, 100); // Get up to 100 roles
       
-      if (rolesResponse && rolesResponse.data) {
-        setRoles(rolesResponse.data);
+      if (rolesResponse && rolesResponse.data?.data) {
+        setRoles(rolesResponse.data.data);
       } else {
         console.error('Failed to load roles: Invalid response format');
         setRoles([]);
@@ -258,9 +258,9 @@ export default function Accounts() {
     } else {
       // For paginated view, check if we need to adjust page
       const response = await userApi.getAllUsers(currentPage, pageSize);
-      if (response.data && response.data.length >= 0) {
-        const newTotalPages = response.totalPages || 1;
-        const newTotalCount = response.totalCount || 0;
+      if (response.data?.data && response.data.data.length >= 0) {
+        const newTotalPages = response.data?.totalPages || 1;
+        const newTotalCount = response.data?.totalCount || 0;
         
         if (currentPage > newTotalPages && newTotalCount > 0) {
           // Navigate to last available page
