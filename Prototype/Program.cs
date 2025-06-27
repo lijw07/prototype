@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Data.SqlClient;
+using Microsoft.OpenApi.Models;
 using Prototype.Data;
 using Prototype.Database;
 using Prototype.Database.Interface;
@@ -41,7 +42,41 @@ builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo 
+    { 
+        Title = "Prototype API", 
+        Version = "v1",
+        Description = "Centralized Application Management System API"
+    });
+
+    // Add JWT Bearer Authentication
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token in the text input below.",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer",
+        BearerFormat = "JWT"
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[] {}
+        }
+    });
+});
 
 // Register CORS for development (open for local Docker/dev use)
 if (builder.Environment.IsDevelopment())
@@ -50,7 +85,12 @@ if (builder.Environment.IsDevelopment())
     {
         options.AddPolicy("AllowAll", policy =>
         {
-            policy.WithOrigins("http://localhost:3000", "http://localhost:8080")
+            policy.WithOrigins(
+                    "http://localhost:3000", 
+                    "http://localhost:8080",
+                    "http://127.0.0.1:3000",
+                    "http://127.0.0.1:8080",
+                    "http://0.0.0.0:8080")
                   .AllowAnyMethod()
                   .AllowAnyHeader()
                   .AllowCredentials(); // Required for SignalR
@@ -350,7 +390,18 @@ if (app.Environment.IsDevelopment())
 // Global exception handling (should be first)
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
-// Enable CORS in development
+// Enable Swagger in development
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Prototype API V1");
+        c.RoutePrefix = "swagger"; // Swagger UI at /swagger
+    });
+}
+
+// Enable CORS in development (MUST be before UseRouting)
 if (app.Environment.IsDevelopment())
 {
     app.UseCors("AllowAll");
@@ -362,7 +413,11 @@ if (!app.Environment.IsDevelopment())
     app.UseMiddleware<RateLimitingMiddleware>();
 }
 
+// Configure static files first
+app.UseStaticFiles();
+
 // Standard middleware
+app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -374,5 +429,8 @@ app.MapControllers();
 
 // Map SignalR Hub
 app.MapHub<Prototype.Hubs.ProgressHub>("/progressHub");
+
+// SPA fallback - serve React app for client-side routes
+app.MapFallbackToFile("index.html");
 
 app.Run();

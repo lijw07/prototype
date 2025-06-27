@@ -106,8 +106,8 @@ export default function SystemHealthDashboard() {
         console.error('Health API failed:', healthResponse);
       }
       
-      if (connectionsResponse.success) {
-        setConnections(connectionsResponse.data);
+      if (connectionsResponse && Array.isArray(connectionsResponse)) {
+        setConnections(connectionsResponse);
       } else {
         console.error('Connections API failed:', connectionsResponse);
       }

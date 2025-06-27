@@ -247,7 +247,7 @@ export default function SecurityDashboard() {
                     {securityData.threats.suspiciousIps.length > 0 ? (
                       <div className="space-y-3">
                         {securityData.threats.suspiciousIps.map((ip, index) => (
-                          <div key={index} className="d-flex justify-content-between align-items-center py-2 px-3 bg-light rounded-3">
+                          <div key={ip.IpAddress} className="d-flex justify-content-between align-items-center py-2 px-3 bg-light rounded-3">
                             <div className="d-flex align-items-center">
                               <AlertTriangle className="text-warning me-2" size={16} />
                               <code className="text-dark">{ip.IpAddress}</code>

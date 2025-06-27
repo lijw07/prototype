@@ -60,11 +60,11 @@ public class ApplicationNavigationController(
                 {
                     UserApplicationId = Guid.NewGuid(),
                     UserId = currentUser.UserId,
-                    User = null, // Don't set navigation property to avoid tracking issues
+                    User = null!, // Don't set navigation property to avoid tracking issues
                     ApplicationId = applicationId,
-                    Application = null, // Don't set navigation property to avoid tracking issues
+                    Application = null!, // Don't set navigation property to avoid tracking issues
                     ApplicationConnectionId = connection.ApplicationConnectionId,
-                    ApplicationConnection = null, // Don't set navigation property to avoid tracking issues
+                    ApplicationConnection = null!, // Don't set navigation property to avoid tracking issues
                     CreatedAt = DateTime.UtcNow
                 };
 

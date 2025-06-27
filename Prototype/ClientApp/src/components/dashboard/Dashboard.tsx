@@ -102,13 +102,13 @@ export default function Dashboard() {
       let totalVerifiedUsers = 0;
       let totalTemporaryUsers = 0;
       
-      if (userCountsResponse.success && userCountsResponse.data) {
-        totalUsers = userCountsResponse.data.totalUsers;
-        totalVerifiedUsers = userCountsResponse.data.totalVerifiedUsers;
-        totalTemporaryUsers = userCountsResponse.data.totalTemporaryUsers;
+      if (userCountsResponse.totalUsers !== undefined) {
+        totalUsers = userCountsResponse.totalUsers;
+        totalVerifiedUsers = userCountsResponse.totalVerifiedUsers;
+        totalTemporaryUsers = userCountsResponse.totalTemporaryUsers;
       }
       
-      const totalRoles = rolesResponse.success ? (rolesResponse.data?.totalCount || rolesResponse.data?.data?.length || 0) : 0;
+      const totalRoles = rolesResponse.totalCount || rolesResponse.data?.length || 0;
       
       setStats({
         totalApplications,

@@ -4,16 +4,16 @@ using Prototype.Database.Interface;
 using Prototype.DTOs;
 using Prototype.Enum;
 using Prototype.Models;
-using Prototype.Services;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Database.File;
 
 public class JsonFileConnectionStrategy(
-    PasswordEncryptionService encryptionService,
+    IPasswordEncryptionService encryptionService,
     ILogger<JsonFileConnectionStrategy> logger)
     : IFileConnectionStrategy
 {
-    private readonly PasswordEncryptionService _encryptionService = encryptionService;
+    private readonly IPasswordEncryptionService _encryptionService = encryptionService;
 
     public DataSourceTypeEnum ConnectionType => DataSourceTypeEnum.JsonFile;
 

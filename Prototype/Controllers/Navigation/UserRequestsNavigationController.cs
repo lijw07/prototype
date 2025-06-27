@@ -70,7 +70,7 @@ public class UserRequestsNavigationController(
                 if (!System.Enum.TryParse<RequestPriorityEnum>(request.Priority, true, out var priority))
                     priority = RequestPriorityEnum.Medium;
 
-                // Create new user request
+                // Create a new user request
                 var userRequest = new UserRequestModel
                 {
                     UserRequestId = Guid.NewGuid(),

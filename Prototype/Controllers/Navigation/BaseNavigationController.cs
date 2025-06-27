@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Prototype.Common.Responses;
 using Prototype.Constants;
@@ -11,7 +10,6 @@ using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
 
-[Authorize]
 [ApiController]
 public abstract class BaseNavigationController : ControllerBase
 {
@@ -143,6 +141,8 @@ public abstract class BaseNavigationController : ControllerBase
         try
         {
             var result = await operation(currentUser);
+            if (result is IActionResult actionResult)
+                return actionResult;
             return Ok(result);
         }
         catch (Exception ex)
@@ -168,20 +168,18 @@ public abstract class BaseNavigationController : ControllerBase
 
     protected IActionResult BadRequestWithMessage<T>(T data, string? message = null)
     {
-        return BadRequest(ApiResponse.FailureResponse(message));
-
+        return BadRequest(data);
     }
 
     protected IActionResult SuccessResponse<T>(T data, string? message = null)
     {
-        var successMessage = message ?? ApplicationConstants.SuccessMessages.OperationSuccess;
-        return Ok(ApiResponse<T>.Success(data, successMessage));
+        return Ok(data);
     }
 
     protected IActionResult SuccessResponse(string? message = null)
     {
         var successMessage = message ?? ApplicationConstants.SuccessMessages.OperationSuccess;
-        return Ok(ApiResponse.SuccessResponse(successMessage));
+        return Ok(new { success = true, message = successMessage });
     }
 
     #endregion
@@ -246,11 +244,11 @@ public abstract class BaseNavigationController : ControllerBase
     {
         return new
         {
-            Data = data,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = totalCount,
-            TotalPages = (int)Math.Ceiling((double)totalCount / pageSize)
+            data = data,
+            page = page,
+            pageSize = pageSize,
+            totalCount = totalCount,
+            totalPages = (int)Math.Ceiling((double)totalCount / pageSize)
         };
     }
 

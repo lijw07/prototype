@@ -20,7 +20,7 @@ public class LoginController(
         {
             var result = await authService.AuthenticateAsync(requestDto);
             
-            return !result.Success ? BadRequestWithMessage(result) : SuccessResponse(result);
+            return result.Success ? SuccessResponse(result) : BadRequestWithMessage(result);
         }
         catch (AuthenticationException ex)
         {
@@ -31,17 +31,17 @@ public class LoginController(
         catch (ValidationException ex)
         {
             logger.LogWarning(ex, "Validation failed during login for username: {Username}", requestDto.Username);
-            return BadRequestWithMessage(new { message = ex.Message, errors = ex.ValidationErrors });
+            return BadRequestWithMessage(new { success = false, message = ex.Message, errors = ex.ValidationErrors });
         }
         catch (ExternalServiceException ex)
         {
             logger.LogError(ex, "External service failure during login for username: {Username}", requestDto.Username);
-            return StatusCode(503, new { message = "Authentication service temporarily unavailable" });
+            return StatusCode(503, new { success = false, message = "Authentication service temporarily unavailable" });
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Unexpected error during login for username: {Username}", requestDto.Username);
-            return StatusCode(500, new { message = "An internal error occurred" });
+            return StatusCode(500, new { success = false, message = "An internal error occurred" });
         }
     }
 }

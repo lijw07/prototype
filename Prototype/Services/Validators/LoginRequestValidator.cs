@@ -15,7 +15,7 @@ namespace Prototype.Services.Validators
                 : Result<LoginRequestDto>.Success(entity);
         }
 
-        public async Task<Result<bool>> ValidatePropertyAsync(LoginRequestDto entity, string propertyName, object value)
+        public Task<Result<bool>> ValidatePropertyAsync(LoginRequestDto entity, string propertyName, object value)
         {
             var errors = new List<string>();
             
@@ -29,19 +29,19 @@ namespace Prototype.Services.Validators
                     break;
             }
 
-            return errors.Any() 
+            return Task.FromResult(errors.Any() 
                 ? Result<bool>.Failure(errors) 
-                : Result<bool>.Success(true);
+                : Result<bool>.Success(true));
         }
 
-        public async Task<List<string>> GetValidationErrorsAsync(LoginRequestDto entity)
+        public Task<List<string>> GetValidationErrorsAsync(LoginRequestDto entity)
         {
             var errors = new List<string>();
 
             ValidateUsername(entity.Username, errors);
             ValidatePassword(entity.Password, errors);
 
-            return errors;
+            return Task.FromResult(errors);
         }
 
         private void ValidateUsername(string username, List<string> errors)

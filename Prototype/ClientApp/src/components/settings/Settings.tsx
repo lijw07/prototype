@@ -66,7 +66,7 @@ const SettingsDashboard: React.FC = () => {
     const handlePasswordChange = async () => {
         try {
             const response = await userApi.changePassword(passwordForm);
-            if (response.success) {
+            if (response.message && !response.message.toLowerCase().includes('error')) {
                 alert('Password changed successfully!');
                 setPasswordForm({ currentPassword: '', newPassword: '', reTypeNewPassword: '' });
             } else {
@@ -82,17 +82,15 @@ const SettingsDashboard: React.FC = () => {
     const handleProfileUpdate = async () => {
         try {
             const response = await userApi.updateProfile(editForm);
-            if (response.success) {
+            if (response.message && response.user) {
                 alert('Profile updated successfully!');
                 // Update local state with the fresh user data from response
-                if (response.user) {
-                    setUserSettings(response.user);
-                    setEditForm({
-                        firstName: response.user.firstName,
-                        lastName: response.user.lastName,
-                        email: response.user.email
-                    });
-                }
+                setUserSettings(response.user);
+                setEditForm({
+                    firstName: response.user.firstName,
+                    lastName: response.user.lastName,
+                    email: response.user.email
+                });
                 // Also fetch fresh data to ensure consistency
                 fetchUserSettings();
             } else {

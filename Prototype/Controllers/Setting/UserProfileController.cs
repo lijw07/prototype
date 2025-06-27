@@ -10,18 +10,14 @@ using Prototype.Utility;
 namespace Prototype.Controllers.Setting;
 
 [Route("settings/user-profile")]
-public class UserProfileController : BaseNavigationController
+public class UserProfileController(
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    TransactionService transactionService,
+    IAuditLogService auditLogService,
+    ILogger<UserProfileController> logger)
+    : BaseNavigationController(logger, context, userAccessor, transactionService, auditLogService)
 {
-    public UserProfileController(
-        SentinelContext context,
-        IAuthenticatedUserAccessor userAccessor,
-        TransactionService transactionService,
-        IAuditLogService auditLogService,
-        ILogger<UserProfileController> logger)
-        : base(logger, context, userAccessor, transactionService, auditLogService)
-    {
-    }
-
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto dto)
     {
@@ -135,7 +131,7 @@ public class UserProfileController : BaseNavigationController
     [HttpGet]
     public async Task<IActionResult> GetProfile()
     {
-        return await EnsureUserAuthenticatedAsync(async currentUser =>
+        return await EnsureUserAuthenticatedAsync<IActionResult>(async currentUser =>
         {
             if (Context == null)
                 throw new InvalidOperationException("Database context is not available");
@@ -143,7 +139,7 @@ public class UserProfileController : BaseNavigationController
             // Get fresh data from database to avoid cached values
             var freshUser = await Context.Users.FirstOrDefaultAsync(u => u.UserId == currentUser.UserId);
             if (freshUser == null)
-                return BadRequestWithMessage("User not found");
+                return BadRequestWithMessage(new { success = false, message = "User not found" });
 
             var userDto = new UserDto
             {
@@ -159,7 +155,7 @@ public class UserProfileController : BaseNavigationController
                 CreatedAt = freshUser.CreatedAt
             };
 
-            return SuccessResponse(new { User = userDto }, "Profile retrieved successfully");
+            return SuccessResponse(new { success = true, user = userDto, message = "Profile retrieved successfully" });
         });
     }
 }

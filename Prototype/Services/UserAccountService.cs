@@ -345,28 +345,71 @@ public class UserAccountService(
 
     public async Task<LoginResponse> DeleteUserAsync(Guid userId)
     {
-        return await transactionService.ExecuteInTransactionAsync(async () =>
+        var user = await GetUserByIdAsync(userId);
+        if (user == null)
         {
-            var user = await GetUserByIdAsync(userId);
-            if (user == null)
-            {
-                return new LoginResponse
-                {
-                    Success = false,
-                    Message = "User not found"
-                };
-            }
-
-            // Remove user from database
-            context.Users.Remove(user);
-            await context.SaveChangesAsync();
-
             return new LoginResponse
             {
-                Success = true,
-                Message = "User deleted successfully"
+                Success = false,
+                Message = "User not found"
             };
-        });
+        }
+
+        // Delete related records first to avoid foreign key constraint violations
+        
+        // Delete UserApplications
+        var userApplications = await context.UserApplications
+            .Where(ua => ua.UserId == userId)
+            .ToListAsync();
+        if (userApplications.Any())
+        {
+            context.UserApplications.RemoveRange(userApplications);
+        }
+
+        // Delete UserActivityLogs
+        var userActivityLogs = await context.UserActivityLogs
+            .Where(ual => ual.UserId == userId)
+            .ToListAsync();
+        if (userActivityLogs.Any())
+        {
+            context.UserActivityLogs.RemoveRange(userActivityLogs);
+        }
+
+        // Delete AuditLogs
+        var auditLogs = await context.AuditLogs
+            .Where(al => al.UserId == userId)
+            .ToListAsync();
+        if (auditLogs.Any())
+        {
+            context.AuditLogs.RemoveRange(auditLogs);
+        }
+
+        // Delete UserRecoveryRequests
+        var recoveryRequests = await context.UserRecoveryRequests
+            .Where(urr => urr.UserId == userId)
+            .ToListAsync();
+        if (recoveryRequests.Any())
+        {
+            context.UserRecoveryRequests.RemoveRange(recoveryRequests);
+        }
+
+        // Delete BulkUploadHistories
+        var bulkUploadHistories = await context.BulkUploadHistories
+            .Where(buh => buh.UserId == userId)
+            .ToListAsync();
+        if (bulkUploadHistories.Any())
+        {
+            context.BulkUploadHistories.RemoveRange(bulkUploadHistories);
+        }
+
+        // Finally remove the user
+        context.Users.Remove(user);
+
+        return new LoginResponse
+        {
+            Success = true,
+            Message = "User deleted successfully"
+        };
     }
 
 

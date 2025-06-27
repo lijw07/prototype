@@ -4,7 +4,7 @@ using Prototype.Services.Interfaces;
 
 namespace Prototype.Services.Factory;
 
-public class ApplicationConnectionFactoryService(PasswordEncryptionService encryptionService)
+public class ApplicationConnectionFactoryService(IPasswordEncryptionService encryptionService)
     : IApplicationConnectionFactoryService
 {
     public ApplicationConnectionModel CreateApplicationConnection(Guid applicationId, ConnectionSourceDto dto)

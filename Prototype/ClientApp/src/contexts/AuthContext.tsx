@@ -2,9 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, Rea
 
 // Helper function to get API base URL (same as in api.ts)
 const getApiBaseUrl = () => {
-  if (process.env.NODE_ENV === 'development') {
-    return 'http://localhost:8080';
-  }
+  // In development, use relative URLs to leverage the proxy
   return '';
 };
 
@@ -101,7 +99,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         body: JSON.stringify(credentials),
       });
 
-      const data = await response.json();
+      // Check if response has content before parsing
+      let data: any = {};
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        const text = await response.text();
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch (e) {
+            console.error('Failed to parse JSON response:', e);
+            data = { success: false, message: 'Invalid response from server' };
+          }
+        }
+      }
 
       if (response.ok && data.success) {
         const authToken = data.token;
@@ -113,7 +124,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         return { success: true, message: data.message || 'Login successful' };
       } else {
-        return { success: false, message: data.message || 'Login failed' };
+        // Handle different error scenarios
+        if (response.status === 401) {
+          return { success: false, message: data.message || 'Invalid credentials' };
+        } else if (response.status === 503) {
+          return { success: false, message: 'Authentication service temporarily unavailable' };
+        } else {
+          return { success: false, message: data.message || 'Login failed' };
+        }
       }
     } catch (error) {
       console.error('Login error:', error);

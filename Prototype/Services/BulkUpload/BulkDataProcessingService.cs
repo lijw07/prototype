@@ -27,7 +27,8 @@ public class BulkDataProcessingService(
         string tableType, 
         Guid userId, 
         bool ignoreErrors = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? jobId = null)
     {
         logger.LogInformation("Starting ProcessDataAsync for table: {TableType}, userId: {UserId}", tableType, userId);
         
@@ -58,12 +59,10 @@ public class BulkDataProcessingService(
             }
             
             logger.LogInformation("Found mapper for table type: {TableType}", tableType);
-
-            // Phase 1: Validation
+            
             var validationResults = await validationService.ValidateWithResultsAsync(dataTable, tableType, cancellationToken);
             var validationErrors = new List<BulkUploadErrorDto>();
             
-            // Process validation results
             foreach (var (rowNum, result) in validationResults)
             {
                 if (!result.IsValid)
@@ -91,17 +90,15 @@ public class BulkDataProcessingService(
                 logger.LogWarning("Validation failed with {ErrorCount} errors, aborting processing", validationErrors.Count);
                 return Result<BulkUploadResponseDto>.Failure($"Validation failed with {validationErrors.Count} errors");
             }
-
-            // Phase 2: Processing
-            var successfullyProcessed = await ProcessValidRecordsAsync(dataTable, mapper, userId, validationResults, ignoreErrors, response, cancellationToken);
+            
+            var successfullyProcessed = await ProcessValidRecordsAsync(dataTable, mapper, userId, validationResults, ignoreErrors, response, cancellationToken, jobId);
             
             response.ProcessedRecords = successfullyProcessed;
             response.ProcessingTime = stopwatch.Elapsed;
             
             logger.LogInformation("Processing completed. Success: {SuccessCount}, Failed: {FailCount}, Duration: {Duration}", 
                 response.ProcessedRecords, response.FailedRecords, response.ProcessingTime);
-
-            // Log bulk upload history
+            
             await LogBulkUploadHistory(userId, tableType, response);
 
             return Result<BulkUploadResponseDto>.Success(response);
@@ -138,7 +135,7 @@ public class BulkDataProcessingService(
             });
 
             // Process the data
-            var result = await ProcessDataAsync(dataTable, tableType, userId, ignoreErrors, cancellationToken);
+            var result = await ProcessDataAsync(dataTable, tableType, userId, ignoreErrors, cancellationToken, jobId);
             
             stopwatch.Stop();
 
@@ -218,7 +215,8 @@ public class BulkDataProcessingService(
         Dictionary<int, ValidationResultDto> validationResults, 
         bool ignoreErrors, 
         BulkUploadResponseDto responseDto, 
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? jobId = null)
     {
         var successfullyProcessed = 0;
         var rowNumber = 1;
@@ -303,6 +301,27 @@ public class BulkDataProcessingService(
                     
                     logger.LogDebug("Batch {BatchIndex} completed. Processed: {BatchProcessed}", 
                         batchIndex + 1, batchProcessed);
+                }
+                
+                // Send progress update via SignalR if jobId is provided
+                if (jobId.HasValue)
+                {
+                    var progressPercentage = ((double)(batchIndex + 1) / totalBatches) * 100;
+                    await progressService.NotifyProgress(jobId.Value.ToString(), new ProgressUpdateDto
+                    {
+                        JobId = jobId.Value.ToString(),
+                        ProgressPercentage = progressPercentage,
+                        Status = "processing",
+                        ProcessedRecords = successfullyProcessed,
+                        TotalRecords = dataTable.Rows.Count,
+                        CurrentOperation = $"Processing batch {batchIndex + 1} of {totalBatches}",
+                        ProcessedFiles = 1,
+                        TotalFiles = 1,
+                        Timestamp = DateTime.UtcNow
+                    });
+                    
+                    logger.LogDebug("Progress update sent: {ProgressPercentage:F1}% ({ProcessedRecords}/{TotalRecords})", 
+                        progressPercentage, successfullyProcessed, dataTable.Rows.Count);
                 }
                 
                 rowNumber = currentRowNumber;

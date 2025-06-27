@@ -22,7 +22,7 @@ public class TableDetectionService : ITableDetectionService
         ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
     }
 
-    public async Task<DetectedTableInfoDto?> DetectTableTypeAsync(byte[] fileData, string fileExtension)
+    public Task<DetectedTableInfoDto?> DetectTableTypeAsync(byte[] fileData, string fileExtension)
     {
         try
         {
@@ -60,12 +60,12 @@ public class TableDetectionService : ITableDetectionService
             }
 
             _logger.LogInformation("Best match: {TableType} with score: {Score}", bestMatch?.TableType ?? "None", highestScore);
-            return bestMatch;
+            return Task.FromResult(bestMatch);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error detecting table type");
-            return null;
+            return Task.FromResult<DetectedTableInfoDto?>(null);
         }
     }
 

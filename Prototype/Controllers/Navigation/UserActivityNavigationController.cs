@@ -6,21 +6,16 @@ using Prototype.Utility;
 namespace Prototype.Controllers.Navigation;
 
 [Route("navigation/user-activity")]
-public class UserActivityNavigationController : BaseNavigationController
+public class UserActivityNavigationController(
+    SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    TransactionService transactionService,
+    IAuditLogService auditLogService,
+    INavigationService navigationService,
+    ILogger<UserActivityNavigationController> logger)
+    : BaseNavigationController(logger, context, userAccessor, transactionService, auditLogService)
 {
-    private readonly INavigationService _navigationService;
-
-    public UserActivityNavigationController(
-        SentinelContext context,
-        IAuthenticatedUserAccessor userAccessor,
-        TransactionService transactionService,
-        IAuditLogService auditLogService,
-        INavigationService navigationService,
-        ILogger<UserActivityNavigationController> logger)
-        : base(logger, context, userAccessor, transactionService, auditLogService)
-    {
-        _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
-    }
+    private readonly INavigationService _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
 
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 50)

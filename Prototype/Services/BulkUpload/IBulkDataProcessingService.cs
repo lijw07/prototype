@@ -11,7 +11,8 @@ public interface IBulkDataProcessingService
         string tableType, 
         Guid userId, 
         bool ignoreErrors = false,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        Guid? jobId = null);
         
     Task<Result<BulkUploadResponseDto>> ProcessDataWithProgressAsync(
         DataTable dataTable, 

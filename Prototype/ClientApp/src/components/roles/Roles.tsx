@@ -47,13 +47,11 @@ const Roles: React.FC = () => {
         try {
             // Fetch all roles by requesting a large page size
             const response = await roleApi.getAllRoles(1, 1000); // Large enough to get all
-            if (response.success && response.data?.data) {
-                setAllRoles(response.data.data);
-                return response.data.data;
-            } else if (response.success && response.roles) {
-                setAllRoles(response.roles);
-                return response.roles;
+            if (response && response.data) {
+                setAllRoles(response.data);
+                return response.data;
             }
+            console.error('Failed to fetch roles: Invalid response format');
             return [];
         } catch (error) {
             console.error('Failed to fetch all roles:', error);
@@ -65,22 +63,12 @@ const Roles: React.FC = () => {
         setLoading(true);
         try {
             const response = await roleApi.getAllRoles(page, size);
-            if (response.success && response.data?.data) {
-                setRoles(response.data.data);
-                setCurrentPage(response.data.page || page);
-                setPageSize(response.data.pageSize || size);
-                setTotalCount(response.data.totalCount || 0);
-                setTotalPages(response.data.totalPages || 1);
-            } else if (response.success && response.roles) {
-                const startIndex = (page - 1) * size;
-                const endIndex = startIndex + size;
-                const paginatedRoles = response.roles.slice(startIndex, endIndex);
-                setRoles(paginatedRoles);
-                // Set pagination values for non-paginated response
-                setTotalCount(response.roles.length);
-                setTotalPages(Math.ceil(response.roles.length / size));
-                setCurrentPage(page);
-                setPageSize(size);
+            if (response && response.data) {
+                setRoles(response.data);
+                setCurrentPage(response.page || page);
+                setPageSize(response.pageSize || size);
+                setTotalCount(response.totalCount || 0);
+                setTotalPages(response.totalPages || 1);
             }
         } catch (error) {
             console.error('Failed to fetch roles:', error);
@@ -93,13 +81,8 @@ const Roles: React.FC = () => {
     const refetchRoles = async () => {
         // First, check the current state after deletion
         const response = await roleApi.getAllRoles(currentPage, pageSize);
-        if (response.success) {
-            let totalItems = 0;
-            if (response.data?.totalCount !== undefined) {
-                totalItems = response.data.totalCount;
-            } else if (response.roles) {
-                totalItems = response.roles.length;
-            }
+        if (response && response.totalCount !== undefined) {
+            let totalItems = response.totalCount;
             
             const newTotalPages = Math.ceil(totalItems / pageSize);
             
@@ -162,24 +145,24 @@ const Roles: React.FC = () => {
             if (editingRole) {
                 // Update existing role
                 const response = await roleApi.updateRole(editingRole.userRoleId, { roleName: roleForm.roleName });
-                if (response.success) {
+                if (response && response.message) {
                     setSubmitSuccess(true);
                     refetchRoles(); // Stay on current page when editing
                     
                     // Role form will be closed manually by user clicking X
                 } else {
-                    alert(response.message || 'Failed to update role');
+                    alert('Failed to update role');
                 }
             } else {
                 // Create new role
                 const response = await roleApi.createRole({ roleName: roleForm.roleName });
-                if (response.success) {
+                if (response && response.message) {
                     setSubmitSuccess(true);
                     refetchAndGoToFirstPage(); // Go to first page where new role should appear
                     
                     // Role form will be closed manually by user clicking X
                 } else {
-                    alert(response.message || 'Failed to create role');
+                    alert('Failed to create role');
                 }
             }
         } catch (error: any) {
@@ -195,13 +178,13 @@ const Roles: React.FC = () => {
 
         try {
             const response = await roleApi.deleteRole(deletingRole.userRoleId);
-            if (response.success) {
+            if (response && response.message) {
                 setDeleteSuccess(true);
                 refetchRoles();
                 
                 // Delete success modal will be closed manually by user clicking X
             } else {
-                alert(response.message || 'Failed to delete role');
+                alert('Failed to delete role');
             }
         } catch (error: any) {
             console.error('Failed to delete role:', error);
@@ -217,7 +200,7 @@ const Roles: React.FC = () => {
         
         try {
             const response = await roleApi.getRoleDeletionConstraints(role.userRoleId);
-            if (response.success) {
+            if (response) {
                 setDeletionConstraints({
                     canDelete: response.canDelete,
                     usersCount: response.usersCount,

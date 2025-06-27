@@ -4,12 +4,12 @@ using Prototype.Database.Interface;
 using Prototype.DTOs;
 using Prototype.Enum;
 using Prototype.Models;
-using Prototype.Services;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Database.Cloud;
 
 public class AmazonS3ConnectionStrategy(
-    PasswordEncryptionService encryptionService,
+    IPasswordEncryptionService encryptionService,
     ILogger<AmazonS3ConnectionStrategy> logger)
     : IFileConnectionStrategy
 {

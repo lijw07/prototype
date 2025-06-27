@@ -5,13 +5,14 @@ using Prototype.Data;
 using Prototype.DTOs.BulkUpload;
 using Prototype.Helpers;
 using Prototype.Models;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Services.BulkUpload.Mappers;
 
 public class UserTableMapper(
     IServiceScopeFactory scopeFactory,
     SentinelContext context,
-    PasswordEncryptionService passwordEncryption,
+    IPasswordEncryptionService passwordEncryption,
     ILogger<UserTableMapper> logger)
     : ITableMapper, IBatchTableMapper
 {
@@ -246,6 +247,13 @@ public class UserTableMapper(
                 var lastName = GetColumnValue(row, "LastName");
                 var role = GetColumnValue(row, "Role");
 
+                // Debug logging for first few rows
+                if (rowNumber <= 3)
+                {
+                    logger.LogInformation("Row {RowNumber} data - Username: '{Username}', Email: '{Email}', FirstName: '{FirstName}', LastName: '{LastName}', Role: '{Role}'", 
+                        rowNumber, username ?? "NULL", email ?? "NULL", firstName ?? "NULL", lastName ?? "NULL", role ?? "NULL");
+                }
+
                 // Basic field validation
                 if (string.IsNullOrWhiteSpace(username))
                     errors.Add($"Row {rowNumber}: Username is required");
@@ -280,6 +288,13 @@ public class UserTableMapper(
                     IsValid = !errors.Any(),
                     Errors = errors
                 };
+
+                // Debug logging for first few rows
+                if (rowNumber <= 3 && errors.Any())
+                {
+                    logger.LogInformation("Row {RowNumber} validation errors: {Errors}", 
+                        rowNumber, string.Join(", ", errors));
+                }
                 
                 rowNumber++;
             }

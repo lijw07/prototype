@@ -3,12 +3,12 @@ using Prototype.Database.Interface;
 using Prototype.DTOs;
 using Prototype.Enum;
 using Prototype.Models;
-using Prototype.Services;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Database.MySql;
 
 public class MySqlDatabaseStrategy(
-    PasswordEncryptionService encryptionService,
+    IPasswordEncryptionService encryptionService,
     ILogger<MySqlDatabaseStrategy> logger)
     : IDatabaseConnectionStrategy
 {

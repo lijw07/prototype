@@ -5,13 +5,13 @@ using Prototype.Database.Interface;
 using Prototype.DTOs;
 using Prototype.Enum;
 using Prototype.Models;
-using Prototype.Services;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Database.Api;
 
 public class SoapApiConnectionStrategy(
     HttpClient httpClient,
-    PasswordEncryptionService encryptionService,
+    IPasswordEncryptionService encryptionService,
     ILogger<SoapApiConnectionStrategy> logger)
     : IApiConnectionStrategy
 {

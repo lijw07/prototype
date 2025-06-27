@@ -112,7 +112,7 @@ export const authApi = {
     api.post<ApiResponse>('/login', credentials),
   
   logout: () =>
-    api.post<ApiResponse>('/logout'),
+    api.post<{ message: string }>('/logout'),
   
   register: (userData: {
     firstName: string;
@@ -145,20 +145,20 @@ export const userApi = {
     lastName: string;
     email: string;
   }) =>
-    api.put<{ success: boolean; message?: string; user?: any }>('/settings/user-profile', userData),
+    api.put<{ message: string; user: any }>('/settings/user-profile', userData),
   
   changePassword: (passwordData: {
     currentPassword: string;
     newPassword: string;
     reTypeNewPassword: string;
   }) =>
-    api.post<{ success: boolean; message?: string }>('/settings/user-profile', passwordData),
+    api.post<{ message: string }>('/settings/user-profile', passwordData),
   
   getAllUsers: (page: number = 1, pageSize: number = 10) =>
-    api.get<{ success: boolean; data?: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }; users?: any[]; message?: string }>(`/navigation/user-administration/all?page=${page}&pageSize=${pageSize}`),
+    api.get<{ data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }>(`/navigation/user-administration/all?page=${page}&pageSize=${pageSize}`),
 
   getUserCounts: () =>
-    api.get<{ success: boolean; data: { totalUsers: number; totalVerifiedUsers: number; totalTemporaryUsers: number }; message?: string }>('/navigation/user-administration/counts'),
+    api.get<{ totalUsers: number; totalVerifiedUsers: number; totalTemporaryUsers: number }>('/navigation/user-administration/counts'),
   
   updateUser: (userData: {
     userId: string;
@@ -170,11 +170,11 @@ export const userApi = {
     role: string;
     isActive: boolean;
   }) =>
-    api.put<{ success: boolean; user?: any; message?: string }>('/navigation/user-administration/update', userData),
+    api.put<{ message: string; user?: any }>('/navigation/user-administration/update', userData),
   
   deleteUser: (userId: string) => {
     const url = `/navigation/user-administration/delete/${userId}`;
-    return api.delete<{ success: boolean; message?: string }>(url);
+    return api.delete<{ message: string }>(url);
   },
   
   updateTemporaryUser: (userData: {
@@ -214,22 +214,22 @@ export const applicationApi = {
 // Role Settings API
 export const roleApi = {
   getAllRoles: (page: number = 1, pageSize: number = 10) =>
-    api.get<{ success: boolean; data?: { data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }; roles?: any[]; message?: string }>(`/navigation/roles?page=${page}&pageSize=${pageSize}`),
+    api.get<{ data: any[]; page: number; pageSize: number; totalCount: number; totalPages: number }>(`/navigation/roles?page=${page}&pageSize=${pageSize}`),
   
   getRoleById: (roleId: string) =>
-    api.get<{ success: boolean; role: any; message?: string }>(`/navigation/roles/${roleId}`),
+    api.get<{ role: any }>(`/navigation/roles/${roleId}`),
   
   createRole: (roleData: { roleName: string }) =>
-    api.post<{ success: boolean; role?: any; message?: string }>('/navigation/roles', roleData),
+    api.post<{ message: string; role: any }>('/navigation/roles', roleData),
   
   updateRole: (roleId: string, roleData: { roleName: string }) =>
-    api.put<{ success: boolean; role?: any; message?: string }>(`/navigation/roles/${roleId}`, roleData),
+    api.put<{ message: string; role: any }>(`/navigation/roles/${roleId}`, roleData),
   
   getRoleDeletionConstraints: (roleId: string) =>
-    api.get<{ success: boolean; canDelete: boolean; usersCount: number; temporaryUsersCount: number; constraintMessage: string; roleName: string }>(`/navigation/roles/${roleId}/deletion-constraints`),
+    api.get<{ canDelete: boolean; usersCount: number; temporaryUsersCount: number; constraintMessage: string; roleName: string }>(`/navigation/roles/${roleId}/deletion-constraints`),
   
   deleteRole: (roleId: string) =>
-    api.delete<{ success: boolean; message?: string }>(`/navigation/roles/${roleId}`),
+    api.delete<{ message: string }>(`/navigation/roles/${roleId}`),
 };
 
 // Dashboard API
@@ -268,13 +268,13 @@ export const securityDashboardApi = {
 // System Health API
 export const systemHealthApi = {
   getHealthOverview: () =>
-    api.get<{ success: boolean; data: any }>('/navigation/system-health/overview'),
+    api.get<any>('/navigation/system-health/overview'),
     
   getDatabaseConnections: () =>
-    api.get<{ success: boolean; data: any[] }>('/navigation/system-health/database-connections'),
+    api.get<any[]>('/navigation/system-health/database-connections'),
     
   getPerformanceMetrics: () =>
-    api.get<{ success: boolean; data: any }>('/navigation/system-health/performance-metrics'),
+    api.get<any>('/navigation/system-health/performance-metrics'),
 };
 
 // Executive Dashboard API

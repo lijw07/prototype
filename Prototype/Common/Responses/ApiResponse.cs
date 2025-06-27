@@ -77,33 +77,27 @@ public class ApiResponse<T> : ApiResponse
     }
 
     #region Success Responses
-    public static ApiResponse<T> Success(T data, string? message = null)
+    public new static ApiResponse<T> Success(T data, string? message = null)
         => new ApiResponse<T>(true, data, message ?? ApplicationConstants.SuccessMessages.OperationSuccess);
-
-    public static ApiResponse<T> CreatedSuccess(T data, string? message = null)
-        => new ApiResponse<T>(true, data, message ?? "Resource created successfully");
-
-    public static ApiResponse<T> UpdatedSuccess(T data, string? message = null)
-        => new ApiResponse<T>(true, data, message ?? "Resource updated successfully");
     #endregion
 
     #region Error Responses
     public static ApiResponse<T> Failure(string message, List<string>? errors = null, Dictionary<string, List<string>>? fieldErrors = null, string? errorCode = null)
         => new ApiResponse<T>(false, default, message, errors, fieldErrors, errorCode);
 
-    public static ApiResponse<T> BadRequest(string? message = null, List<string>? errors = null)
+    public new static ApiResponse<T> BadRequest(string? message = null, List<string>? errors = null)
         => new ApiResponse<T>(false, default, message ?? ApplicationConstants.ErrorMessages.InvalidRequest, errors);
 
-    public static ApiResponse<T> Unauthorized(string? message = null)
+    public new static ApiResponse<T> Unauthorized(string? message = null)
         => new ApiResponse<T>(false, default, message ?? ApplicationConstants.ErrorMessages.UnauthorizedAccess);
 
-    public static ApiResponse<T> NotFound(string? message = null)
+    public new static ApiResponse<T> NotFound(string? message = null)
         => new ApiResponse<T>(false, default, message ?? "Resource not found");
 
-    public static ApiResponse<T> InternalServerError(string? message = null)
+    public new static ApiResponse<T> InternalServerError(string? message = null)
         => new ApiResponse<T>(false, default, message ?? ApplicationConstants.ErrorMessages.ServerError);
 
-    public static ApiResponse<T> ValidationError(List<string> validationErrors, Dictionary<string, List<string>>? fieldErrors = null)
+    public new static ApiResponse<T> ValidationError(List<string> validationErrors, Dictionary<string, List<string>>? fieldErrors = null)
         => new ApiResponse<T>(false, default, ApplicationConstants.ErrorMessages.InvalidRequest, validationErrors, fieldErrors);
     #endregion
 
