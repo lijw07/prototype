@@ -104,3 +104,4 @@ lcov-report/
 /Prototype/obj
 /CLAUDE.md
 env
+CLEAN_CODE_PATTERNS.md

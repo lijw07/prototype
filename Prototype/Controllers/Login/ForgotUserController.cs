@@ -1,15 +1,16 @@
 using Microsoft.AspNetCore.Mvc;
+using Prototype.Controllers.Navigation;
 using Prototype.DTOs;
 using Prototype.Services.Interfaces;
 
 namespace Prototype.Controllers.Login;
 
 [ApiController]
-[Route("ForgotUser")]
+[Route("login/forgot-user")]
 public class ForgotUserController(
     IUserAccountService userAccountService,
     ILogger<ForgotUserController> logger)
-    : ControllerBase
+    : BaseNavigationController(logger)
 {
     [HttpPost]
     public async Task<IActionResult> ForgotUser([FromBody] ForgotUserRequestDto requestDto)
@@ -18,10 +19,7 @@ public class ForgotUserController(
         {
             var result = await userAccountService.ForgotPasswordAsync(requestDto);
             
-            if (!result.Success)
-                return BadRequest(result);
-                
-            return Ok(result);
+            return !result.Success ? BadRequest(result) : SuccessResponse(result);
         }
         catch (Exception ex)
         {

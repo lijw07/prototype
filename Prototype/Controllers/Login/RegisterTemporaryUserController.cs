@@ -1,15 +1,16 @@
 using Microsoft.AspNetCore.Mvc;
+using Prototype.Controllers.Navigation;
 using Prototype.DTOs;
 using Prototype.Services.Interfaces;
 
 namespace Prototype.Controllers.Login;
 
 [ApiController]
-[Route("Register")]
+[Route("login/register")]
 public class RegisterTemporaryUserController(
     IUserAccountService userAccountService,
     ILogger<RegisterTemporaryUserController> logger)
-    : ControllerBase
+    : BaseNavigationController(logger)
 {
     [HttpPost]
     public async Task<IActionResult> Register([FromBody] RegisterRequestDto requestDto)
@@ -18,10 +19,7 @@ public class RegisterTemporaryUserController(
         {
             var result = await userAccountService.RegisterTemporaryUserAsync(requestDto);
             
-            if (!result.Success)
-                return BadRequest(result);
-                
-            return Ok(result);
+            return !result.Success ? BadRequestWithMessage(result) : SuccessResponse(result);
         }
         catch (Exception ex)
         {

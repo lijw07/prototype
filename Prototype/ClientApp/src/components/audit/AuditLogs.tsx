@@ -4,10 +4,10 @@ import { auditLogApi } from '../../services/api';
 
 interface AuditLog {
     auditLogId: string;
-    userId: string;
+    userId?: string;
     username: string;
     actionType: string;
-    metadata: string;
+    metadata?: string;
     createdAt: string;
 }
 
@@ -32,13 +32,13 @@ const AuditLogs: React.FC = () => {
         setLoading(true);
         try {
             const response = await auditLogApi.getAuditLogs(page, pageSize);
-            if (response && response.data) {
-                setAuditLogs(response.data);
+            if (response && response.data?.data) {
+                setAuditLogs(response.data.data);
                 setPagination({
-                    page: response.page,
-                    pageSize: response.pageSize,
-                    totalCount: response.totalCount,
-                    totalPages: response.totalPages
+                    page: response.data.page || 1,
+                    pageSize: response.data.pageSize || pageSize,
+                    totalCount: response.data.totalCount || 0,
+                    totalPages: response.data.totalPages || 1
                 });
             } else {
                 setAuditLogs([]);

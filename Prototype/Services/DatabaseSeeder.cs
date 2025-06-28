@@ -1,14 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.Models;
-using Prototype.Services;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
 
 public class DatabaseSeeder(
     SentinelContext context,
-    PasswordEncryptionService passwordService,
-    ILogger<DatabaseSeeder> logger)
+    IPasswordEncryptionService passwordService,
+    ILogger<DatabaseSeeder> logger) : IDatabaseSeeder
 {
     public async Task SeedAsync()
     {

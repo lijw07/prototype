@@ -201,7 +201,7 @@ public class UserRoleTableMapper(
         }
     }
 
-    public async Task<Result<int>> SaveBatchAsync(DataTable dataTable, Guid userId, Dictionary<int, ValidationResultDto> validationResults, bool ignoreErrors = false, CancellationToken cancellationToken = default)
+    public Task<Result<int>> SaveBatchAsync(DataTable dataTable, Guid userId, Dictionary<int, ValidationResultDto> validationResults, bool ignoreErrors = false, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -240,12 +240,12 @@ public class UserRoleTableMapper(
                 logger.LogInformation("Added {RoleCount} user roles to context for bulk save", rolesToAdd.Count);
             }
 
-            return Result<int>.Success(successCount);
+            return Task.FromResult(Result<int>.Success(successCount));
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error during batch save");
-            return Result<int>.Failure($"Batch save error: {ex.Message}");
+            return Task.FromResult(Result<int>.Failure($"Batch save error: {ex.Message}"));
         }
     }
 

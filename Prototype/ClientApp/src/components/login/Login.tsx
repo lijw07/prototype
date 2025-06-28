@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { useForm, validationRules } from '../../hooks/useForm';
+import { useForm } from '../../hooks/shared';
+import { useFormSubmission } from '../../hooks/shared';
 import { authApi } from '../../services/api';
+import { loginSchema, validationSchemas } from '../../utils/validation/schemas';
 import { Eye, EyeOff, Lock, User, CheckCircle } from 'lucide-react';
 
-interface LoginFormData {
-  username: string;
-  password: string;
-}
+import { LoginFormData } from '../../utils/validation/schemas';
 
 interface RecoveryFormData {
   recoveryEmail: string;
@@ -56,49 +55,94 @@ const LoginForm: React.FC = () => {
     };
   }, []);
 
+  // Enhanced login form with validation and error handling
   const loginForm = useForm<LoginFormData>({
     initialValues: {
       username: '',
       password: '',
     },
     validationRules: {
-      username: validationRules.username,
+      username: { required: true, validate: (value) => value.length < 3 ? 'Username must be at least 3 characters' : null },
       password: { required: true },
-    },
-    onSubmit: async (values) => {
-      const result = await login(values);
-      if (result.success) {
-        navigate(from, { replace: true });
-      } else {
-        loginForm.setError('username', 'Invalid credentials');
-        loginForm.setError('password', result.message);
-      }
-    },
+    }
   });
 
+  // Form submission with error handling
+  const { execute: submitLogin, loading: isSubmitting } = useFormSubmission(
+    async (values: LoginFormData) => {
+      const result = await login(values);
+      if (result.success) {
+        return { success: true, data: result };
+      } else {
+        throw new Error(result.message || 'Invalid credentials');
+      }
+    },
+    {
+      successMessage: 'Login successful! Redirecting...',
+      onSuccess: () => {
+        navigate(from, { replace: true });
+      },
+      onValidationError: (errors) => {
+        Object.entries(errors).forEach(([field, error]) => {
+          loginForm.setError(field as keyof LoginFormData, error);
+        });
+      }
+    }
+  );
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const isValid = loginForm.validateForm();
+    if (isValid) {
+      await submitLogin(loginForm.values);
+    }
+  };
+
+  // Recovery form with validation
   const recoveryForm = useForm<RecoveryFormData>({
     initialValues: {
       recoveryEmail: '',
       recoveryType: 'PASSWORD',
     },
     validationRules: {
-      recoveryEmail: validationRules.email,
-      recoveryType: validationRules.required,
+      recoveryEmail: { required: true, validate: (value) => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(value) ? null : 'Please enter a valid email address';
+      }},
+      recoveryType: { required: true },
+    }
+  });
+
+  // Recovery form submission
+  const { execute: submitRecovery, loading: isRecoverySubmitting } = useFormSubmission(
+    async (values: RecoveryFormData) => {
+      return await authApi.forgotPassword(values.recoveryEmail, values.recoveryType);
     },
-    onSubmit: async (values) => {
-      try {
-        await authApi.forgotPassword(values.recoveryEmail, values.recoveryType);
+    {
+      successMessage: 'Recovery email sent successfully! Check your inbox.',
+      onSuccess: () => {
         setRecoverySuccess(true);
-        recoveryForm.reset();
+        recoveryForm.resetForm();
         setTimeout(() => {
           setShowRecovery(false);
           setRecoverySuccess(false);
         }, 3000);
-      } catch (error: any) {
-        recoveryForm.setError('recoveryEmail', error.message || 'Recovery request failed');
+      },
+      onValidationError: (errors) => {
+        Object.entries(errors).forEach(([field, error]) => {
+          recoveryForm.setError(field as keyof RecoveryFormData, error);
+        });
       }
-    },
-  });
+    }
+  );
+
+  const handleRecoverySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const isValid = recoveryForm.validateForm();
+    if (isValid) {
+      await submitRecovery(recoveryForm.values);
+    }
+  };
 
 
   return (
@@ -128,7 +172,7 @@ const LoginForm: React.FC = () => {
                         </p>
                       </div>
 
-                      <form onSubmit={loginForm.handleSubmit}>
+                      <form onSubmit={handleLoginSubmit}>
                     <div className="mb-4">
                       <label htmlFor="username" className="form-label fw-semibold">
                         <User className="me-2" size={16} />
@@ -211,10 +255,10 @@ const LoginForm: React.FC = () => {
                     <div className="d-grid mb-3">
                       <button
                           type="submit"
-                          disabled={loginForm.isSubmitting || !loginForm.isValid}
+                          disabled={isSubmitting || !loginForm.isValid}
                           className="btn btn-primary btn-lg rounded-3 fw-semibold"
                       >
-                        {loginForm.isSubmitting ? (
+                        {isSubmitting ? (
                             <>
                               <div className="spinner-border spinner-border-sm me-2" role="status">
                                 <span className="visually-hidden">Loading...</span>
@@ -257,7 +301,7 @@ const LoginForm: React.FC = () => {
                           </span>
                         </div>
                       ) : (
-                        <form onSubmit={recoveryForm.handleSubmit}>
+                        <form onSubmit={handleRecoverySubmit}>
                           <div className="mb-4">
                             <label htmlFor="recoveryEmail" className="form-label fw-semibold">
                               Email Address
@@ -301,10 +345,10 @@ const LoginForm: React.FC = () => {
                           <div className="d-grid mb-3">
                             <button
                                 type="submit"
-                                disabled={recoveryForm.isSubmitting || !recoveryForm.isValid}
+                                disabled={isRecoverySubmitting || !recoveryForm.isValid}
                                 className="btn btn-primary btn-lg rounded-3 fw-semibold"
                             >
-                              {recoveryForm.isSubmitting ? (
+                              {isRecoverySubmitting ? (
                                   <>
                                     <div className="spinner-border spinner-border-sm me-2" role="status">
                                       <span className="visually-hidden">Loading...</span>

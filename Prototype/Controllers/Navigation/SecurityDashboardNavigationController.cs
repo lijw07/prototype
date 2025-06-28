@@ -8,13 +8,13 @@ using Prototype.Utility;
 namespace Prototype.Controllers.Navigation;
 
 [Authorize]
-[Route("api/security-dashboard")]
+[Route("navigation/security-dashboard")]
 [ApiController]
 public class SecurityDashboardNavigationController(
     SentinelContext context,
     IAuthenticatedUserAccessor userAccessor,
     ILogger<SecurityDashboardNavigationController> logger)
-    : ControllerBase
+    : BaseNavigationController(logger, context, userAccessor)
 {
     [HttpGet("overview")]
     public async Task<IActionResult> GetSecurityOverview()
@@ -23,7 +23,7 @@ public class SecurityDashboardNavigationController(
         {
             var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
+                return HandleUserNotAuthenticated(); 
 
             var now = DateTime.UtcNow;
             var last24Hours = now.AddHours(-24);
@@ -131,7 +131,7 @@ public class SecurityDashboardNavigationController(
         {
             var currentUser = await userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
+                return HandleUserNotAuthenticated();
 
             var cutoffDate = DateTime.UtcNow.AddDays(-days);
 

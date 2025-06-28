@@ -1,53 +1,29 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
+using Prototype.Services;
+using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
 
-[Route("[controller]")]
+[Route("navigation/application-log")]
 public class ApplicationLogNavigationController(
     SentinelContext context,
+    IAuthenticatedUserAccessor userAccessor,
+    TransactionService transactionService,
+    IAuditLogService auditLogService,
+    INavigationService navigationService,
     ILogger<ApplicationLogNavigationController> logger)
-    : BaseNavigationController(logger)
+    : BaseNavigationController(logger, context, userAccessor, transactionService, auditLogService)
 {
+    private readonly INavigationService _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
+
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
-        try
+        return await ExecuteWithErrorHandlingAsync(async () =>
         {
-            // Validate pagination parameters
-            if (page < 1) page = 1;
-            if (pageSize < 1 || pageSize > 100) pageSize = 50;
-
-            var skip = (page - 1) * pageSize;
-
-            var logs = await context.ApplicationLogs
-                .Include(log => log.Application)
-                .OrderByDescending(log => log.CreatedAt)
-                .Skip(skip)
-                .Take(pageSize)
-                .Select(log => new
-                {
-                    ApplicationLogId = log.ApplicationLogId,
-                    ApplicationId = log.ApplicationId,
-                    ApplicationName = log.Application != null ? log.Application.ApplicationName : "[Deleted Application]",
-                    ActionType = log.ActionType,
-                    Metadata = log.Metadata,
-                    CreatedAt = log.CreatedAt,
-                    UpdatedAt = log.UpdatedAt
-                })
-                .ToListAsync();
-
-            var totalCount = await context.ApplicationLogs.CountAsync();
-
-            var result = CreatePaginatedResponse(logs, page, pageSize, totalCount);
-
-            return Ok(new { success = true, data = result });
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Error retrieving application logs");
-            return StatusCode(500, new { success = false, message = "An internal error occurred" });
-        }
+            var result = await _navigationService.GetApplicationLogsPagedAsync(page, pageSize);
+            return SuccessResponse(result, "Application logs retrieved successfully");
+        }, "retrieving application logs");
     }
 }

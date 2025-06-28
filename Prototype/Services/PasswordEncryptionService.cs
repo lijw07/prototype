@@ -1,9 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Services;
 
-public class PasswordEncryptionService
+public class PasswordEncryptionService : IPasswordEncryptionService
 {
     private readonly byte[] _key;
     private const string EncryptionPrefix = "ENC:";

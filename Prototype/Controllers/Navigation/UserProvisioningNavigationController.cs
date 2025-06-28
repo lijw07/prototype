@@ -9,25 +9,28 @@ using Prototype.Utility;
 namespace Prototype.Controllers.Navigation;
 
 [Authorize]
-[Route("api/user-provisioning")]
+[Route("navigation/user-provisioning")]
 [ApiController]
 public class UserProvisioningNavigationController(
     SentinelContext context,
     IAuthenticatedUserAccessor userAccessor,
     ILogger<UserProvisioningNavigationController> logger)
-    : ControllerBase
+    : BaseNavigationController(logger, context, userAccessor)
 {
+    private readonly SentinelContext _context = context;
+    private readonly IAuthenticatedUserAccessor _userAccessor = userAccessor;
+
     [HttpGet("overview")]
     public async Task<IActionResult> GetProvisioningOverview()
     {
         try
         {
-            var currentUser = await userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
+                return HandleUserNotAuthenticated();
 
             var overview = await CollectProvisioningMetrics();
-            return Ok(new { success = true, data = overview });
+            return SuccessResponse(new { success = true, data = overview });
         }
         catch (Exception ex)
         {
@@ -41,7 +44,7 @@ public class UserProvisioningNavigationController(
     {
         try
         {
-            var currentUser = await userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -60,7 +63,7 @@ public class UserProvisioningNavigationController(
     {
         try
         {
-            var currentUser = await userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -79,7 +82,7 @@ public class UserProvisioningNavigationController(
     {
         try
         {
-            var currentUser = await userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
                 return Unauthorized(new { success = false, message = "User not authenticated" });
 
@@ -107,18 +110,18 @@ public class UserProvisioningNavigationController(
             var cancellationToken = cancellationTokenSource.Token;
 
             // Run COUNT queries sequentially to avoid DbContext concurrency issues
-            var totalUsers = await context.Users.CountAsync(cancellationToken);
-            var pendingUsers = await context.TemporaryUsers.CountAsync(cancellationToken);
-            var recentlyProvisioned = await context.Users
+            var totalUsers = await _context.Users.CountAsync(cancellationToken);
+            var pendingUsers = await _context.TemporaryUsers.CountAsync(cancellationToken);
+            var recentlyProvisioned = await _context.Users
                 .Where(u => u.CreatedAt >= last7Days)
                 .CountAsync(cancellationToken);
-            var totalApplications = await context.Applications.CountAsync(cancellationToken);
-            var usersWithAccess = await context.UserApplications
+            var totalApplications = await _context.Applications.CountAsync(cancellationToken);
+            var usersWithAccess = await _context.UserApplications
                 .Select(ua => ua.UserId)
                 .Distinct()
                 .CountAsync(cancellationToken);
-            var totalRoles = await context.UserRoles.CountAsync(cancellationToken);
-            var usersWithRoles = await context.Users
+            var totalRoles = await _context.UserRoles.CountAsync(cancellationToken);
+            var usersWithRoles = await _context.Users
                 .Where(u => !string.IsNullOrEmpty(u.Role))
                 .CountAsync(cancellationToken);
 
@@ -225,7 +228,7 @@ public class UserProvisioningNavigationController(
     {
         var skip = (page - 1) * pageSize;
         
-        var pendingUsersData = await context.TemporaryUsers
+        var pendingUsersData = await _context.TemporaryUsers
             .OrderBy(tu => tu.CreatedAt)
             .Skip(skip)
             .Take(pageSize)
@@ -246,7 +249,7 @@ public class UserProvisioningNavigationController(
             })
             .ToList();
 
-        var totalCount = await context.TemporaryUsers.CountAsync();
+        var totalCount = await _context.TemporaryUsers.CountAsync();
 
         return new
         {
@@ -277,7 +280,7 @@ public class UserProvisioningNavigationController(
             ? now.AddDays(-request.Criteria.MaxDaysWaiting.Value)
             : DateTime.MinValue;
 
-        var eligibleUsers = await context.TemporaryUsers
+        var eligibleUsers = await _context.TemporaryUsers
             .Where(tu => request.Criteria.MaxDaysWaiting == null || 
                         tu.CreatedAt >= cutoffDate)
             .Take(request.MaxUsers ?? 50)
@@ -302,8 +305,8 @@ public class UserProvisioningNavigationController(
                     PasswordHash = tempUser.PasswordHash
                 };
 
-                context.Users.Add(newUser);
-                context.TemporaryUsers.Remove(tempUser);
+                _context.Users.Add(newUser);
+                _context.TemporaryUsers.Remove(tempUser);
 
                 processed.Add(new
                 {
@@ -324,7 +327,7 @@ public class UserProvisioningNavigationController(
             }
         }
 
-        await context.SaveChangesAsync();
+        await _context.SaveChangesAsync();
 
         return new
         {
@@ -339,7 +342,7 @@ public class UserProvisioningNavigationController(
     private async Task<List<object>> GetTemplates()
     {
         // Role-based templates
-        var roles = await context.UserRoles
+        var roles = await _context.UserRoles
             .Select(r => r.Role)
             .Distinct()
             .ToListAsync();
@@ -394,7 +397,7 @@ public class UserProvisioningNavigationController(
             // Add timeout protection for trends query
             using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             
-            var rawMonthlyData = await context.Users
+            var rawMonthlyData = await _context.Users
                 .Where(u => u.CreatedAt >= last6Months)
                 .GroupBy(u => new { u.CreatedAt.Year, u.CreatedAt.Month })
                 .Select(g => new
@@ -450,7 +453,7 @@ public class UserProvisioningNavigationController(
             Metadata = $"{action}: User {user.Username} provisioned by {currentUser.Username}",
             CreatedAt = DateTime.UtcNow
         };
-        context.AuditLogs.Add(auditLog);
+        _context.AuditLogs.Add(auditLog);
     }
 
 }

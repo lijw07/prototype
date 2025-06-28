@@ -6,24 +6,27 @@ using Prototype.Utility;
 
 namespace Prototype.Controllers.Navigation;
 
-[Route("[controller]")]
+[Route("navigation/dashboard")]
 public class DashboardNavigationController(
     SentinelContext context,
     IAuthenticatedUserAccessor userAccessor,
     ILogger<DashboardNavigationController> logger)
-    : ControllerBase
+    : BaseNavigationController(logger, context, userAccessor)
 {
+    private readonly SentinelContext _context = context;
+    private readonly IAuthenticatedUserAccessor _userAccessor = userAccessor;
+
     [HttpGet("statistics")]
     public async Task<IActionResult> GetDashboardStatistics()
     {
         try
         {
-            var currentUser = await userAccessor.GetCurrentUserAsync(User);
+            var currentUser = await _userAccessor.GetCurrentUserAsync(User);
             if (currentUser == null)
-                return Unauthorized(new { success = false, message = "User not authenticated" });
+                return HandleUserNotAuthenticated();
 
             // Get user's applications (the ones they have access to)
-            var userApplications = await context.UserApplications
+            var userApplications = await _context.UserApplications
                 .Where(ua => ua.UserId == currentUser.UserId)
                 .Include(ua => ua.Application)
                 .Include(ua => ua.ApplicationConnection)
@@ -34,7 +37,7 @@ public class DashboardNavigationController(
 
             // Count active connections (assuming active means recently used - within last 30 days)
             var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
-            var activeConnections = await context.UserActivityLogs
+            var activeConnections = await _context.UserActivityLogs
                 .Where(log => log.UserId == currentUser.UserId && 
                              log.Timestamp >= thirtyDaysAgo &&
                              (log.ActionType == ActionTypeEnum.ApplicationAdded || 
@@ -44,21 +47,21 @@ public class DashboardNavigationController(
                 .CountAsync();
 
             // Get user statistics breakdown
-            var totalVerifiedUsers = await context.Users.CountAsync();
-            var totalTemporaryUsers = await context.TemporaryUsers.CountAsync();
+            var totalVerifiedUsers = await _context.Users.CountAsync();
+            var totalTemporaryUsers = await _context.TemporaryUsers.CountAsync();
             var totalUsers = totalVerifiedUsers + totalTemporaryUsers;
             
             // Get total roles in the system
-            var totalRoles = await context.UserRoles.CountAsync();
+            var totalRoles = await _context.UserRoles.CountAsync();
 
             // Get recent activity count (last 24 hours for this user)
             var twentyFourHoursAgo = DateTime.UtcNow.AddHours(-24);
-            var recentActivity = await context.UserActivityLogs
+            var recentActivity = await _context.UserActivityLogs
                 .Where(log => log.UserId == currentUser.UserId && log.Timestamp >= twentyFourHoursAgo)
                 .CountAsync();
 
             // Get recent activity details (last 10 activities for this user)
-            var recentActivities = await context.UserActivityLogs
+            var recentActivities = await _context.UserActivityLogs
                 .Where(log => log.UserId == currentUser.UserId)
                 .OrderByDescending(log => log.Timestamp)
                 .Take(10)
@@ -95,7 +98,7 @@ public class DashboardNavigationController(
             };
 
             logger.LogInformation("Dashboard statistics retrieved for user: {Username}", currentUser.Username);
-            return Ok(statistics);
+            return SuccessResponse(statistics);
         }
         catch (Exception ex)
         {

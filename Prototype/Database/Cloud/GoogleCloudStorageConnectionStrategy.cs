@@ -5,13 +5,13 @@ using Prototype.Database.Interface;
 using Prototype.DTOs;
 using Prototype.Enum;
 using Prototype.Models;
-using Prototype.Services;
 using System.Text;
+using Prototype.Services.Interfaces;
 
 namespace Prototype.Database.Cloud;
 
 public class GoogleCloudStorageConnectionStrategy(
-    PasswordEncryptionService encryptionService,
+    IPasswordEncryptionService encryptionService,
     ILogger<GoogleCloudStorageConnectionStrategy> logger)
     : IFileConnectionStrategy
 {

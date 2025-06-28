@@ -1,19 +1,25 @@
 using Microsoft.EntityFrameworkCore;
+using Prototype.Constants;
 using Prototype.Data;
 using Prototype.DTOs;
 using Prototype.DTOs.Responses;
 using Prototype.Enum;
+using Prototype.Exceptions;
 using Prototype.Models;
 using Prototype.Services.Interfaces;
+using Prototype.Services.Validators;
 
 namespace Prototype.Services;
 
 public class AuthenticationService(
     SentinelContext context,
     IJwtTokenService jwtTokenService,
-    PasswordEncryptionService passwordService,
-    ValidationService validationService,
-    ILogger<AuthenticationService> logger)
+    IPasswordEncryptionService passwordService,
+    LoginRequestValidator loginValidator,
+    ILogger<AuthenticationService> logger,
+    IHttpContextAccessor httpContextAccessor,
+    IAuditLogService auditLogService,
+    IHttpContextParsingService httpContextParsingService)
     : IAuthenticationService
 {
     public async Task<LoginResponse> AuthenticateAsync(LoginRequestDto request)
@@ -21,12 +27,13 @@ public class AuthenticationService(
         try
         {
             // Validation
-            var validationResult = validationService.ValidateLoginRequest(request);
+            var validationResult = await loginValidator.ValidateAsync(request);
             if (!validationResult.IsSuccess)
                 return new LoginResponse
                 {
                     Success = false,
-                    Message = "Validation failed"
+                    Message = ApplicationConstants.ErrorMessages.InvalidRequest,
+                    Errors = validationResult.Errors
                 };
 
             // Find user
@@ -39,7 +46,7 @@ public class AuthenticationService(
                 return new LoginResponse
                 {
                     Success = false,
-                    Message = "Invalid username or password"
+                    Message = ApplicationConstants.ErrorMessages.InvalidCredentials
                 };
             }
 
@@ -47,20 +54,12 @@ public class AuthenticationService(
             user.LastLogin = DateTime.UtcNow;
             user.UpdatedAt = DateTime.UtcNow;
 
-            // Create activity log
-            var userActivityLog = new UserActivityLogModel
-            {
-                UserActivityLogId = Guid.NewGuid(),
-                UserId = user.UserId,
-                User = user,
-                IpAddress = "127.0.0.1", // Would need HttpContext to get real IP
-                DeviceInformation = "Unknown", // Would need HttpContext to get real device info
-                ActionType = ActionTypeEnum.Login,
-                Description = "User logged in",
-                Timestamp = DateTime.UtcNow
-            };
-
-            context.UserActivityLogs.Add(userActivityLog);
+            // Create activity log using centralized service
+            var httpContext = httpContextAccessor.HttpContext;
+            var ipAddress = httpContextParsingService.GetClientIpAddress(httpContext);
+            var deviceInfo = httpContextParsingService.GetDeviceInformation(httpContext);
+            
+            await auditLogService.CreateUserActivityLogAsync(user.UserId, ActionTypeEnum.Login, "User logged in", ipAddress, deviceInfo);
             await context.SaveChangesAsync();
 
             // Generate token
@@ -70,17 +69,54 @@ public class AuthenticationService(
             return new LoginResponse
             {
                 Success = true,
-                Message = "Login successful",
+                Message = ApplicationConstants.SuccessMessages.LoginSuccess,
                 Token = token
+            };
+        }
+        catch (ValidationException ex)
+        {
+            logger.LogWarning(ex, "Validation failed during authentication for username: {Username}", request.Username);
+            return new LoginResponse
+            {
+                Success = false,
+                Message = ex.Message
+            };
+        }
+        catch (AuthenticationException ex)
+        {
+            logger.LogWarning(ex, "Authentication failed for username: {Username} from IP: {IpAddress}", 
+                request.Username, ex.IpAddress);
+            return new LoginResponse
+            {
+                Success = false,
+                Message = ex.Message
+            };
+        }
+        catch (DataNotFoundException ex)
+        {
+            logger.LogWarning(ex, "User not found during authentication: {Username}", request.Username);
+            return new LoginResponse
+            {
+                Success = false,
+                Message = ApplicationConstants.ErrorMessages.InvalidCredentials
+            };
+        }
+        catch (ExternalServiceException ex)
+        {
+            logger.LogError(ex, "External service failure during authentication for username: {Username}", request.Username);
+            return new LoginResponse
+            {
+                Success = false,
+                Message = "Authentication service temporarily unavailable"
             };
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error during authentication for username: {Username}", request.Username);
+            logger.LogError(ex, "Unexpected error during authentication for username: {Username}", request.Username);
             return new LoginResponse
             {
                 Success = false,
-                Message = "An error occurred during authentication"
+                Message = ApplicationConstants.ErrorMessages.ServerError
             };
         }
     }

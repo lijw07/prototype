@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { RefreshCw, CheckCircle, AlertCircle, Upload, X, Maximize2, Minimize2 } from 'lucide-react';
-import { useMigration } from '../../context/MigrationContext';
+import { useMigration } from '../../contexts/MigrationContext';
 import { MinimizedMigrationIndicator } from './MinimizedMigrationIndicator';
 
 interface GlobalMigrationIndicatorProps {

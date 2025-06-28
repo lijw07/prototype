@@ -12,14 +12,14 @@ public class UserAccountService(
     SentinelContext context,
     IJwtTokenService jwtTokenService,
     IEmailNotificationFactoryService emailService,
-    ValidationService validationService,
     TransactionService transactionService,
-    PasswordEncryptionService passwordService,
+    IPasswordEncryptionService passwordService,
     ILogger<UserAccountService> logger,
-    IHttpContextAccessor httpContextAccessor)
+    IHttpContextAccessor httpContextAccessor,
+    IHttpContextParsingService httpContextParsingService,
+    IAuditLogService auditLogService)
     : IUserAccountService
 {
-    private readonly ValidationService _validationService = validationService;
 
     public async Task<UserModel?> GetUserByEmailAsync(string email)
     {
@@ -139,11 +139,6 @@ public class UserAccountService(
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to send password reset email to {Email}. Recovery request {RecoveryId} was saved but email failed.", request.Email, userRecovery.UserRecoveryRequestId);
-                
-                // TODO:
-                // Don't return error here - the recovery request was saved successfully
-                // User can still use the token if they have it, or admin can manually send
-                // Just log the email failure and continue
             }
 
             await CreateAuditLogAsync(user.UserId, ActionTypeEnum.ForgotPassword, "Password reset requested");
@@ -282,97 +277,13 @@ public class UserAccountService(
 
     public async Task CreateUserActivityLogAsync(Guid userId, ActionTypeEnum action, string description)
     {
-        var user = await context.Users.FindAsync(userId);
-        if (user != null)
-        {
-            var httpContext = httpContextAccessor.HttpContext;
-            var ipAddress = GetClientIpAddress(httpContext);
-            var deviceInfo = GetDeviceInformation(httpContext);
+        var httpContext = httpContextAccessor.HttpContext;
+        var ipAddress = httpContextParsingService.GetClientIpAddress(httpContext);
+        var deviceInfo = httpContextParsingService.GetDeviceInformation(httpContext);
 
-            var activityLog = new UserActivityLogModel
-            {
-                UserActivityLogId = Guid.NewGuid(),
-                UserId = userId,
-                User = user,
-                IpAddress = ipAddress,
-                DeviceInformation = deviceInfo,
-                ActionType = action,
-                Description = description,
-                Timestamp = DateTime.UtcNow
-            };
-
-            context.UserActivityLogs.Add(activityLog);
-            // Note: SaveChanges will be called by the transaction service
-        }
+        await auditLogService.CreateUserActivityLogAsync(userId, action, description, ipAddress, deviceInfo);
     }
 
-    private string GetClientIpAddress(HttpContext? httpContext)
-    {
-        if (httpContext == null)
-            return "Unknown";
-
-        // Check for forwarded IP first (for reverse proxy scenarios)
-        var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(forwardedFor))
-        {
-            return forwardedFor.Split(',')[0].Trim();
-        }
-
-        // Check for real IP header
-        var realIp = httpContext.Request.Headers["X-Real-IP"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(realIp))
-        {
-            return realIp;
-        }
-
-        // Fall back to remote IP address
-        return httpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
-    }
-
-    private string GetDeviceInformation(HttpContext? httpContext)
-    {
-        if (httpContext == null)
-            return "Unknown";
-
-        var userAgent = httpContext.Request.Headers["User-Agent"].FirstOrDefault();
-        if (string.IsNullOrEmpty(userAgent))
-            return "Unknown";
-
-        // Extract basic device information from User-Agent
-        var deviceInfo = new List<string>();
-
-        // Check for mobile devices
-        if (userAgent.Contains("Mobile", StringComparison.OrdinalIgnoreCase))
-            deviceInfo.Add("Mobile");
-        else if (userAgent.Contains("Tablet", StringComparison.OrdinalIgnoreCase))
-            deviceInfo.Add("Tablet");
-        else
-            deviceInfo.Add("Desktop");
-
-        // Extract browser information
-        if (userAgent.Contains("Chrome", StringComparison.OrdinalIgnoreCase))
-            deviceInfo.Add("Chrome");
-        else if (userAgent.Contains("Firefox", StringComparison.OrdinalIgnoreCase))
-            deviceInfo.Add("Firefox");
-        else if (userAgent.Contains("Safari", StringComparison.OrdinalIgnoreCase))
-            deviceInfo.Add("Safari");
-        else if (userAgent.Contains("Edge", StringComparison.OrdinalIgnoreCase))
-            deviceInfo.Add("Edge");
-
-        // Extract OS information
-        if (userAgent.Contains("Windows", StringComparison.OrdinalIgnoreCase))
-            deviceInfo.Add("Windows");
-        else if (userAgent.Contains("Mac", StringComparison.OrdinalIgnoreCase))
-            deviceInfo.Add("macOS");
-        else if (userAgent.Contains("Linux", StringComparison.OrdinalIgnoreCase))
-            deviceInfo.Add("Linux");
-        else if (userAgent.Contains("Android", StringComparison.OrdinalIgnoreCase))
-            deviceInfo.Add("Android");
-        else if (userAgent.Contains("iOS", StringComparison.OrdinalIgnoreCase))
-            deviceInfo.Add("iOS");
-
-        return deviceInfo.Count > 0 ? string.Join(", ", deviceInfo) : "Unknown";
-    }
 
     public async Task<LoginResponse> UpdateUserAsync(UpdateUserRequestDto request)
     {
@@ -434,47 +345,76 @@ public class UserAccountService(
 
     public async Task<LoginResponse> DeleteUserAsync(Guid userId)
     {
-        return await transactionService.ExecuteInTransactionAsync(async () =>
+        var user = await GetUserByIdAsync(userId);
+        if (user == null)
         {
-            var user = await GetUserByIdAsync(userId);
-            if (user == null)
-            {
-                return new LoginResponse
-                {
-                    Success = false,
-                    Message = "User not found"
-                };
-            }
-
-            // Remove user from database
-            context.Users.Remove(user);
-            await context.SaveChangesAsync();
-
             return new LoginResponse
             {
-                Success = true,
-                Message = "User deleted successfully"
+                Success = false,
+                Message = "User not found"
             };
-        });
+        }
+
+        // Delete related records first to avoid foreign key constraint violations
+        
+        // Delete UserApplications
+        var userApplications = await context.UserApplications
+            .Where(ua => ua.UserId == userId)
+            .ToListAsync();
+        if (userApplications.Any())
+        {
+            context.UserApplications.RemoveRange(userApplications);
+        }
+
+        // Delete UserActivityLogs
+        var userActivityLogs = await context.UserActivityLogs
+            .Where(ual => ual.UserId == userId)
+            .ToListAsync();
+        if (userActivityLogs.Any())
+        {
+            context.UserActivityLogs.RemoveRange(userActivityLogs);
+        }
+
+        // Delete AuditLogs
+        var auditLogs = await context.AuditLogs
+            .Where(al => al.UserId == userId)
+            .ToListAsync();
+        if (auditLogs.Any())
+        {
+            context.AuditLogs.RemoveRange(auditLogs);
+        }
+
+        // Delete UserRecoveryRequests
+        var recoveryRequests = await context.UserRecoveryRequests
+            .Where(urr => urr.UserId == userId)
+            .ToListAsync();
+        if (recoveryRequests.Any())
+        {
+            context.UserRecoveryRequests.RemoveRange(recoveryRequests);
+        }
+
+        // Delete BulkUploadHistories
+        var bulkUploadHistories = await context.BulkUploadHistories
+            .Where(buh => buh.UserId == userId)
+            .ToListAsync();
+        if (bulkUploadHistories.Any())
+        {
+            context.BulkUploadHistories.RemoveRange(bulkUploadHistories);
+        }
+
+        // Finally remove the user
+        context.Users.Remove(user);
+
+        return new LoginResponse
+        {
+            Success = true,
+            Message = "User deleted successfully"
+        };
     }
 
 
     public async Task CreateAuditLogAsync(Guid userId, ActionTypeEnum action, string metadata)
     {
-        var user = await context.Users.FindAsync(userId);
-        if (user != null)
-        {
-            var auditLog = new AuditLogModel
-            {
-                AuditLogId = Guid.NewGuid(),
-                UserId = userId,
-                User = user,
-                ActionType = action,
-                Metadata = metadata,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            context.AuditLogs.Add(auditLog);
-        }
+        await auditLogService.CreateAuditLogAsync(userId, action, metadata);
     }
 }

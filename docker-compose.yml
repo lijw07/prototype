@@ -11,7 +11,8 @@ services:
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
       - BROWSER=none
-      - REACT_APP_API_URL=http://127.0.0.1:8080
+      - REACT_APP_API_URL=http://backend:8080
+      - REACT_APP_WS_URL=ws://backend:8080
       - NODE_ENV=development
       - GENERATE_SOURCEMAP=true
       - WDS_SOCKET_HOST=localhost

@@ -158,7 +158,7 @@ export default function Accounts() {
       while (hasMoreData) {
         const usersResponse = await userApi.getAllUsers(currentPage, maxPageSize);
         
-        if (usersResponse.success && usersResponse.data?.data) {
+        if (usersResponse.data?.data && usersResponse.data.data.length > 0) {
           const transformedUsers: User[] = usersResponse.data.data.map((user: any) => ({
             userId: user.userId,
             firstName: user.firstName,
@@ -176,27 +176,11 @@ export default function Accounts() {
           allUsers = [...allUsers, ...transformedUsers];
           
           // Check if we've fetched all pages
-          const totalPages = usersResponse.data.totalPages || 1;
+          const totalPages = usersResponse.data?.totalPages || 1;
           hasMoreData = currentPage < totalPages;
           currentPage++;
-        } else if (usersResponse.success && usersResponse.users) {
-          // Fallback for old API response format
-          const transformedUsers: User[] = usersResponse.users.map((user: any) => ({
-            userId: user.userId,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            username: user.username,
-            email: user.email,
-            phoneNumber: user.phoneNumber,
-            isActive: user.isActive,
-            role: user.role,
-            lastLogin: user.lastLogin,
-            createdAt: user.createdAt,
-            isTemporary: user.isTemporary || false
-          }));
-          allUsers = transformedUsers;
-          hasMoreData = false; // Old format returns all data at once
         } else {
+          // No more data to fetch
           hasMoreData = false;
         }
       }
@@ -217,7 +201,7 @@ export default function Accounts() {
     try {
       const usersResponse = await userApi.getAllUsers(page, size);
       
-      if (usersResponse.success && usersResponse.data?.data) {
+      if (usersResponse && usersResponse.data?.data) {
         const transformedUsers: User[] = usersResponse.data.data.map((user: any) => ({
           userId: user.userId,
           firstName: user.firstName,
@@ -233,36 +217,12 @@ export default function Accounts() {
         }));
         
         setUsers(transformedUsers);
-        setCurrentPage(usersResponse.data.page || page);
-        setPageSize(usersResponse.data.pageSize || size);
-        setTotalCount(usersResponse.data.totalCount || 0);
-        setTotalPages(usersResponse.data.totalPages || 1);
-      } else if (usersResponse.success && usersResponse.users) {
-        // Fallback for old API response format - use client-side pagination
-        const allTransformedUsers: User[] = usersResponse.users.map((user: any) => ({
-          userId: user.userId,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          username: user.username,
-          email: user.email,
-          phoneNumber: user.phoneNumber,
-          isActive: user.isActive,
-          role: user.role,
-          lastLogin: user.lastLogin,
-          createdAt: user.createdAt,
-          isTemporary: user.isTemporary || false
-        }));
-        const startIndex = (page - 1) * size;
-        const endIndex = startIndex + size;
-        const paginatedUsers = allTransformedUsers.slice(startIndex, endIndex);
-        setUsers(paginatedUsers);
-        // Set pagination values for non-paginated response
-        setTotalCount(allTransformedUsers.length);
-        setTotalPages(Math.ceil(allTransformedUsers.length / size));
-        setCurrentPage(page);
-        setPageSize(size);
+        setCurrentPage(usersResponse.data?.page || page);
+        setPageSize(usersResponse.data?.pageSize || size);
+        setTotalCount(usersResponse.data?.totalCount || 0);
+        setTotalPages(usersResponse.data?.totalPages || 1);
       } else {
-        console.error('Failed to load users:', usersResponse.message);
+        console.error('Failed to load users: Invalid response format');
         setUsers([]);
       }
     } catch (error) {
@@ -274,13 +234,10 @@ export default function Accounts() {
     try {
       const rolesResponse = await roleApi.getAllRoles(1, 100); // Get up to 100 roles
       
-      if (rolesResponse.success && rolesResponse.data?.data) {
+      if (rolesResponse && rolesResponse.data?.data) {
         setRoles(rolesResponse.data.data);
-      } else if (rolesResponse.success && rolesResponse.roles) {
-        // Fallback for old API response format
-        setRoles(rolesResponse.roles);
       } else {
-        console.error('Failed to load roles:', rolesResponse.message);
+        console.error('Failed to load roles: Invalid response format');
         setRoles([]);
       }
     } catch (error) {
@@ -301,9 +258,9 @@ export default function Accounts() {
     } else {
       // For paginated view, check if we need to adjust page
       const response = await userApi.getAllUsers(currentPage, pageSize);
-      if (response.success && response.data?.data) {
-        const newTotalPages = response.data.totalPages || 1;
-        const newTotalCount = response.data.totalCount || 0;
+      if (response.data?.data && response.data.data.length >= 0) {
+        const newTotalPages = response.data?.totalPages || 1;
+        const newTotalCount = response.data?.totalCount || 0;
         
         if (currentPage > newTotalPages && newTotalCount > 0) {
           // Navigate to last available page
@@ -713,7 +670,7 @@ export default function Accounts() {
         response = await userApi.updateUser(editUserForm);
       }
       
-      if (response && response.success) {
+      if (response && response.message) {
         setEditSubmitSuccess(true);
         // Update the user in the local state
         setUsers(prevUsers => 
@@ -782,7 +739,7 @@ export default function Accounts() {
       
       const response = await userApi.updateUser(updatedUser);
       
-      if (response && response.success) {
+      if (response && response.message) {
         // Update the user in the local state
         setUsers(prevUsers => 
           prevUsers.map(u => 

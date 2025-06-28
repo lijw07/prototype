@@ -15,12 +15,6 @@ public class AuthenticatedUserAccessor(
 {
     private readonly TimeSpan _cacheExpiry = TimeSpan.FromMinutes(5);
 
-    public Task<UserModel?> GetCurrentUserAsync()
-    {
-        // Implementation would need HttpContext to get current user
-        throw new NotImplementedException("Use GetCurrentUserAsync(ClaimsPrincipal user) instead");
-    }
-
     public async Task<UserModel?> GetUserByIdAsync(Guid userId)
     {
         var cacheKey = $"user:{userId}";

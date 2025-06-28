@@ -1,12 +1,6 @@
-namespace Prototype.DTOs.BulkUpload;
+using Prototype.Enum;
 
-public enum ErrorCategoryEnum
-{
-    ValidationError = 0,
-    DuplicateRecord = 1,
-    SystemError = 2,
-    ProcessingError = 3
-}
+namespace Prototype.DTOs.BulkUpload;
 
 public class BulkUploadErrorDto
 {

@@ -1,8 +1,8 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { MigrationProvider } from './context/MigrationContext';
-import { NotificationProvider } from './context/NotificationContext';
+import { MigrationProvider } from './contexts/MigrationContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Accounts from './components/account/Accounts';
@@ -25,6 +25,11 @@ import ComplianceDashboard from './components/compliance/ComplianceDashboard';
 import Home from './components/home/Home';
 import About from './components/pages/About';
 import Contact from './components/pages/Contact';
+
+// Import test runner for development
+if (process.env.NODE_ENV === 'development') {
+  import('./utils/testRunner');
+}
 
 // Conditional redirect component
 function ConditionalRedirect() {

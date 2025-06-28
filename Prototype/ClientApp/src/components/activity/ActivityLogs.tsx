@@ -34,13 +34,13 @@ const ActivityLogs: React.FC = () => {
         setLoading(true);
         try {
             const response = await activityLogApi.getActivityLogs(page, pageSize);
-            if (response && response.data) {
-                setUserActivityLogs(response.data);
+            if (response && response.data?.data) {
+                setUserActivityLogs(response.data.data);
                 setPagination({
-                    page: response.page,
-                    pageSize: response.pageSize,
-                    totalCount: response.totalCount,
-                    totalPages: response.totalPages
+                    page: response.data.page || 1,
+                    pageSize: response.data.pageSize || pageSize,
+                    totalCount: response.data.totalCount || 0,
+                    totalPages: response.data.totalPages || 1
                 });
             } else {
                 setUserActivityLogs([]);

@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Prototype.Data;
 using Prototype.Helpers;
 using Prototype.Services.Interfaces;
@@ -9,105 +10,130 @@ public class TransactionService(SentinelContext context, ILogger<TransactionServ
 {
     public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation)
     {
-        using var transaction = await context.Database.BeginTransactionAsync();
-        try
+        var strategy = context.Database.CreateExecutionStrategy();
+        
+        return await strategy.ExecuteAsync(async () =>
         {
-            var result = await operation();
-            await context.SaveChangesAsync();
-            await transaction.CommitAsync();
-            return result;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Transaction rolled back due to error");
-            await transaction.RollbackAsync();
-            throw;
-        }
+            using var transaction = await context.Database.BeginTransactionAsync();
+            try
+            {
+                var result = await operation();
+                await context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return result;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Transaction rolled back due to error");
+                await transaction.RollbackAsync();
+                throw;
+            }
+        });
     }
 
     public async Task ExecuteInTransactionAsync(Func<Task> operation)
     {
-        using var transaction = await context.Database.BeginTransactionAsync();
-        try
+        var strategy = context.Database.CreateExecutionStrategy();
+        
+        await strategy.ExecuteAsync(async () =>
         {
-            await operation();
-            await context.SaveChangesAsync();
-            await transaction.CommitAsync();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Transaction rolled back due to error");
-            await transaction.RollbackAsync();
-            throw;
-        }
+            using var transaction = await context.Database.BeginTransactionAsync();
+            try
+            {
+                await operation();
+                await context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Transaction rolled back due to error");
+                await transaction.RollbackAsync();
+                throw;
+            }
+        });
     }
 
     // Interface implementation with Result pattern
     public async Task<Result<T>> ExecuteInTransactionAsync<T>(Func<Task<Result<T>>> operation)
     {
-        using var transaction = await context.Database.BeginTransactionAsync();
-        try
+        var strategy = context.Database.CreateExecutionStrategy();
+        
+        return await strategy.ExecuteAsync(async () =>
         {
-            var result = await operation();
-            if (result.IsSuccess)
+            using var transaction = await context.Database.BeginTransactionAsync();
+            try
             {
-                await context.SaveChangesAsync();
-                await transaction.CommitAsync();
+                var result = await operation();
+                if (result.IsSuccess)
+                {
+                    await context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                }
+                else
+                {
+                    await transaction.RollbackAsync();
+                }
+                return result;
             }
-            else
+            catch (Exception ex)
             {
+                logger.LogError(ex, "Transaction rolled back due to error");
                 await transaction.RollbackAsync();
+                return Result<T>.Failure($"Transaction failed: {ex.Message}");
             }
-            return result;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Transaction rolled back due to error");
-            await transaction.RollbackAsync();
-            return Result<T>.Failure($"Transaction failed: {ex.Message}");
-        }
+        });
     }
 
     public async Task<Result<bool>> ExecuteInTransactionAsync(Func<Task<Result<bool>>> operation)
     {
-        using var transaction = await context.Database.BeginTransactionAsync();
-        try
+        var strategy = context.Database.CreateExecutionStrategy();
+        
+        return await strategy.ExecuteAsync(async () =>
         {
-            var result = await operation();
-            if (result.IsSuccess)
+            using var transaction = await context.Database.BeginTransactionAsync();
+            try
             {
-                await context.SaveChangesAsync();
-                await transaction.CommitAsync();
+                var result = await operation();
+                if (result.IsSuccess)
+                {
+                    await context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                }
+                else
+                {
+                    await transaction.RollbackAsync();
+                }
+                return result;
             }
-            else
+            catch (Exception ex)
             {
+                logger.LogError(ex, "Transaction rolled back due to error");
                 await transaction.RollbackAsync();
+                return Result<bool>.Failure($"Transaction failed: {ex.Message}");
             }
-            return result;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Transaction rolled back due to error");
-            await transaction.RollbackAsync();
-            return Result<bool>.Failure($"Transaction failed: {ex.Message}");
-        }
+        });
     }
 
     public async Task<Result<bool>> ExecuteInTransactionWithResultAsync(Func<Task> operation)
     {
-        using var transaction = await context.Database.BeginTransactionAsync();
-        try
+        var strategy = context.Database.CreateExecutionStrategy();
+        
+        return await strategy.ExecuteAsync(async () =>
         {
-            await operation();
-            await context.SaveChangesAsync();
-            await transaction.CommitAsync();
-            return Result<bool>.Success(true);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Transaction rolled back due to error");
-            await transaction.RollbackAsync();
-            return Result<bool>.Failure($"Transaction failed: {ex.Message}");
-        }
+            using var transaction = await context.Database.BeginTransactionAsync();
+            try
+            {
+                await operation();
+                await context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return Result<bool>.Success(true);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Transaction rolled back due to error");
+                await transaction.RollbackAsync();
+                return Result<bool>.Failure($"Transaction failed: {ex.Message}");
+            }
+        });
     }
 }

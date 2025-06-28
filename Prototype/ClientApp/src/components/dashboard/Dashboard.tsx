@@ -102,13 +102,13 @@ export default function Dashboard() {
       let totalVerifiedUsers = 0;
       let totalTemporaryUsers = 0;
       
-      if (userCountsResponse.success && userCountsResponse.data) {
+      if (userCountsResponse.data?.totalUsers !== undefined) {
         totalUsers = userCountsResponse.data.totalUsers;
         totalVerifiedUsers = userCountsResponse.data.totalVerifiedUsers;
         totalTemporaryUsers = userCountsResponse.data.totalTemporaryUsers;
       }
       
-      const totalRoles = rolesResponse.success ? (rolesResponse.data?.totalCount || rolesResponse.data?.data?.length || 0) : 0;
+      const totalRoles = rolesResponse.data?.totalCount || rolesResponse.data?.data?.length || 0;
       
       setStats({
         totalApplications,
@@ -143,8 +143,8 @@ export default function Dashboard() {
       const combinedLogs: LogEntry[] = [];
       
       // Add audit logs
-      if (auditResponse?.data) {
-        auditResponse.data.slice(0, 2).forEach((log: any) => {
+      if (auditResponse?.data?.data) {
+        auditResponse.data.data.slice(0, 2).forEach((log: any) => {
           combinedLogs.push({
             id: log.id || log.auditLogId || Math.random().toString(),
             type: 'audit',
@@ -157,8 +157,8 @@ export default function Dashboard() {
       }
       
       // Add activity logs
-      if (activityResponse?.data) {
-        activityResponse.data.slice(0, 2).forEach((log: any) => {
+      if (activityResponse?.data?.data) {
+        activityResponse.data.data.slice(0, 2).forEach((log: any) => {
           combinedLogs.push({
             id: log.id || log.userActivityLogId || Math.random().toString(),
             type: 'activity',
@@ -190,8 +190,8 @@ export default function Dashboard() {
       
       // Calculate total pages based on the average of all log types
       const totalCounts = [
-        auditResponse?.totalCount || 0,
-        activityResponse?.totalCount || 0,
+        auditResponse?.data?.totalCount || 0,
+        activityResponse?.data?.totalCount || 0,
         applicationResponse?.data?.totalCount || 0
       ];
       const avgCount = Math.ceil(totalCounts.reduce((a, b) => a + b, 0) / 3);

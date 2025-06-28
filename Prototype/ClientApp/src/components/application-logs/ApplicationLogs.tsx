@@ -1,82 +1,67 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, Clock, User, Monitor, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import React, { useCallback } from 'react';
+import { FileText, Clock, User, Monitor } from 'lucide-react';
 import { applicationLogApi } from '../../services/api';
+import { Pagination, LoadingSpinner } from '../shared';
+import { formatDateTime } from '../../utils/dateUtils';
+import { useApiWithErrorHandling, usePagination } from '../../hooks/shared';
 
 interface ApplicationLog {
     applicationLogId: string;
     applicationId: string;
     applicationName: string;
     actionType: string;
-    metadata: string;
+    metadata?: string;
     createdAt: string;
-    updatedAt: string;
+    updatedAt?: string;
 }
 
-interface PaginationData {
-    page: number;
-    pageSize: number;
-    totalCount: number;
-    totalPages: number;
-}
 
 const ApplicationLogs: React.FC = () => {
-    const [applicationLogs, setApplicationLogs] = useState<ApplicationLog[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [pagination, setPagination] = useState<PaginationData>({
-        page: 1,
-        pageSize: 20,
-        totalCount: 0,
-        totalPages: 0
+    // Use pagination hook
+    const pagination = usePagination({
+        initialPageSize: 20
     });
 
-    const fetchApplicationLogs = async (page: number = 1, pageSize: number = 20) => {
-        setLoading(true);
-        try {
-            const response = await applicationLogApi.getApplicationLogs(page, pageSize);
-            if (response && response.success && response.data && response.data.data) {
-                setApplicationLogs(response.data.data);
-                setPagination({
-                    page: response.data.page,
-                    pageSize: response.data.pageSize,
-                    totalCount: response.data.totalCount,
-                    totalPages: response.data.totalPages
-                });
-            } else {
-                setApplicationLogs([]);
-                setPagination({
-                    page: 1,
-                    pageSize: 20,
-                    totalCount: 0,
-                    totalPages: 0
-                });
-            }
-        } catch (error) {
-            console.error('Failed to fetch application logs:', error);
-            setApplicationLogs([]);
-            setPagination({
-                page: 1,
-                pageSize: 20,
-                totalCount: 0,
-                totalPages: 0
-            });
-        } finally {
-            setLoading(false);
+    // Use API hook with error handling for fetching application logs
+    const { 
+        data: logsData, 
+        loading, 
+        error, 
+        execute: fetchLogs,
+        canRetry,
+        retry,
+        isNetworkError
+    } = useApiWithErrorHandling(
+        (page: number, pageSize: number) => applicationLogApi.getApplicationLogs(page, pageSize),
+        {
+            immediate: true,
+            showErrorNotification: true,
+            retryable: true,
+            maxRetries: 2,
+            onSuccess: (data) => {
+                if (data && data.data) {
+                    // Update pagination with response data
+                    pagination.setTotalCount(data.totalCount || 0);
+                }
+            },
+            dependencies: [pagination.currentPage, pagination.pageSize]
         }
-    };
+    );
 
-    useEffect(() => {
-        fetchApplicationLogs();
-    }, []);
+    // Extract application logs from API response
+    const applicationLogs = logsData?.data || [];
 
-    const handlePageChange = (newPage: number) => {
-        if (newPage >= 1 && newPage <= pagination.totalPages) {
-            fetchApplicationLogs(newPage, pagination.pageSize);
-        }
-    };
+    // Handle page changes
+    const handlePageChange = useCallback((newPage: number) => {
+        pagination.setPage(newPage);
+        fetchLogs(newPage, pagination.pageSize);
+    }, [pagination, fetchLogs]);
 
-    const handlePageSizeChange = (newPageSize: number) => {
-        fetchApplicationLogs(1, newPageSize);
-    };
+    // Handle page size changes
+    const handlePageSizeChange = useCallback((newPageSize: number) => {
+        pagination.setPageSize(newPageSize);
+        fetchLogs(1, newPageSize);
+    }, [pagination, fetchLogs]);
 
     const getActionBadgeColor = (actionType: string) => {
         switch (actionType.toLowerCase()) {
@@ -114,12 +99,10 @@ const ApplicationLogs: React.FC = () => {
                         </h2>
                         
                         {loading ? (
-                            <div className="d-flex align-items-center text-muted">
-                                <div className="spinner-border spinner-border-sm me-2" role="status">
-                                    <span className="visually-hidden">Loading...</span>
-                                </div>
-                                Loading application logs...
-                            </div>
+                            <LoadingSpinner 
+                                text="Loading application logs..." 
+                                size="sm"
+                            />
                         ) : (
                             <div className="table-responsive">
                                 <table className="table" style={{ cursor: 'default' }}>
@@ -148,8 +131,8 @@ const ApplicationLogs: React.FC = () => {
                                                     </span>
                                                 </td>
                                                 <td className="small text-muted">{log.metadata}</td>
-                                                <td className="small">{new Date(log.createdAt).toLocaleString()}</td>
-                                                <td className="small">{new Date(log.updatedAt).toLocaleString()}</td>
+                                                <td className="small">{formatDateTime(log.createdAt)}</td>
+                                                <td className="small">{formatDateTime(log.updatedAt)}</td>
                                             </tr>
                                         ))}
                                         {(Array.isArray(applicationLogs) ? applicationLogs : []).length === 0 && (
@@ -166,83 +149,39 @@ const ApplicationLogs: React.FC = () => {
                         )}
                         
                         {/* Pagination Controls */}
-                        {!loading && (Array.isArray(applicationLogs) ? applicationLogs : []).length > 0 && (
-                            <div className="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
-                                <div className="d-flex align-items-center gap-3">
-                                    <span className="text-muted small">
-                                        Showing {((pagination.page - 1) * pagination.pageSize) + 1} to {Math.min(pagination.page * pagination.pageSize, pagination.totalCount)} of {pagination.totalCount} entries
-                                    </span>
-                                    <div className="d-flex align-items-center gap-2">
-                                        <label className="text-muted small mb-0">Per page:</label>
-                                        <select 
-                                            className="form-select form-select-sm" 
-                                            style={{width: 'auto'}}
-                                            value={pagination.pageSize}
-                                            onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                                        >
-                                            <option value={10}>10</option>
-                                            <option value={20}>20</option>
-                                            <option value={50}>50</option>
-                                            <option value={100}>100</option>
-                                        </select>
+                        {!loading && applicationLogs.length > 0 && (
+                            <Pagination
+                                currentPage={pagination.currentPage}
+                                totalPages={pagination.totalPages}
+                                pageSize={pagination.pageSize}
+                                totalCount={pagination.totalCount}
+                                onPageChange={handlePageChange}
+                                onPageSizeChange={handlePageSizeChange}
+                                className="mt-4 pt-3 border-top"
+                            />
+                        )}
+                        
+                        {/* Enhanced Error State */}
+                        {error && (
+                            <div className="alert alert-danger mt-3 d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>Error loading application logs</strong>
+                                    <div className="small mt-1">
+                                        {isNetworkError ? 
+                                            'Network connection issue. Please check your internet connection.' :
+                                            typeof error === 'string' ? error : 'An unexpected error occurred.'
+                                        }
                                     </div>
                                 </div>
-                                
-                                <div className="d-flex gap-1">
-                                    <button
-                                        className="btn btn-outline-secondary btn-sm"
-                                        onClick={() => handlePageChange(1)}
-                                        disabled={pagination.page === 1}
+                                {canRetry && (
+                                    <button 
+                                        className="btn btn-sm btn-outline-danger"
+                                        onClick={retry}
+                                        disabled={loading}
                                     >
-                                        <ChevronsLeft size={16} />
+                                        {loading ? 'Retrying...' : 'Retry'}
                                     </button>
-                                    <button
-                                        className="btn btn-outline-secondary btn-sm"
-                                        onClick={() => handlePageChange(pagination.page - 1)}
-                                        disabled={pagination.page === 1}
-                                    >
-                                        <ChevronLeft size={16} />
-                                    </button>
-                                    
-                                    {/* Page numbers */}
-                                    {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                                        let pageNum: number;
-                                        if (pagination.totalPages <= 5) {
-                                            pageNum = i + 1;
-                                        } else if (pagination.page <= 3) {
-                                            pageNum = i + 1;
-                                        } else if (pagination.page >= pagination.totalPages - 2) {
-                                            pageNum = pagination.totalPages - 4 + i;
-                                        } else {
-                                            pageNum = pagination.page - 2 + i;
-                                        }
-                                        
-                                        return (
-                                            <button
-                                                key={pageNum}
-                                                className={`btn btn-sm ${pageNum === pagination.page ? 'btn-primary' : 'btn-outline-secondary'}`}
-                                                onClick={() => handlePageChange(pageNum)}
-                                            >
-                                                {pageNum}
-                                            </button>
-                                        );
-                                    })}
-                                    
-                                    <button
-                                        className="btn btn-outline-secondary btn-sm"
-                                        onClick={() => handlePageChange(pagination.page + 1)}
-                                        disabled={pagination.page === pagination.totalPages}
-                                    >
-                                        <ChevronRight size={16} />
-                                    </button>
-                                    <button
-                                        className="btn btn-outline-secondary btn-sm"
-                                        onClick={() => handlePageChange(pagination.totalPages)}
-                                        disabled={pagination.page === pagination.totalPages}
-                                    >
-                                        <ChevronsRight size={16} />
-                                    </button>
-                                </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -264,7 +203,7 @@ const ApplicationLogs: React.FC = () => {
                             <div className="card-body p-4 text-center" style={{ transition: 'none', transform: 'none' }}>
                                 <User className="text-success mb-2" size={32} />
                                 <h3 className="display-6 fw-bold text-dark">
-                                    {new Set((Array.isArray(applicationLogs) ? applicationLogs : []).map(log => log.applicationId)).size}
+                                    {new Set(applicationLogs.map(log => log.applicationId)).size}
                                 </h3>
                                 <p className="text-muted mb-0">Applications</p>
                             </div>
@@ -275,7 +214,7 @@ const ApplicationLogs: React.FC = () => {
                             <div className="card-body p-4 text-center" style={{ transition: 'none', transform: 'none' }}>
                                 <FileText className="text-info mb-2" size={32} />
                                 <h3 className="display-6 fw-bold text-dark">
-                                    {(Array.isArray(applicationLogs) ? applicationLogs : []).filter(log => log.actionType.includes('Create')).length}
+                                    {applicationLogs.filter(log => log.actionType.includes('Create')).length}
                                 </h3>
                                 <p className="text-muted mb-0">Create Actions</p>
                             </div>
@@ -286,7 +225,7 @@ const ApplicationLogs: React.FC = () => {
                             <div className="card-body p-4 text-center" style={{ transition: 'none', transform: 'none' }}>
                                 <Clock className="text-warning mb-2" size={32} />
                                 <h3 className="display-6 fw-bold text-dark">
-                                    {(Array.isArray(applicationLogs) ? applicationLogs : []).length > 0 ? 'Recent' : 'None'}
+                                    {applicationLogs.length > 0 ? 'Recent' : 'None'}
                                 </h3>
                                 <p className="text-muted mb-0">Latest Activity</p>
                             </div>

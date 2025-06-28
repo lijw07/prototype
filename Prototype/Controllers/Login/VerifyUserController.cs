@@ -1,14 +1,15 @@
 using Microsoft.AspNetCore.Mvc;
+using Prototype.Controllers.Navigation;
 using Prototype.Services.Interfaces;
 
 namespace Prototype.Controllers.Login;
 
 [ApiController]
-[Route("[controller]")]
+[Route("login/verify-user")]
 public class VerifyUserController(
     IUserAccountService userAccountService,
     ILogger<VerifyUserController> logger)
-    : ControllerBase
+    : BaseNavigationController(logger)
 {
     [HttpGet]
     public async Task<IActionResult> VerifyEmail([FromQuery] string token)
@@ -17,10 +18,7 @@ public class VerifyUserController(
         {
             var result = await userAccountService.RegisterNewUser(token);
             
-            if (!result.Success)
-                return BadRequest(result);
-                
-            return Ok(result);
+            return !result.Success ? BadRequestWithMessage(result) : SuccessResponse(result);
         }
         catch (Exception ex)
         {

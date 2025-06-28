@@ -42,5 +42,6 @@ public enum ActionTypeEnum
     RoleUpdated,
     RoleDeleted,
     UserProvisioned,
-    ReportGenerated
+    ReportGenerated,
+    ApplicationFailure
 }
