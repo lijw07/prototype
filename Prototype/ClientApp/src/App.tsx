@@ -26,6 +26,11 @@ import Home from './components/home/Home';
 import About from './components/pages/About';
 import Contact from './components/pages/Contact';
 
+// Import test runner for development
+if (process.env.NODE_ENV === 'development') {
+  import('./utils/testRunner');
+}
+
 // Conditional redirect component
 function ConditionalRedirect() {
   const { isAuthenticated, loading } = useAuth();

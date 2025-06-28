@@ -61,7 +61,7 @@ public class UserProfileController(
                     trackedUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
                     trackedUser.UpdatedAt = DateTime.UtcNow;
 
-                    return SuccessResponse(new { Message = "Password changed successfully" }, "Password changed successfully");
+                    return SuccessResponse<object>(null, "Password changed successfully");
 
                 }, ActionTypeEnum.ChangePassword, "User changed their password", "Password changed successfully");
 
@@ -122,7 +122,7 @@ public class UserProfileController(
                     CreatedAt = trackedUser.CreatedAt
                 };
 
-                return SuccessResponse(new { Message = "Profile updated successfully", User = userDto }, "Profile updated successfully");
+                return SuccessResponse(userDto, "Profile updated successfully");
 
             }, ActionTypeEnum.Update, "Profile information updated", "Profile updated successfully");
         });
@@ -155,7 +155,7 @@ public class UserProfileController(
                 CreatedAt = freshUser.CreatedAt
             };
 
-            return SuccessResponse(new { success = true, user = userDto, message = "Profile retrieved successfully" });
+            return SuccessResponse(userDto, "Profile retrieved successfully");
         });
     }
 }

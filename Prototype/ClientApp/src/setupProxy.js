@@ -1,13 +1,10 @@
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 module.exports = function(app) {
-  // Determine target based on environment - use same logic as API service
-  const target = process.env.NODE_ENV === 'development' 
-    ? 'http://localhost:8080'  // Force localhost in development
-    : (process.env.REACT_APP_API_URL || 'http://localhost:8080');
-  const wsTarget = process.env.NODE_ENV === 'development'
-    ? 'ws://localhost:8080'   // Force localhost in development
-    : (process.env.REACT_APP_WS_URL || 'ws://localhost:8080');
+  // Determine target based on environment
+  // Use environment variables for Docker, fallback to localhost for local development
+  const target = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+  const wsTarget = process.env.REACT_APP_WS_URL || 'ws://localhost:8080';
 
   // API proxy
   app.use(

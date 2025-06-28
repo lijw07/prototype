@@ -4,10 +4,10 @@ import { auditLogApi } from '../../services/api';
 
 interface AuditLog {
     auditLogId: string;
-    userId: string;
+    userId?: string;
     username: string;
     actionType: string;
-    metadata: string;
+    metadata?: string;
     createdAt: string;
 }
 

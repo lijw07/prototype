@@ -4,23 +4,27 @@ interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   text?: string;
+  fullScreen?: boolean;
+  variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info' | 'light' | 'dark';
 }
 
 const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ 
   size = 'md', 
   className = '', 
-  text 
+  text,
+  fullScreen = false,
+  variant = 'primary'
 }) => {
   const sizeClasses = {
-    sm: 'h-4 w-4',
-    md: 'h-8 w-8',
-    lg: 'h-12 w-12'
+    sm: 'spinner-border-sm',
+    md: '',
+    lg: 'spinner-border-lg'
   };
 
-  return (
+  const spinner = (
     <div className={`d-flex flex-column align-items-center justify-content-center ${className}`}>
       <div 
-        className={`spinner-border text-primary ${sizeClasses[size]}`} 
+        className={`spinner-border text-${variant} ${sizeClasses[size]}`} 
         role="status"
         aria-hidden="true"
       />
@@ -32,6 +36,16 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
       <span className="visually-hidden">Loading...</span>
     </div>
   );
+
+  if (fullScreen) {
+    return (
+      <div className="min-vh-100 bg-light d-flex justify-content-center align-items-center">
+        {spinner}
+      </div>
+    );
+  }
+
+  return spinner;
 };
 
 export default LoadingSpinner;

@@ -85,7 +85,7 @@ export interface ExtendedUser extends User {
   isActive: boolean;
   role: string;
   createdAt: string;
-  phoneNumber?: string; // Optional for backward compatibility
+  // phoneNumber is inherited from User interface as required
 }
 
 // Form-specific interfaces

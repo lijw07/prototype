@@ -1,3 +1,6 @@
+/* Import shared component styles */
+@import '../components/shared/styles.css';
+
 /* Custom CSS Variables for Consistent Design */
 :root {
   /* Primary Color Palette */

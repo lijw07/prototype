@@ -6,7 +6,7 @@ interface Application {
     applicationId: string;
     applicationName: string;
     applicationDescription: string;
-    applicationDataSourceType: number;
+    applicationDataSourceType: number | string;
     connection: {
         host: string;
         port: string;
@@ -68,8 +68,11 @@ const DataSourceTypeEnum: { [key: number]: string } = {
 };
 
 // Helper function to get enum string name from numeric value
-const getDataSourceTypeName = (numericValue: number): string => {
-    return DataSourceTypeEnum[numericValue] || 'MicrosoftSqlServer';
+const getDataSourceTypeName = (value: number | string): string => {
+    if (typeof value === 'number') {
+        return DataSourceTypeEnum[value] || 'MicrosoftSqlServer';
+    }
+    return value || 'MicrosoftSqlServer';
 };
 
 const Applications: React.FC = () => {
@@ -98,7 +101,7 @@ const Applications: React.FC = () => {
                                  app.applicationDescription.toLowerCase().includes(searchTerm.toLowerCase());
             
             const matchesConnectionType = filterConnectionType === 'all' || 
-                                        DataSourceTypeEnum[app.applicationDataSourceType] === filterConnectionType;
+                                        getDataSourceTypeName(app.applicationDataSourceType) === filterConnectionType;
             
             const matchesAuthType = filterAuthType === 'all' || 
                                   app.connection.authenticationType === filterAuthType;

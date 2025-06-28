@@ -75,7 +75,7 @@ const AutoProvisioningPanel: React.FC<AutoProvisioningProps> = ({
   // Initialize local config
   useEffect(() => {
     if (initialConfig) {
-      setLocalConfig(initialConfig);
+      setLocalConfig(prev => ({ ...prev, ...initialConfig }));
     } else if (autoProvisioningConfig) {
       setLocalConfig(autoProvisioningConfig);
     }

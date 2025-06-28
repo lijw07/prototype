@@ -3,6 +3,7 @@ using Prototype.Controllers.Navigation;
 using Prototype.DTOs;
 using Prototype.Exceptions;
 using Prototype.Services.Interfaces;
+using StackExchange.Redis;
 
 namespace Prototype.Controllers.Login;
 
@@ -19,6 +20,11 @@ public class LoginController(
         try
         {
             var result = await authService.AuthenticateAsync(requestDto);
+
+            if (result.Success)
+            {
+                Console.WriteLine(SuccessResponse(result));
+            }
             
             return result.Success ? SuccessResponse(result) : BadRequestWithMessage(result);
         }

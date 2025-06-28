@@ -43,13 +43,13 @@ const SettingsDashboard: React.FC = () => {
         try {
             const response = await userApi.getProfile();
             console.log('User profile response:', response);
-            // Backend returns ApiResponse format
-            if (response.success && response.data?.user) {
-                setUserSettings(response.data.user);
+            // Backend returns user data directly in ApiResponse.data
+            if (response.success && response.data) {
+                setUserSettings(response.data);
                 setEditForm({
-                    firstName: response.data.user.firstName,
-                    lastName: response.data.user.lastName,
-                    email: response.data.user.email
+                    firstName: response.data.firstName,
+                    lastName: response.data.lastName,
+                    email: response.data.email
                 });
             }
         } catch (error) {
@@ -82,14 +82,14 @@ const SettingsDashboard: React.FC = () => {
     const handleProfileUpdate = async () => {
         try {
             const response = await userApi.updateProfile(editForm);
-            if (response.success && response.data?.user) {
+            if (response.success && response.data) {
                 alert('Profile updated successfully!');
                 // Update local state with the fresh user data from response
-                setUserSettings(response.data.user);
+                setUserSettings(response.data);
                 setEditForm({
-                    firstName: response.data.user.firstName,
-                    lastName: response.data.user.lastName,
-                    email: response.data.user.email
+                    firstName: response.data.firstName,
+                    lastName: response.data.lastName,
+                    email: response.data.email
                 });
                 // Also fetch fresh data to ensure consistency
                 fetchUserSettings();

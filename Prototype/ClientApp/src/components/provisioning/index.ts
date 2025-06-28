@@ -24,6 +24,14 @@ import { useProvisioning } from './hooks/useProvisioning';
 import { useBulkUpload } from './hooks/useBulkUpload';
 import { useSignalRProgress } from './hooks/useSignalRProgress';
 
+// Import components for grouped exports
+import UserProvisioningDashboard from './UserProvisioningDashboard';
+import ProvisioningOverview from './ProvisioningOverview';
+import PendingRequestsTable from './PendingRequestsTable';
+import BulkUploadForm from './BulkUploadForm';
+import AutoProvisioningPanel from './AutoProvisioningPanel';
+import MigrationProgressTracker from './MigrationProgressTracker';
+
 // Component Groups for easy imports
 export const ProvisioningComponents = {
   Dashboard: UserProvisioningDashboard,

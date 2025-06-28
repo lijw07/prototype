@@ -2,7 +2,6 @@ import React, { createContext, useContext, useEffect, useState, useCallback, Rea
 
 // Helper function to get API base URL (same as in api.ts)
 const getApiBaseUrl = () => {
-  // In development, use relative URLs to leverage the proxy
   return '';
 };
 
@@ -58,8 +57,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (response.ok) {
         const data = await response.json();
-        if (data.success && data.user) {
-          setUser(data.user);
+        if (data.success && data.data) {
+          setUser(data.data);
         } else {
           // Invalid token, clear auth state
           clearAuthState();
@@ -115,7 +114,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       if (response.ok && data.success) {
-        const authToken = data.token;
+        const authToken = data.data.token;
         setToken(authToken);
         localStorage.setItem('authToken', authToken);
         

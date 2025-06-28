@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Data.SqlClient;
-using Microsoft.OpenApi.Models;
 using Prototype.Data;
 using Prototype.Database;
 using Prototype.Database.Interface;
@@ -24,13 +23,11 @@ using Prototype.Database.File;
 using Prototype.Database.Cloud;
 using Prototype.Middleware;
 using Prototype.POCO;
-using Prototype.Repositories;
 using Prototype.Services;
 using Prototype.Services.Factory;
 using Prototype.Services.Interfaces;
 using Prototype.Services.BulkUpload;
 using Prototype.Services.BulkUpload.Mappers;
-using Prototype.Services.Validators;
 using Prototype.Utility;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -41,49 +38,8 @@ builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
-
-// Configure JSON options for HTTP endpoints
-builder.Services.ConfigureHttpJsonOptions(options =>
-{
-    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
-});
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo 
-    { 
-        Title = "Prototype API", 
-        Version = "v1",
-        Description = "Centralized Application Management System API"
-    });
-
-    // Add JWT Bearer Authentication
-    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token in the text input below.",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer",
-        BearerFormat = "JWT"
-    });
-
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            new string[] {}
-        }
-    });
-});
+builder.Services.AddSwaggerGen();
 
 // Register CORS for development (open for local Docker/dev use)
 if (builder.Environment.IsDevelopment())
@@ -92,12 +48,7 @@ if (builder.Environment.IsDevelopment())
     {
         options.AddPolicy("AllowAll", policy =>
         {
-            policy.WithOrigins(
-                    "http://localhost:3000", 
-                    "http://localhost:8080",
-                    "http://127.0.0.1:3000",
-                    "http://127.0.0.1:8080",
-                    "http://0.0.0.0:8080")
+            policy.WithOrigins("http://localhost:3000", "http://localhost:8080")
                   .AllowAnyMethod()
                   .AllowAnyHeader()
                   .AllowCredentials(); // Required for SignalR
@@ -112,17 +63,13 @@ var dbName = Environment.GetEnvironmentVariable("DB_NAME") ?? "PrototypeDb";
 var dbUser = Environment.GetEnvironmentVariable("DB_USER") ?? "sa";
 var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "YourStrong!Passw0rd";
 
-var connectionString = $"Server={dbHost},{dbPort};Database={dbName};User={dbUser};Password={dbPassword};TrustServerCertificate=True;MultipleActiveResultSets=True;Connection Timeout=300;Max Pool Size=200;Min Pool Size=10;Pooling=True;Command Timeout=300";
+var connectionString = $"Server={dbHost},{dbPort};Database={dbName};User={dbUser};Password={dbPassword};TrustServerCertificate=True;MultipleActiveResultSets=False;Connection Timeout=300";
 
 builder.Services.AddDbContext<SentinelContext>(options =>
     options.UseSqlServer(connectionString, sqlOptions =>
     {
         sqlOptions.CommandTimeout(300); // 5 minutes timeout for bulk operations
-        sqlOptions.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(30), null);
-    })
-    .EnableSensitiveDataLogging(builder.Environment.IsDevelopment())
-    .EnableDetailedErrors(builder.Environment.IsDevelopment())
-    .ConfigureWarnings(warnings => warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.FirstWithoutOrderByAndFilterWarning)));
+    }));
 
 // Bind SMTP Settings
 builder.Services.Configure<SmtpSettingsPoco>(
@@ -136,39 +83,19 @@ builder.Services.AddScoped<IApplicationFactoryService, ApplicationFactoryService
 builder.Services.AddScoped<IApplicationConnectionFactoryService, ApplicationConnectionFactoryService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<TransactionService>();
-builder.Services.AddScoped<IPasswordEncryptionService, PasswordEncryptionService>();
+builder.Services.AddScoped<PasswordEncryptionService>();
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<IUserAccountService, UserAccountService>();
-// UserContext handled by AuthenticatedUserAccessor
 builder.Services.AddScoped<IUserRoleService, UserRoleService>();
-builder.Services.AddScoped<IDatabaseSeeder, DatabaseSeeder>();
-
-// Register Common Services
-builder.Services.AddScoped<IAuditLogService, AuditLogService>();
-builder.Services.AddScoped<INavigationService, NavigationService>();
-builder.Services.AddScoped<IHttpContextParsingService, HttpContextParsingService>();
-builder.Services.AddScoped<IPaginationService, PaginationService>();
-
-// Register Repository Pattern
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
-
-// Register Validators
-builder.Services.AddScoped<RegisterRequestValidator>();
-builder.Services.AddScoped<LoginRequestValidator>();
-// TODO: Add FileUploadValidator in Phase 2
+builder.Services.AddScoped<DatabaseSeeder>();
 
 // Register Bulk Upload Services
-builder.Services.AddScoped<IFileParsingService, FileParsingService>();
-builder.Services.AddScoped<IBulkValidationService, BulkValidationService>();
-builder.Services.AddScoped<IBulkDataProcessingService, BulkDataProcessingService>();
 builder.Services.AddScoped<IBulkUploadService, BulkUploadService>();
 builder.Services.AddScoped<ITableDetectionService, TableDetectionService>();
 builder.Services.AddScoped<ITableMappingService, TableMappingService>();
 builder.Services.AddScoped<IProgressService, ProgressService>();
 builder.Services.AddSingleton<IJobCancellationService, JobCancellationService>();
 builder.Services.AddScoped<IFileQueueService, FileQueueService>();
-builder.Services.AddScoped<IBulkInsertService, SqlServerBulkInsertService>();
 
 // Register Table Mappers
 builder.Services.AddScoped<UserTableMapper>();
@@ -186,6 +113,8 @@ builder.Services.AddMemoryCache();
 // Add SignalR
 builder.Services.AddSignalR();
 
+// SQL Server connection strategies are now self-contained in SqlServerDatabaseStrategy
+
 // Add Database Connection Strategies
 builder.Services.AddScoped<IDatabaseConnectionStrategy, SqlServerDatabaseStrategy>();
 builder.Services.AddScoped<IDatabaseConnectionStrategy, MySqlDatabaseStrategy>();
@@ -200,7 +129,6 @@ builder.Services.AddScoped<IDatabaseConnectionStrategy, ElasticSearchDatabaseStr
 
 // Add API Connection Strategies
 builder.Services.AddScoped<IApiConnectionStrategy, RestApiConnectionStrategy>();
-// builder.Services.AddScoped<IApiConnectionStrategy, GraphQLConnectionStrategy>(); // TODO: Implement GraphQLConnectionStrategy
 builder.Services.AddScoped<IApiConnectionStrategy, SoapApiConnectionStrategy>();
 
 // Add File Connection Strategies
@@ -214,7 +142,6 @@ builder.Services.AddScoped<IFileConnectionStrategy, GoogleCloudStorageConnection
 
 // Add HttpClient for API connections
 builder.Services.AddHttpClient<RestApiConnectionStrategy>();
-// builder.Services.AddHttpClient<GraphQLConnectionStrategy>(); // TODO: Implement GraphQLConnectionStrategy
 builder.Services.AddHttpClient<SoapApiConnectionStrategy>();
 
 // Add Database Connection Factory
@@ -225,12 +152,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         var jwtKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? 
-                     builder.Configuration["JwtSettings:Key"];
-        
-        if (string.IsNullOrEmpty(jwtKey))
-        {
-            throw new InvalidOperationException("JWT secret key must be configured via JWT_SECRET_KEY environment variable or JwtSettings:Key configuration setting. This is required for security.");
-        }
+                     builder.Configuration["JwtSettings:Key"] ?? 
+                     "your-super-secret-jwt-key-that-is-at-least-32-characters-long!";
         var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? 
                         builder.Configuration["JwtSettings:Issuer"] ?? 
                         "PrototypeApp";
@@ -348,7 +271,7 @@ using (var scope = app.Services.CreateScope())
                 logger.LogDebug("Database connection verified successfully.");
                 
                 // Seed database with initial data
-                var seeder = scope.ServiceProvider.GetRequiredService<IDatabaseSeeder>();
+                var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
                 await seeder.SeedAsync();
                 
                 // Success - exit the retry loop
@@ -397,18 +320,7 @@ if (app.Environment.IsDevelopment())
 // Global exception handling (should be first)
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
-// Enable Swagger in development
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Prototype API V1");
-        c.RoutePrefix = "swagger"; // Swagger UI at /swagger
-    });
-}
-
-// Enable CORS in development (MUST be before UseRouting)
+// Enable CORS in development
 if (app.Environment.IsDevelopment())
 {
     app.UseCors("AllowAll");
@@ -420,11 +332,7 @@ if (!app.Environment.IsDevelopment())
     app.UseMiddleware<RateLimitingMiddleware>();
 }
 
-// Configure static files first
-app.UseStaticFiles();
-
 // Standard middleware
-app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -436,8 +344,5 @@ app.MapControllers();
 
 // Map SignalR Hub
 app.MapHub<Prototype.Hubs.ProgressHub>("/progressHub");
-
-// SPA fallback - serve React app for client-side routes
-app.MapFallbackToFile("index.html");
 
 app.Run();

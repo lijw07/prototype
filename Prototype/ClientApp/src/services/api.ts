@@ -132,21 +132,21 @@ export const authApi = {
 // User Settings API
 export const userApi = {
   getProfile: () =>
-    api.get<ApiResponse<{ user: User }>>('/settings/user-profile'),
+    api.get<ApiResponse<User>>('/settings/user-profile'),
   
   updateProfile: (userData: {
     firstName: string;
     lastName: string;
     email: string;
   }) =>
-    api.put<ApiResponse<{ user: User }>>('/settings/user-profile', userData),
+    api.put<ApiResponse<User>>('/settings/user-profile/update', userData),
   
   changePassword: (passwordData: {
     currentPassword: string;
     newPassword: string;
     reTypeNewPassword: string;
   }) =>
-    api.post<ApiResponse<{ message: string }>>('/settings/user-profile', passwordData),
+    api.post<ApiResponse<null>>('/settings/user-profile/change-password', passwordData),
   
   getAllUsers: (page: number = 1, pageSize: number = 10) =>
     api.get<ApiResponse<PaginatedResponse<User>>>(`/navigation/user-administration/all?page=${page}&pageSize=${pageSize}`),
